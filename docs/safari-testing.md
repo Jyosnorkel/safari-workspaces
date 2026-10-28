@@ -15,9 +15,24 @@ node --test tests/safari.test.mjs
 node scripts/check.mjs
 ```
 
-Eight focused tests simulate popup APIs and check packaged resource references. The existing shared check command currently runs the 14 workspace tests; it does not discover the new Safari test file until the coordinator updates its runner.
+Nine focused tests simulate popup/host APIs and check packaged resource references. The original shared check command runs the workspace tests; verify that the integrated runner discovers all `tests/*.test.mjs` files before reporting combined results.
 
-No live Safari interaction was performed by this workstream. No native files were changed, so a second native build was not used as evidence for a JavaScript-only change.
+## Live investigation — October 28, 2026
+
+The user authorized this agent to control Safari exclusively for a separate disposable test window. A fresh normal window was created containing exactly one `https://example.com` tab. No personal browsing tabs were closed or modified.
+
+Observed results:
+
+- The freshly built native host opened. Its Safari extension state eventually reported enabled.
+- Safari Settings → Extensions listed Safari Workspaces **0.2.0**, while the current manifest is **0.2.1**. Its visible error was: “Unable to validate ‘popup.html’ with the extension’s code signature. It has probably been modified since the extension was built.”
+- Both the main app and isolated agent app passed `codesign --verify --deep --strict`; this does not establish which cached build Safari was using.
+- Refreshing only Safari Workspaces by toggling it off/on produced an alert saying the extension was no longer valid. Safari then removed it from the visible Extensions list.
+- Developer settings showed **Allow unsigned extensions** unchecked. This agent did not change that security setting, broad website access, or private browsing access. User action to enable unsigned development extensions is required before continuing.
+- Two local registrations shared native version 1.0. The agent build now increments native version to **1.0.1 (build 2)**, preserving bundle identifiers. The isolated rebuild passed. Whether Safari reloads that version is not verified yet.
+
+The native host now displays actionable extension-state/settings errors rather than silently ignoring them. It keeps the host open if Safari cannot open extension settings, and safely ignores unexpected native-message types.
+
+**Still unverified:** popup rendering, dashboard launch/reuse, scan, save/close, restore and restart persistence in the fresh test window. The observed signature/development setting failure blocks those steps. This is not a successful end-to-end run.
 
 ## Coordinator's live test plan
 

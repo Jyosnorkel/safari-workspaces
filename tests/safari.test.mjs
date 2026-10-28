@@ -69,3 +69,22 @@ test('manifest popup and background resources are included in the native extensi
     assert(phase.includes(`${file} in Resources`),`${file} belongs to the extension copy phase`);
   }
 });
+
+test('native host renders extension-state failures and settings failures as actionable text',()=>{
+  const source=readFileSync(path.join(root,'native/Safari Dev Lab/Safari Dev Lab/Resources/Script.js'),'utf8');
+  const nodes=new Map();const classes=new Set();
+  const node=name=>{if(!nodes.has(name))nodes.set(name,{innerText:'',addEventListener(){}});return nodes.get(name);};
+  const context=vm.createContext({document:{
+    getElementsByClassName:name=>[node(name)],querySelector:()=>node('open-preferences'),
+    body:{classList:{toggle:(name,on)=>on?classes.add(name):classes.delete(name),remove:(...names)=>names.forEach(name=>classes.delete(name))}}
+  }});
+  vm.runInContext(source,context);
+  vm.runInContext('show(true, true)',context);assert(classes.has('state-on'));
+  vm.runInContext('showStateError()',context);
+  assert(!classes.has('state-on'));assert(!classes.has('state-off'));
+  assert.match(node('state-unknown').innerText,/couldn’t confirm/);
+  assert.match(node('state-unknown').innerText,/Safari Settings/);
+  vm.runInContext('showSettingsError()',context);
+  assert.match(node('state-unknown').innerText,/manually/);
+  vm.runInContext('show(false, true)',context);assert(classes.has('state-off'));
+});

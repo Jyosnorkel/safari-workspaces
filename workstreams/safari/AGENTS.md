@@ -14,7 +14,7 @@ Toolbar opens or focuses one dashboard in a normal window. Permission errors and
 
 ## Boundaries
 
-Do not edit core.js, background.js, dashboard.*, or shared scripts. The coordinator exclusively operates the live Safari session. Supply a focused test plan; no simultaneous browser actions.
+Do not edit core.js, background.js, dashboard.*, or shared scripts. The user subsequently authorized this agent to operate live Safari exclusively in a fresh normal window with disposable tabs. Coordinate browser ownership with the primary agent; no simultaneous actions. Use CUA for UI and verify the current window contents before any save/close. Ask for specific authentication/security-setting action if blocked; never touch personal tabs or silently broaden access.
 
 ## Collaboration rules
 

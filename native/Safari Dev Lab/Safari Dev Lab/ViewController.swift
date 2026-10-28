@@ -28,7 +28,9 @@ class ViewController: NSViewController, WKNavigationDelegate, WKScriptMessageHan
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         SFSafariExtensionManager.getStateOfSafariExtension(withIdentifier: extensionBundleIdentifier) { (state, error) in
             guard let state = state, error == nil else {
-                // Insert code to inform the user that something went wrong.
+                DispatchQueue.main.async {
+                    webView.evaluateJavaScript("showStateError()")
+                }
                 return
             }
 
@@ -43,13 +45,17 @@ class ViewController: NSViewController, WKNavigationDelegate, WKScriptMessageHan
     }
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-        if (message.body as! String != "open-preferences") {
-            return;
+        guard let action = message.body as? String, action == "open-preferences" else {
+            return
         }
 
         SFSafariApplication.showPreferencesForExtension(withIdentifier: extensionBundleIdentifier) { error in
             DispatchQueue.main.async {
-                NSApplication.shared.terminate(nil)
+                if error != nil {
+                    self.webView.evaluateJavaScript("showSettingsError()")
+                } else {
+                    NSApplication.shared.terminate(nil)
+                }
             }
         }
     }
