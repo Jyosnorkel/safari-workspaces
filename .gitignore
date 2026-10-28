@@ -1,0 +1,17 @@
+.DS_Store
+build/
+*.xcuserstate
+xcuserdata/
+
+# Local credentials and editor state
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+node_modules/
+
+# Local planning and source documents; not product source
+/AGENTS.md
+/CODEX_HANDOFF.md
+/project-guide/
