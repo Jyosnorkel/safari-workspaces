@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Safari Workspaces",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Review, save and restore Safari workspaces. Keep related tabs together and resume later.",
   "permissions": ["tabs", "storage"],
   "background": {"scripts": ["core.js", "background.js"], "persistent": false},

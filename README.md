@@ -50,8 +50,8 @@ Open http://localhost:8765/ in Safari. The existing test page still describes th
 
 - The native 0.2 build succeeded during development on October 28, 2026.
 - The full workspace journey, restart persistence, and failure recovery have **not yet been verified end to end in Safari**.
-- `scripts/check.mjs` still targets the earlier badge prototype and does not validate the workspace implementation. Replacement tests are pending.
-- Completed restore snapshots currently cannot be deliberately restored again. A new restore-session flow with duplicate-operation protection is planned.
+- `node scripts/check.mjs` passes 14 automated checks for the workspace coordinator and domain rules using a simulated browser API. Syntax and manifest resource checks are included. These do not replace Safari testing.
+- Completed snapshots support an explicit **Restore another copy** action. New restore sessions are protected against replayed requests and stale dashboards.
 - Unsaved forms, browsing history, scroll position and complete page state are not saved. Restoration reopens URLs only.
 - Groups live in the extension dashboard. Native Safari Tab Groups are not controlled.
 - Current scope is one normal Safari window; no accounts, cloud sync or App Store distribution.
@@ -66,7 +66,7 @@ Future Meta inference will require explicit disclosure of the data being sent an
 
 - `extension/`: popup, dashboard, browser operation coordinator and domain rules.
 - `native/`: Swift macOS host and Safari Web Extension target.
-- `scripts/`: build, demo server, and legacy checks.
+- `scripts/`: build, demo server, and automated checks.
 - `demo/`: local development test page.
 
 ## Original contributions and attribution
@@ -79,7 +79,7 @@ Project source is released under the [MIT License](LICENSE). Apple's SDKs and de
 
 ## Next milestones
 
-1. Replace legacy checks and verify the manual Safari journey, including persistence and partial failures.
-2. Make saved snapshots deliberately reusable without accidental duplicate restores.
+1. Verify the manual Safari journey, including persistence and partial failures.
+2. Add export/import backup and improve recovery guidance.
 3. Connect a real Meta model and add editable suggestion review.
 4. Measure grouping quality and restoration on realistic sessions, then document a reproducible judge setup.

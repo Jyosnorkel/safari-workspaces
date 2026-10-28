@@ -59,11 +59,23 @@
     }
     return {workspace: record, closedTabIds};
   }
-  async function restore({id, windowId}) {
+  async function restore({id, windowId, newSessionId, previousSessionId}) {
     await normalWindow(windowId);
     const record = (await read())[id];
     if (!record || record.version !== 1 || !Array.isArray(record.tabs)) throw new Error('Workspace not found or unsupported.');
+    if (newSessionId && newSessionId !== record.restore.sessionId) {
+      if (!/^[a-f0-9-]{36}$/i.test(newSessionId)) throw new Error('Invalid restore session.');
+      if (record.restore.state !== 'complete' || (previousSessionId ?? null) !== (record.restore.sessionId ?? null)) {
+        throw new Error('This workspace changed in another manager. Refresh saved workspaces before starting another copy.');
+      }
+      record.restoreHistory = [...(record.restoreHistory || []), {
+        sessionId: record.restore.sessionId || null, completedAt: record.updatedAt,
+        openedCount: Object.values(record.restore.results).filter(r => r.state === 'opened').length
+      }].slice(-20);
+      record.restore = {state: 'not-started', sessionId: newSessionId, results: {}};
+    }
     if (record.restore.state === 'complete') return {workspace: record, repeated: true};
+    record.restore.sessionId ||= crypto.randomUUID();
     if (Object.values(record.restore.results).some(r => r.state === 'pending')) throw new Error('A previous restore was interrupted. Check Safari for already opened tabs, then resolve the uncertain items before retrying.');
     record.restore.state = 'restoring';
     await write(record);

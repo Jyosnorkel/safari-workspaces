@@ -87,7 +87,7 @@
             option.selected = target.id === group.id; move.append(option);
           }
           move.addEventListener('change', () => {
-            assignments.set(tab.id,move.value); requests.clear(); requests.clear(); renderGroups();
+            assignments.set(tab.id,move.value); requests.clear(); renderGroups();
           });
           content.append(move);
         }
@@ -162,16 +162,21 @@
         card.append(recovery);
       }
       const actions = e('div','actions');
-      const restore = button(workspace.restore.state === 'complete' ? 'Restored ✓' : opened ? 'Restore remaining tabs' : 'Restore workspace ↗',async () => {
-        if (!await confirm('Restore this workspace?',`Open ${workspace.tabs.length-opened} saved URLs in this window? Already confirmed restores are skipped. The snapshot stays saved. Original tabs may still be open.`,'Restore')) return;
+      const complete = workspace.restore.state === 'complete';
+      const restore = button(complete ? 'Restore another copy ↗' : opened ? 'Restore remaining tabs' : 'Restore workspace ↗',async () => {
+        const amount = complete ? workspace.tabs.length : workspace.tabs.length-opened;
+        const text = complete
+          ? `Start a new restore session and open another copy of all ${amount} tabs? Tabs from previous restores may still be open. This is a deliberate new copy.`
+          : `Open ${amount} saved URLs in this window? Already confirmed restores are skipped. The snapshot stays saved. Original tabs may still be open.`;
+        if (!await confirm(complete ? 'Open another copy?' : 'Restore this workspace?',text,complete ? 'Open another copy' : 'Restore')) return;
         notice('Restoring saved URLs. Keep this window open…');
         try {
-          const response = await send('restore',{id:workspace.id,windowId});
+          const response = await send('restore',{id:workspace.id,windowId,...(complete ? {newSessionId:crypto.randomUUID(),previousSessionId:workspace.restore.sessionId || null} : {})});
           const count = Object.values(response.workspace.restore.results).filter(r=>r.state==='opened').length;
           notice(`${workspace.name}: ${count}/${workspace.tabs.length} tabs restored. ${response.workspace.restore.state === 'complete' ? 'Snapshot kept for reference.' : 'Review failures and retry the remaining tabs.'}`);
         } finally { await loadSaved(); }
       },'primary');
-      restore.disabled = workspace.restore.state === 'complete' || pending.length > 0;
+      restore.disabled = pending.length > 0;
       actions.append(restore); card.append(actions);
       const detail = e('details'), summary = e('summary','', 'Saved tabs & recovery details');
       const list = e('ol');
