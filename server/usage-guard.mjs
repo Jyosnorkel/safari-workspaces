@@ -13,7 +13,7 @@ const positive = (value, name) => {
 };
 const dayOf = time => new Date(time).toISOString().slice(0, 10);
 const nextDay = time => Date.parse(`${dayOf(time)}T00:00:00.000Z`) + 86400000;
-const minuteRetry = (attempts, limit) => [...attempts].sort((a,b) => a-b)[attempts.length-limit] + 60000;
+const minuteRetry = (attempts, limit, needed = 1) => [...attempts].sort((a,b) => a-b)[attempts.length+needed-limit-1] + 60000;
 const validTime = time => Number.isSafeInteger(time) && time >= 0 && Number.isFinite(new Date(time).getTime());
 
 /** One account, one shared state path, one local machine. Not a distributed limiter. */
@@ -59,12 +59,13 @@ export class UsageGuard {
       await unlink(temporary).catch(() => {});
     }
   }
-  async status() {
+  async status({requiredAttempts = 1} = {}) {
+    positive(requiredAttempts, 'requiredAttempts');
     const time = this.#time(); const state = await this.#read(time);
     let locked = this.#busy;
     try { await access(this.lockPath); locked = true; } catch (error) { if (error.code !== 'ENOENT') throw new UsageError('state_error', 'Cannot inspect the usage lock.'); }
-    const minuteAt = state.attempts.length >= this.perMinute ? minuteRetry(state.attempts, this.perMinute) : null;
-    const dailyAt = state.daily >= this.perDay ? nextDay(time) : null;
+    const minuteAt = state.attempts.length + requiredAttempts > this.perMinute && state.attempts.length ? minuteRetry(state.attempts, this.perMinute, requiredAttempts) : null;
+    const dailyAt = state.daily + requiredAttempts > this.perDay ? nextDay(time) : null;
     return {
       maxConcurrent: 1, busy: locked, attemptsToday: state.daily,
       remainingToday: Math.max(0, this.perDay-state.daily), remainingThisMinute: Math.max(0, this.perMinute-state.attempts.length),
@@ -72,7 +73,9 @@ export class UsageGuard {
       retryAt: Math.max(minuteAt || 0, dailyAt || 0) || null, timezone: 'UTC'
     };
   }
-  async run(operation) {
+  async run(operation, {requiredAttempts = 1} = {}) {
+    positive(requiredAttempts, 'requiredAttempts');
+    if (requiredAttempts > this.perMinute || requiredAttempts > this.perDay) throw new UsageError('invalid_config', 'The configured request limits cannot admit this operation.');
     if (typeof operation !== 'function') throw new UsageError('invalid_operation', 'A provider operation is required.');
     if (this.#busy) throw new UsageError('concurrency_limit', 'A model request is already running. No new request was sent.');
     this.#busy = true;
@@ -90,13 +93,31 @@ export class UsageGuard {
         throw new UsageError('state_error', 'Cannot acquire the persistent usage lock.');
       }
       const time = this.#time(), state = await this.#read(time);
-      if (state.daily >= this.perDay) throw new UsageError('daily_limit', 'The daily request budget is exhausted. No new request was sent.', nextDay(time));
-      if (state.attempts.length >= this.perMinute) throw new UsageError('minute_limit', 'The rolling-minute limit is reached. No new request was sent.', minuteRetry(state.attempts, this.perMinute));
-      state.daily++; state.attempts.push(time); state.lastSeenAt = time;
-      await this.#write(state); // Attempts, including failures/timeouts, count before any network operation.
+      const check = (current, at, needed) => {
+        if (current.daily + needed > this.perDay) throw new UsageError('daily_limit', 'The daily request budget is exhausted. No new request was sent.', nextDay(at));
+        if (current.attempts.length + needed > this.perMinute) throw new UsageError('minute_limit', 'The rolling-minute limit is reached. No new request was sent.', minuteRetry(current.attempts, this.perMinute, needed));
+      };
+      check(state, time, requiredAttempts);
       const controller = new AbortController();
+      // Hold the same lock across count + generation, but timestamp each actual
+      // endpoint admission separately. A slow token count cannot age out a
+      // future generation reservation and exceed the rolling-minute limit.
+      let admission = Promise.resolve();
+      const reserve = () => {
+        const pending = admission.then(async () => {
+          if (controller.signal.aborted) throw new UsageError('timeout', 'The operation was cancelled before another request was sent.');
+          const at = this.#time(), current = await this.#read(at);
+          check(current, at, 1);
+          current.daily++; current.attempts.push(at); current.lastSeenAt = at;
+          await this.#write(current);
+          if (controller.signal.aborted) throw new UsageError('timeout', 'The operation was cancelled. Its admitted attempt remains counted.');
+        });
+        admission = pending.catch(() => {});
+        return pending;
+      };
+      await reserve();
       let timer, settled = false;
-      const request = Promise.resolve().then(() => operation(controller.signal)).finally(() => { settled = true; });
+      const request = Promise.resolve().then(() => operation(controller.signal, reserve)).finally(() => { settled = true; });
       try {
         return await Promise.race([request, new Promise((_, reject) => {
           timer = setTimeout(() => {
