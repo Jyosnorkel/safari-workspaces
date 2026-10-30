@@ -112,7 +112,7 @@ test('consent, byte/token limits and invalid inventories reject before consuming
 test('service sanitizes URLs, forwards output cap and signal, validates returned IDs',async t=>{
   const f=await fixture(t);let captured;
   const service=createAIService({env:fakeEnv,statePath:f.statePath,now:f.now,provider:fakeProvider({generate:async options=>{captured=options;return {groups:[{name:'Docs',reason:'Reading',tabIds:[1]}]};}})});
-  const result=await service.suggest(tabs,{consent:true});assert.equal(captured.tabs[0].url,'https://example.com/docs');assert.equal(captured.maxOutputTokens,512);
+  const result=await service.suggest(tabs,{consent:true});assert.equal(captured.tabs[0].url,'https://example.com/docs');assert.equal(captured.maxOutputTokens,2048);
   assert(captured.signal instanceof AbortSignal);assert.deepEqual(result.groups[0].tabIds,['1']);
   const status=JSON.stringify(await service.status());assert(!status.includes(fakeEnv.META_API_KEY));assert(!status.includes('Documentation'));
   assert(!(await readFile(f.statePath,'utf8')).includes('Documentation'));
@@ -308,7 +308,7 @@ test('service preserves safe Meta diagnostics and original budgets without retri
    if(mode==='output-limit')return jsonResponse({status:'incomplete',incomplete_details:{reason:'max_output_tokens'},output:[]});
    return new Response(JSON.stringify({error:{message:'FAKE-PRIVATE-PROVIDER-TEXT',param:'model'}}),{status:mode==='count-failure'?400:429});
   }});
-  const service=createAIService({env:{...fakeEnv,META_API_PROVIDER_ID:'meta'},provider,statePath:f.statePath,now:f.now});
+  const service=createAIService({env:{...fakeEnv,META_API_PROVIDER_ID:'meta',AI_MAX_OUTPUT_TOKENS:'512'},provider,statePath:f.statePath,now:f.now});
   await assert.rejects(service.suggest(tabs,{consent:true}),error=>error.code==='provider_error'&&!error.message.includes('FAKE-PRIVATE-PROVIDER-TEXT')&&(mode==='count-failure'?/Token count: Meta HTTP 400/.test(error.message):mode==='rate-limit'?/Meta HTTP 429/.test(error.message):/512-token output cap/.test(error.message)));
   assert.equal(calls,mode==='count-failure'?1:2);
   const usage=await service.status();assert.equal(usage.attemptsToday,calls);assert.equal(usage.perMinute,2);assert.equal(usage.perDay,20);assert.equal(usage.maxOutputTokens,512);

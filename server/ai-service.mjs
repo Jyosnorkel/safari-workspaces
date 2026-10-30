@@ -13,7 +13,7 @@ export function readConfig(env = process.env) {
     model: env.META_API_MODEL || '', apiKey: env.META_API_KEY || env.MODEL_API_KEY || '',
     perMinute: number(env, 'AI_REQUESTS_PER_MINUTE', 2), perDay: number(env, 'AI_REQUESTS_PER_DAY', 20),
     timeoutMs: number(env, 'AI_TIMEOUT_MS', 30000), maxInputBytes: number(env, 'AI_MAX_INPUT_BYTES', 12000),
-    maxInputTokens: number(env, 'AI_MAX_INPUT_TOKENS', 4096), maxOutputTokens: number(env, 'AI_MAX_OUTPUT_TOKENS', 512)
+    maxInputTokens: number(env, 'AI_MAX_INPUT_TOKENS', 4096), maxOutputTokens: number(env, 'AI_MAX_OUTPUT_TOKENS', 2048)
   };
   if (config.maxOutputTokens < 16) throw new UsageError('invalid_config', 'AI_MAX_OUTPUT_TOKENS must be at least 16.');
   return config;

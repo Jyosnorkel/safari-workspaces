@@ -140,3 +140,7 @@ A user-reported status request was rejected even though the displayed origin exa
 ## Provider diagnostics follow-up
 
 User reported generic provider_error after reaching suggestions, then asked whether rate limits were too aggressive. Limits remain unchanged. Safe server-side diagnostics now distinguish provider HTTP429, authentication/credit/request errors, incomplete output-token exhaustion and invalid responses using fixed text and allowlisted fields/codes. Never forward arbitrary provider messages or model output. This is a service-only update requiring only a local AI service restart; do not rebuild/toggle Safari unnecessarily. The original provider status was discarded, so the actual prior failure cause remains unverified. No live diagnostic/retry calls are authorized or made by this patch.
+
+## Confirmed 512-token output exhaustion
+
+User confirmed an incomplete Meta response caused by the 512-token output cap. The service's bounded default and .env.example are now 2,048 tokens; existing explicit overrides remain respected. Request limits remain 1 in flight, 2/minute, 20/day with no retries. Increasing the output allowance can increase per-call cost and is not a guarantee large inventories fit. Only the local AI service needs restarting, from the user's key-configured terminal with AI_MAX_OUTPUT_TOKENS=2048; no Safari rebuild, re-pair or quit. No live calls are made automatically. The actual larger-cap result remains unverified.

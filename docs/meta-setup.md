@@ -51,7 +51,7 @@ Replace the placeholder with the exact origin shown in the dashboard. `--re-pair
 | Complete suggestion timeout | 30 seconds |
 | Serialized sanitized tab input | 12,000 UTF-8 bytes; 1–100 tabs |
 | Complete model input | 4,096 tokens, counted by Meta |
-| Generated output | 512 tokens including reasoning |
+| Generated output | 2,048 tokens including reasoning |
 
 A normal suggestion uses **two attempts**: token count followed by generation. With the default daily budget that permits at most ten complete suggestions per UTC day; failures may reduce that number. Each actual endpoint admission is persisted with its own timestamp before calling the provider. The service holds one shared lock across both calls and preflights room for both. A failed/excessive token count uses one attempt and never generates. An admitted generation failure uses the second attempt. Nothing retries automatically, and status checks consume no provider budget.
 
@@ -97,6 +97,19 @@ The local server retains GET compatibility when a correct Origin is supplied, ac
 
 The local limiter's cooldown/daily/concurrency errors are separate from provider failures. Safe diagnostics now distinguish Meta HTTP status (including 429), allowlisted request fields/codes, incomplete responses caused by the configured output-token cap, refusals and invalid response structures. Raw provider messages, generated text, tab metadata and keys are never forwarded to the dashboard. Token-count failures are identified separately and cannot trigger generation. No automatic retries or cap increases are introduced.
 
-The old generic error discarded the original provider status, so it cannot establish whether a past failure was a rate limit or exhausted output allowance. Restart only the local AI service to load these diagnostic changes; the extension does not need rebuilding or re-pairing. A later explicitly consented suggestion will show the new diagnostic if it fails. Requests/minute, requests/day and output tokens are different controls; keep the approved 2/minute, 20/day and 512-token cap until evidence supports a deliberate change. Testing used only fake provider responses; no diagnostic live calls were made.
+The old generic error discarded the original provider status, so it cannot establish whether a past failure was a rate limit or exhausted output allowance. Restart only the local AI service to load these diagnostic changes; the extension does not need rebuilding or re-pairing. A later explicitly consented suggestion will show the new diagnostic if it fails. Requests/minute, requests/day and output tokens are different controls; keep request-frequency limits separate from output length. The initial 512-token cap was later confirmed too small by the user; the default is now 2,048 tokens. The approved 2/minute and 20/day limits remain unchanged. Testing used only fake provider responses; no diagnostic live calls were made.
 
 Reference: [Meta error handling](https://dev.meta.ai/docs/error-handling) and [Responses API](https://dev.meta.ai/docs/protocols/responses).
+
+## Confirmed output-token exhaustion
+
+The user reported the explicit 512-token output-cap error. The service default and example configuration now use 2,048 output tokens, including reasoning and visible JSON. This allows a longer response and can increase per-call cost; it does not raise the 2/minute, 20/day request limits, retry automatically or guarantee that every large inventory will fit.
+
+An existing shell variable or copied `.env` can still override the default with 512. Stop only the local AI service in its terminal, then explicitly set:
+
+```sh
+export AI_MAX_OUTPUT_TOKENS=2048
+node server/start.mjs
+```
+
+Use the same service-start command as before if it includes an env-file option. Exported shell values take precedence over Node's env-file values. Keep the existing key, pairing, ledger and Safari sessions. No extension rebuild is needed. Live success with the larger bound remains unverified until a user-initiated suggestion completes.
