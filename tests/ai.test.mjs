@@ -135,3 +135,90 @@ test('lowering per-minute config reports when enough prior reservations expire',
   f.advance(40000);await assert.rejects(lower.run(async()=>{}),hasCode('minute_limit'));
   f.advance(20000);await lower.run(async()=>{});
 });
+
+// Injected fake HTTP responses and local-only servers; never live Meta calls.
+import {createMetaProvider,makeMetaRequest} from '../server/meta-provider.mjs';
+import {createLoopbackServer} from '../server/loopback.mjs';
+import {createConnection,readConnection} from '../server/connection.mjs';
+import {stat,chmod} from 'node:fs/promises';
+import vm from 'node:vm';
+import http from 'node:http';
+const jsonResponse=value=>new Response(JSON.stringify(value));
+const remoteProvider=overrides=>fakeProvider({remoteTokenCount:true,countInputTokens:async()=>100,...overrides});
+test('official key alias is supported with META_API_KEY precedence',()=>{
+  assert.equal(readConfig({MODEL_API_KEY:'FAKE-ALIAS'}).apiKey,'FAKE-ALIAS');
+  assert.equal(readConfig({META_API_KEY:'FAKE-PRIMARY',MODEL_API_KEY:'FAKE-ALIAS'}).apiKey,'FAKE-PRIMARY');
+});
+test('Meta adapter sends bounded stateless structured requests to fixed official endpoints',async()=>{
+  const requests=[];
+  const provider=createMetaProvider({fetchImpl:async(url,options)=>{requests.push({url,options});return jsonResponse(url.endsWith('/input_tokens')?{object:'response.input_tokens',input_tokens:123}:{status:'completed',output:[{type:'message',role:'assistant',status:'completed',content:[{type:'output_text',text:'{"groups":[]}'}]}]});}});
+  const controller=new AbortController(),options={tabs:[{id:'1',title:'Docs',url:'https://example.com/'}],model:'test-model',apiKey:'FAKE-TEST-KEY',maxOutputTokens:512,signal:controller.signal};
+  assert.equal(await provider.countInputTokens(options),123);assert.deepEqual(await provider.generate(options),{groups:[]});
+  assert.deepEqual(requests.map(r=>r.url),['https://api.meta.ai/v1/responses/input_tokens','https://api.meta.ai/v1/responses']);
+  for(const {options} of requests){const body=JSON.parse(options.body);assert.equal(options.redirect,'error');assert.equal(options.signal,controller.signal);assert.equal(body.store,false);assert.equal(body.stream,false);assert.equal(body.max_output_tokens,512);assert.equal(body.text.format.strict,true);assert.deepEqual(body.tools,[]);assert.equal(body.reasoning.effort,'minimal');assert(!options.body.includes('FAKE-TEST-KEY'));}
+  assert.deepEqual(JSON.parse(requests[0].options.body),JSON.parse(requests[1].options.body));
+  assert.throws(()=>makeMetaRequest({...options,maxOutputTokens:15}),hasCode('invalid_config'));
+});
+test('Meta adapter refuses invalid counts, incomplete/refused/multiple outputs and oversized bodies without retry',async()=>{
+  const options={tabs:[],model:'test',apiKey:'FAKE',maxOutputTokens:512};let calls=0;
+  for(const result of [{input_tokens:2},{object:'response.input_tokens',input_tokens:-1}]){const p=createMetaProvider({fetchImpl:async()=>{calls++;return jsonResponse(result);}});await assert.rejects(p.countInputTokens(options));}
+  for(const result of [{status:'incomplete',output:[]},{status:'completed',output:[{type:'message',role:'assistant',status:'completed',content:[{type:'refusal'}]}]},{status:'completed',output:[{type:'message',role:'assistant',status:'completed',content:[{type:'output_text',text:'{}'},{type:'output_text',text:'{}'}]}]},{status:'completed',output:[{type:'message',role:'assistant',status:'completed',content:[{type:'output_text',text:'not JSON'}]}]}]){const p=createMetaProvider({fetchImpl:async()=>{calls++;return jsonResponse(result);}});await assert.rejects(p.generate(options));}
+  const p=createMetaProvider({fetchImpl:async()=>{calls++;return new Response('x'.repeat(256001));}});await assert.rejects(p.generate(options));assert.equal(calls,7);
+});
+test('remote endpoints each persist admission while one lock serializes the whole suggestion',async t=>{
+  const f=await fixture(t),entered=deferred(),hold=deferred();let generated=0;
+  const service=createAIService({env:fakeEnv,statePath:f.statePath,now:f.now,provider:remoteProvider({countInputTokens:async()=>{entered.resolve();return hold.promise;},generate:async()=>{generated++;assert.equal(JSON.parse(await readFile(f.statePath,'utf8')).daily,2);return {groups:[]};}})});
+  const pending=service.suggest(tabs,{consent:true});await entered.promise;assert.equal((await service.status()).attemptsToday,1);
+  await assert.rejects(service.suggest(tabs,{consent:true}),hasCode('concurrency_limit'));hold.resolve(100);await pending;assert.equal(generated,1);assert.equal((await service.status()).attemptsToday,2);
+  await assert.rejects(service.suggest(tabs,{consent:true}),hasCode('minute_limit'));
+});
+test('slow token count timestamps generation at actual admission, preventing three calls per minute',async t=>{
+  const f=await fixture(t);let counts=0,generations=0;
+  const service=createAIService({env:fakeEnv,statePath:f.statePath,now:f.now,provider:remoteProvider({countInputTokens:async()=>{counts++;f.advance(59000);return 100;},generate:async()=>{generations++;return {groups:[]};}})});
+  await service.suggest(tabs,{consent:true});f.advance(2000);await assert.rejects(service.suggest(tabs,{consent:true}),hasCode('minute_limit'));assert.equal(counts,1);assert.equal(generations,1);
+  const state=JSON.parse(await readFile(f.statePath,'utf8'));assert.equal(state.attempts[1]-state.attempts[0],59000);
+});
+test('failed or excessive remote counts consume only one attempt and never generate',async t=>{
+  for(const mode of ['failure','large']){const f=await fixture(t);let generated=0,calls=0;const service=createAIService({env:fakeEnv,statePath:f.statePath,now:f.now,provider:remoteProvider({countInputTokens:async()=>{calls++;if(mode==='failure')throw Error('FAKE-KEY');return 4097;},generate:async()=>{generated++;}})});await assert.rejects(service.suggest(tabs,{consent:true}),hasCode(mode==='failure'?'provider_error':'input_limit'));assert.equal(calls,1);assert.equal(generated,0);assert.equal((await service.status()).attemptsToday,1);}
+});
+test('late remote count after timeout cannot reserve or start generation',async t=>{
+  const f=await fixture(t),hold=deferred();let generated=0;const service=createAIService({env:{...fakeEnv,AI_TIMEOUT_MS:'10'},statePath:f.statePath,now:f.now,provider:remoteProvider({countInputTokens:()=>hold.promise,generate:async()=>{generated++;}})});
+  await assert.rejects(service.suggest(tabs,{consent:true}),hasCode('timeout'));hold.resolve(100);await new Promise(resolve=>setTimeout(resolve,20));assert.equal(generated,0);assert.equal((await service.status()).attemptsToday,1);
+});
+test('two-call suggestions do not waste the last daily attempt on counting',async t=>{
+  const f=await fixture(t);let calls=0;const service=createAIService({env:{...fakeEnv,AI_REQUESTS_PER_DAY:'3'},statePath:f.statePath,now:f.now,provider:remoteProvider({countInputTokens:async()=>{calls++;return 100;}})});
+  await service.suggest(tabs,{consent:true});f.advance(60000);await assert.rejects(service.suggest(tabs,{consent:true}),hasCode('daily_limit'));assert.equal(calls,1);
+});
+async function localFixture(t){
+  const token='a'.repeat(64),origin='safari-web-extension://test-extension';let suggestions=0;
+  const service={status:async()=>({configured:true,attemptsToday:suggestions}),suggest:async()=>{suggestions++;return {groups:[]};}};
+  const {server,listen}=createLoopbackServer({service,token,allowedOrigin:origin,port:0});const address=await listen();t.after(()=>new Promise(resolve=>server.close(resolve)));
+  return {token,origin,base:`http://127.0.0.1:${address.port}`,headers:{Origin:origin,Authorization:`Bearer ${token}`},calls:()=>suggestions};
+}
+test('loopback requires exact Host, Origin and token, concealing status from strangers',async t=>{
+  const f=await localFixture(t);
+  for(const headers of [{},{...f.headers,Origin:'https://attacker.example'},{...f.headers,Authorization:'Bearer wrong'}]){const response=await fetch(f.base+'/v1/status',{headers});assert([401,403].includes(response.status));const body=await response.json();assert.equal(body.usage,undefined);assert(!JSON.stringify(body).includes(f.token));}
+  // Node fetch protects Host; use a raw HTTP request to test DNS-rebinding defense.
+  const wrongHost=await new Promise((resolve,reject)=>{const request=http.get(f.base+'/v1/status',{headers:{...f.headers,Host:'attacker.example'}},response=>{response.resume();response.on('end',()=>resolve(response.statusCode));});request.on('error',reject);});
+  assert.equal(wrongHost,403);
+  const response=await fetch(f.base+'/v1/status',{headers:f.headers});assert.equal(response.status,200);assert.equal((await response.json()).usage.configured,true);assert.equal(f.calls(),0);
+});
+test('loopback handles exact preflight, rejects extra fields, admits authenticated suggestion',async t=>{
+  const f=await localFixture(t);const p=await fetch(f.base+'/v1/suggestions',{method:'OPTIONS',headers:{Origin:f.origin,'Access-Control-Request-Method':'POST','Access-Control-Request-Headers':'authorization, content-type'}});assert.equal(p.status,204);assert.equal(p.headers.get('Access-Control-Allow-Origin'),f.origin);
+  const d=await fetch(f.base+'/v1/suggestions',{method:'OPTIONS',headers:{Origin:f.origin,'Access-Control-Request-Method':'DELETE'}});assert.equal(d.status,403);
+  const extra=await fetch(f.base+'/v1/suggestions',{method:'POST',headers:{...f.headers,'Content-Type':'application/json'},body:JSON.stringify({tabs,consent:true,apiKey:'TEST-ONLY'})});assert.equal(extra.status,400);assert.equal(f.calls(),0);
+  const good=await fetch(f.base+'/v1/suggestions',{method:'POST',headers:{...f.headers,'Content-Type':'application/json'},body:JSON.stringify({tabs,consent:true})});assert.equal(good.status,200);assert.equal(f.calls(),1);
+});
+test('loopback rejects oversized bodies before service invocation',async t=>{
+  const f=await localFixture(t);const r=await fetch(f.base+'/v1/suggestions',{method:'POST',headers:{...f.headers,'Content-Type':'application/json'},body:'x'.repeat(20001)});assert.equal(r.status,413);assert.equal(f.calls(),0);
+});
+test('pairing persists private token, rejects accidental re-pair and loose file permissions',async t=>{
+  const f=await fixture(t),path=join(f.dir,'connection.json');const a=await createConnection(path,'safari-web-extension://test');assert.match(a.token,/^[a-f0-9]{64}$/);assert.equal((await stat(path)).mode&0o077,0);assert.deepEqual(await createConnection(path,'safari-web-extension://test'),a);
+  await assert.rejects(createConnection(path,'safari-web-extension://other'),hasCode('invalid_config'));await chmod(path,0o644);await assert.rejects(readConnection(path),hasCode('invalid_config'));
+});
+test('extension client uses authenticated fixed loopback, exposes limit errors and never retries',async()=>{
+  const source=await readFile(new URL('../extension/ai.js',import.meta.url),'utf8'),requests=[];
+  const context=vm.createContext({location:{origin:'null',protocol:'safari-web-extension:',host:'test'},AbortController,setTimeout,clearTimeout,fetch:async(url,options)=>{requests.push({url,options});return {ok:false,json:async()=>({ok:false,error:{code:'minute_limit',message:'Wait',retryAt:123},usage:{remainingThisMinute:0}})};}});
+  vm.runInContext(source,context);const client=context.WorkspaceAI;assert.equal(client.clientOrigin,'safari-web-extension://test');await assert.rejects(client.status({token:'not-valid'}),hasCode('local_token_required'));assert.equal(requests.length,0);
+  await assert.rejects(client.suggest({token:'b'.repeat(64),tabs:[{id:'1'}],consent:true}),error=>error.code==='minute_limit'&&error.retryAt===123&&error.usage.remainingThisMinute===0);assert.equal(requests.length,1);assert.equal(requests[0].url,'http://127.0.0.1:8788/v1/suggestions');assert.equal(requests[0].options.redirect,'error');
+});

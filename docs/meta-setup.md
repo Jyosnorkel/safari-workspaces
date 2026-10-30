@@ -1,95 +1,81 @@
-# Meta integration and usage controls
+# Local Meta grouping and request limits
 
-## Current status
+This iteration ships the Meta Responses adapter, authenticated loopback service, private pairing, and `extension/ai.js` client. The coordinator integrates the dashboard review UI and Safari permissions. **No live inference, real key, or branded Safari extension connection has been tested by this workstream.** All tests use fake providers or loopback-only fake services.
 
-This milestone implements the **server-side usage guard and injectable service boundary**. It does not ship a Meta HTTP provider adapter, HTTP server, or extension/dashboard connection. No live inference or API spending has been tested. The `suggest` button remains unavailable until those pieces are implemented and verified.
+## Start locally
 
-All provider functions used by `tests/ai.test.mjs` are local fakes, explicitly labelled. They cannot demonstrate real Meta integration.
+Use Node.js 20.12 or newer on the Mac running Safari. No npm dependencies are needed.
 
-## Selected defaults
+1. Open the extension dashboard and copy its displayed extension origin (`safari-web-extension://…`). Pair exactly that origin from the repository folder:
 
-The user selected these conservative defaults:
+   ```sh
+   node server/pair.mjs 'safari-web-extension://YOUR-EXTENSION-ORIGIN'
+   ```
+
+   Pairing makes a private connection file containing a random local token. It prints the file location, never the token or Meta key. Copy the token locally into the dashboard's **local service token** field. This token is different from your Meta API key and stays in page memory; re-enter it after reload. Do not paste either secret into chat or GitHub.
+
+2. If your Meta key is already exported in a terminal, start the service from **that same terminal**. Exports in another terminal do not automatically reach Codex or another process. The service accepts `META_API_KEY`, with `MODEL_API_KEY` as a fallback; `META_API_KEY` takes precedence. Set the remaining non-secret configuration:
+
+   ```sh
+   export AI_LIVE_ENABLED=true
+   export META_API_PROVIDER_ID=meta
+   export META_API_MODEL=muse-spark-1.3
+   node server/start.mjs
+   ```
+
+   Confirm your account can use the chosen model. The documented example ID is not evidence of your account's access. Without a key/model/explicit opt-in, the service reports unconfigured and sends no provider calls. Starting, pairing and checking status do not request inference.
+
+   Alternatively, copy `server/.env.example` to an ignored `server/.env`, protect it with `chmod 600 server/.env`, edit the key locally, and start with `node --env-file=server/.env server/start.mjs`. Never commit this file. Existing shell variables override Node's env-file values.
+
+3. Connect in the dashboard. Safari may ask to allow access to the local service; the only service URL is `http://127.0.0.1:8788`. Status shows configuration, usage and cooldown without exposing the key.
+4. Scan a normal window, review the disclosure, and explicitly choose to send eligible titles and sanitized URLs for suggestions. The service removes URL credentials, query strings and fragments again. Titles and paths can still be sensitive. Page contents are not sent. Suggestion results require review before applying; they cannot directly close or restore tabs.
+
+The default state directory is `~/Library/Application Support/Safari Workspaces/AI`. It is shared across repository copies, so changing worktrees does not silently start a fresh budget. `AI_STATE_DIR` may override it with one private persistent absolute directory; **every service using this key must share the same directory**. `connection.json` holds the local pairing token; `usage.json` holds counts/timestamps only. Do not serve or publish this directory. Port 8788 is fixed for the packaged client; the server binds only to IPv4 loopback.
+
+If Safari changes the extension origin after reinstalling, preserve `usage.json` and stop the local AI service before deliberately replacing only `connection.json` and pairing again. Pairing never overwrites an existing different-origin connection. This service restart does not require quitting Safari or closing any windows.
+
+## Approved limits and accounting
 
 | Control | Default |
 | --- | --- |
-| In-flight requests | 1 |
-| Attempts per rolling 60 seconds | 2 |
-| Attempts per UTC calendar day | 20 |
-| Automatic retries | 0 |
-| Request timeout | 30 seconds |
-| Serialized tab input | 12,000 UTF-8 bytes |
-| Complete input prompt | 4,096 actual model tokens |
-| Maximum output | 512 tokens, passed to the provider adapter |
+| Concurrent suggestions | 1 across both endpoint calls |
+| Outbound attempts | 2 per rolling minute; 20 per UTC day |
+| Automatic retries / background inference | None |
+| Complete suggestion timeout | 30 seconds |
+| Serialized sanitized tab input | 12,000 UTF-8 bytes; 1–100 tabs |
+| Complete model input | 4,096 tokens, counted by Meta |
+| Generated output | 512 tokens including reasoning |
 
-A rejected local validation/consent/configuration check consumes no attempt. An admitted provider attempt is persisted **before** provider execution; failures, invalid model responses and timeouts still consume one. No automatic retries or request queue are implemented. A limit error carries a stable `code` and, where known, a Unix-millisecond `retryAt` timestamp for a future UI.
+A normal suggestion uses **two attempts**: token count followed by generation. With the default daily budget that permits at most ten complete suggestions per UTC day; failures may reduce that number. Each actual endpoint admission is persisted with its own timestamp before calling the provider. The service holds one shared lock across both calls and preflights room for both. A failed/excessive token count uses one attempt and never generates. An admitted generation failure uses the second attempt. Nothing retries automatically, and status checks consume no provider budget.
 
-**These controls are not a dollar spending cap.** Prices and model access have not been verified. Input counting and the output-token parameter must be correctly implemented by the eventual provider adapter. Request/token limits apply only to calls routed through this service, not other programs or other uses of the same API key. Provider-side budgets remain useful separately.
+Local configuration, consent and input checks consume no attempt. Remote counting checks the full prompt/schema with the exact generation body. The service never guesses tokens or calls another model as fallback. Output limits and `reasoning.effort=minimal` bound the request; truncated/refused/malformed responses fail without applying suggestions.
 
-## Credential setup
+These are local request/token limits, **not an account-wide or guaranteed dollar cap**. Other programs or different state paths can spend separately. Pricing is not claimed here. Optional positive settings: `AI_REQUESTS_PER_MINUTE`, `AI_REQUESTS_PER_DAY`, `AI_TIMEOUT_MS`, `AI_MAX_INPUT_BYTES`, `AI_MAX_INPUT_TOKENS`, `AI_MAX_OUTPUT_TOKENS` (minimum 16). Limits must admit two calls for this adapter. In-flight concurrency stays fixed at one.
 
-`server/.env.example` contains blank credential placeholders and `AI_LIVE_ENABLED=false`. Never place a real key in source, the extension, a GitHub issue/PR, screenshots, or logs. Copying the example to an ignored local `.env` is optional; environment loading is the responsibility of the future server entrypoint. The current modules do not read dotenv files automatically.
+## Security and recovery
 
-Required live configuration is:
+The HTTP service requires all of: loopback peer, exact `Host`, one exact paired `Origin`, and a 256-bit bearer token compared in constant time. It limits request bodies, denies extra credential/config fields, sets no-store responses, and never logs keys, inventories or raw provider errors. CORS preflight permits only GET/POST with Authorization/Content-Type. It deliberately does not accept `Origin: null` or wildcard origins. Safari's actual extension Origin behavior still needs verification; do not weaken these checks to make a fixture work.
 
-- `AI_LIVE_ENABLED=true` (explicit opt-in)
-- `META_API_PROVIDER_ID`: must match the installed adapter's `id`
-- `META_API_MODEL`: a verified callable model ID
-- `META_API_KEY`: local environment only
-- An actual provider adapter with the functions below
+The request ledger uses private files, exclusive locks, atomic rename and file/directory sync. Preserve it during upgrades. Clock rollback, corrupt state, failed writes and orphan locks block calls. No quota reset control exists. If the local service crashes with a `.lock`, first stop all service copies and confirm the previous provider operation has settled; preserve `usage.json` before manually removing only the orphan lock. A timed-out provider can still be billed, and the lock remains held if it ignores cancellation. Late token-count completion cannot start generation after timeout.
 
-Missing/disabled configuration fails closed without reserving budget or calling a provider. Do not enable live inference merely to test limits.
+Supported scope: one user, one local Mac/filesystem and one shared ledger. This is not a distributed quota system or protection against another local process that can read the user's private files. Production distribution still needs packaging/startup UX and real Safari/provider verification.
 
-Optional positive-integer settings: `AI_REQUESTS_PER_MINUTE`, `AI_REQUESTS_PER_DAY`, `AI_TIMEOUT_MS`, `AI_MAX_INPUT_BYTES`, `AI_MAX_INPUT_TOKENS`, and `AI_MAX_OUTPUT_TOKENS`. In-flight concurrency is deliberately fixed at one. Higher limits require a deliberate configuration change; the app does not increase limits automatically.
+## Client contract
 
-## Integration contract
+`WorkspaceAI.status({token})` returns `{ok:true, usage}`. `WorkspaceAI.suggest({token,tabs,consent:true})` returns `{ok:true, result:{groups,ungrouped},usage}`. Errors expose `code`, `retryAt`, and optional `usage`, with safe text. The client has a fixed loopback base, does not retain tokens, follow redirects, or retry. UI usage should disclose `requestsPerSuggestion:2` and preserve manual edits on any failure. No provider key travels through the extension or loopback request.
 
-```js
-import {createAIService} from '../server/ai-service.mjs';
-
-const service = createAIService({
-  env: process.env,
-  provider: reviewedMetaAdapter,
-  statePath: '/a/private/local/state/directory/meta-usage.json'
-});
-
-const usage = await service.status();
-// Show the data disclosure and obtain an explicit user action before consent:true.
-const suggestions = await service.suggest(scannedEligibleTabs, {consent: true});
-```
-
-The future server must keep this service instance and state path private to its authorized local client. No unauthenticated HTTP endpoint is included. It must route **every** inference request through `suggest`, not call the provider directly. The dashboard must disclose that titles and URL paths can contain sensitive information, and forward explicit user consent. Browser/storage actions remain deterministic extension code, separate from AI output.
-
-The adapter interface is:
-
-- `id`: configured provider identifier.
-- `countInputTokens({tabs, model})`: a synchronous, local count of the **complete prompt actually sent**, including system/instruction overhead, using the actual model tokenizer. A guess, incomplete count, Promise, or missing counter is not an acceptable implementation.
-- `generate({tabs, model, apiKey, maxOutputTokens, signal})`: exactly one provider request, with provider retries disabled, the actual provider output-token cap applied, and `AbortSignal` forwarded. Return parsed `{groups:[{name, reason, tabIds}]}`. The adapter must not silently call another model, retry, or log the request/key.
-
-No endpoint, HTTP schema, model ID, tokenizer, provider price or API compatibility is assumed here. The provider adapter is a separate integration task requiring current official Meta documentation and actual account access.
-
-The service validates tab IDs and cardinality, excludes private/pinned/unsupported inputs, strips URL credentials/queries/fragments, checks byte/token limits, and validates returned group names and assignments against the supplied IDs. It rejects invented or duplicate assignments. Unassigned tabs remain listed as ungrouped. Titles and paths are **not anonymized**. Model-supplied URLs are never returned as restoration instructions.
-
-`status()` exposes counts, limits, busy state and reset times, never the key, tab titles, URLs or model response. Do not serialize the internal `readConfig()` result: it is server-only and contains the key.
-
-## Durable usage and deployment scope
-
-`UsageGuard` is supported for **one account on one local machine using one shared private state path**, on a local filesystem supporting exclusive creation and atomic rename (macOS/Linux). Every service instance/process using the key must share that path. Multiple machines, serverless replicas and network filesystems require a transactional shared datastore and distributed concurrency control before deployment.
-
-Reservations are written to a private temporary file, synced, atomically renamed, and the directory synced before provider execution. The ledger contains counts/timestamps only. A sidecar `.lock` is exclusively created and held for the entire provider operation; separate instances cannot concurrently admit calls. Do not put the ledger in the repository or serve its directory over HTTP. `server/.data/`, lock files and temporary files are ignored.
-
-The daily window resets at **00:00 UTC**, independent of machine timezone. Rolling-minute attempts remain enforced across midnight. Restarting the process with the same state file preserves counts. Moving the system clock backwards blocks requests until it catches up. Deleting/replacing the state file resets local accounting, so preserve it when upgrading or restarting. There is no reset-budget button.
-
-Corrupt/unreadable state, failed writes, and existing locks fail closed. Crash recovery does not silently reset a quota or auto-expire a lock. If a service dies holding a lock, first stop all copies, verify that the prior provider request has finished or been cancelled, preserve the usage JSON, and only then remove the orphan `.lock` manually. An in-flight provider operation may still be billed even when the local process has exited.
-
-Timeouts abort the provider signal and return an error, but if an adapter ignores cancellation the concurrency lock remains held until its promise actually settles. A hung adapter therefore blocks subsequent calls rather than permitting extra billable requests. Stopping a hung service can leave an orphan lock; use the recovery procedure above.
-
-## Verification
+## Evidence and checks
 
 ```sh
-node --check server/usage-guard.mjs
-node --check server/ai-service.mjs
 node --test tests/ai.test.mjs
-node scripts/check.mjs
 ```
 
-The AI tests cover rolling-minute/daily windows, UTC reset, cross-midnight accounting, instance restart, concurrent instances, failed writes/corrupt state/orphan locks, clock rollback, timeouts including ignored cancellation, disabled/missing configuration, byte/token limits, consent, sanitization, redacted provider errors and invalid model assignments. They do not make network requests. The shared test runner does not yet discover this new suite; coordinator integration must add it before release.
+31 fake-provider/local-only tests cover original durable-budget behavior plus endpoint/schema construction, output bounds, strict response parsing, separate count/generation admissions, slow-count timing, whole-operation concurrency, timeout continuation, daily preflight, key alias precedence, Host/Origin/token checks, CORS, request-body bounds, private pairing and client error propagation. No test runs Safari or a live Meta call.
+
+Primary Meta documentation checked October 30, 2026:
+
+- [Responses protocol](https://dev.meta.ai/docs/protocols/responses): official base URL and example model; stateless requests.
+- [Count input tokens](https://dev.meta.ai/docs/api-reference/responses/count-input-tokens): `/v1/responses/input_tokens` measures rendered input without generation.
+- [Responses schemas — Token Counts Body and Resource](https://dev.meta.ai/docs/api-reference/responses/schemas#token-counts-body): accepts our `model`, `instructions`, `input`, `reasoning`, `background`, `text`, `tools`, `store`, `stream` and `max_output_tokens`; returns `object:response.input_tokens` and integer `input_tokens`.
+- [Structured output](https://dev.meta.ai/docs/structured-output): Responses uses `text.format.strict` and requires the strict object schema rules followed by this adapter.
+- [Reasoning](https://dev.meta.ai/docs/reasoning): Responses nests `reasoning.effort`; `minimal` is supported and `none` is unsupported by Muse Spark. Output cap includes reasoning and visible tokens.

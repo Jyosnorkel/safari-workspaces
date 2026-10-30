@@ -7,13 +7,15 @@ function number(env, key, fallback) {
   return value;
 }
 export function readConfig(env = process.env) {
-  return {
-    enabled: env.AI_LIVE_ENABLED === 'true', providerId: env.META_API_PROVIDER_ID || '',
-    model: env.META_API_MODEL || '', apiKey: env.META_API_KEY || '',
+  const config = {
+    enabled: env.AI_LIVE_ENABLED === 'true', providerId: env.META_API_PROVIDER_ID || 'meta',
+    model: env.META_API_MODEL || '', apiKey: env.META_API_KEY || env.MODEL_API_KEY || '',
     perMinute: number(env, 'AI_REQUESTS_PER_MINUTE', 2), perDay: number(env, 'AI_REQUESTS_PER_DAY', 20),
     timeoutMs: number(env, 'AI_TIMEOUT_MS', 30000), maxInputBytes: number(env, 'AI_MAX_INPUT_BYTES', 12000),
     maxInputTokens: number(env, 'AI_MAX_INPUT_TOKENS', 4096), maxOutputTokens: number(env, 'AI_MAX_OUTPUT_TOKENS', 512)
   };
+  if (config.maxOutputTokens < 16) throw new UsageError('invalid_config', 'AI_MAX_OUTPUT_TOKENS must be at least 16.');
+  return config;
 }
 function inputTabs(tabs) {
   if (!Array.isArray(tabs) || !tabs.length || tabs.length > 100) throw new UsageError('invalid_input', 'Send between one and 100 eligible tabs.');
@@ -45,30 +47,48 @@ function validateGroups(result, tabs) {
   }), ungrouped: [...allowed].filter(id => !seen.has(id))};
 }
 
-/** Server-side service boundary; no provider HTTP adapter is shipped in this milestone. */
+/** All model operations pass through this credential-safe server boundary. */
 export function createAIService({env = process.env, provider, statePath, now = Date.now}) {
   const config = readConfig(env);
+  if (provider?.remoteTokenCount && (config.perMinute < 2 || config.perDay < 2)) throw new UsageError('invalid_config', 'This provider needs room for two attempts per suggestion.');
   const guard = new UsageGuard({statePath, perMinute: config.perMinute, perDay: config.perDay, timeoutMs: config.timeoutMs, now});
   const configured = () => config.enabled && Boolean(config.apiKey.trim() && config.model.trim() && config.providerId.trim()) && provider?.id === config.providerId && typeof provider.generate === 'function' && typeof provider.countInputTokens === 'function';
   return {
-    async status() { return {enabled: config.enabled, configured: Boolean(configured()), ...await guard.status(), maxInputBytes: config.maxInputBytes, maxInputTokens: config.maxInputTokens, maxOutputTokens: config.maxOutputTokens}; },
+    async status() { return {enabled: config.enabled, configured: Boolean(configured()), ...await guard.status({requiredAttempts: provider?.remoteTokenCount ? 2 : 1}), maxInputBytes: config.maxInputBytes, maxInputTokens: config.maxInputTokens, maxOutputTokens: config.maxOutputTokens, requestsPerSuggestion: provider?.remoteTokenCount ? 2 : 1}; },
     async suggest(tabs, {consent = false} = {}) {
       if (!configured()) throw new UsageError('not_configured', 'Live AI is disabled or its provider/model/key adapter is not configured. No request was sent.');
       if (consent !== true) throw new UsageError('consent_required', 'Confirm sending tab titles and sanitized URL paths to the configured provider. Titles and paths may contain sensitive information.');
       const input = inputTabs(tabs);
       const body = JSON.stringify(input);
       if (Buffer.byteLength(body, 'utf8') > config.maxInputBytes) throw new UsageError('input_limit', 'The tab inventory exceeds the configured input byte limit.');
-      // Adapter must count the COMPLETE locally constructed prompt with the actual model tokenizer.
-      let tokenCount;
-      try { tokenCount = provider.countInputTokens({tabs: input, model: config.model}); }
-      catch { throw new UsageError('input_limit', 'The adapter could not count input tokens. No request was sent.'); }
-      if (!Number.isSafeInteger(tokenCount) || tokenCount < 0 || tokenCount > config.maxInputTokens) throw new UsageError('input_limit', 'The complete prompt exceeds the input token limit or cannot be counted.');
-      return guard.run(async signal => {
+      const options = {tabs: input, model: config.model, apiKey: config.apiKey, maxOutputTokens: config.maxOutputTokens};
+      const checkCount = count => {
+        if (!Number.isSafeInteger(count) || count < 0 || count > config.maxInputTokens) throw new UsageError('input_limit', 'The complete prompt exceeds the input token limit or cannot be counted.');
+      };
+      const generate = async signal => {
+        if (signal.aborted) throw new UsageError('timeout', 'The request was cancelled before generation. The reserved budget is retained.');
         let result;
-        try { result = await provider.generate({tabs: input, model: config.model, apiKey: config.apiKey, maxOutputTokens: config.maxOutputTokens, signal}); }
+        try { result = await provider.generate({...options, signal}); }
         catch { throw new UsageError('provider_error', 'The provider request failed and counts against your budget. No automatic retry was made.'); }
         return validateGroups(result, input);
-      });
+      };
+      if (provider.remoteTokenCount) {
+        // Preflight room for both calls; hold one lock and admit each endpoint
+        // immediately before calling it, with its own durable timestamp.
+        return guard.run(async (signal, reserve) => {
+          let count;
+          try { count = await provider.countInputTokens({...options, signal}); }
+          catch { throw new UsageError('provider_error', 'The provider token-count request failed. The reserved budget is retained; no generation or retry was made.'); }
+          checkCount(count);
+          await reserve();
+          return generate(signal);
+        }, {requiredAttempts: 2});
+      }
+      let count;
+      try { count = provider.countInputTokens(options); }
+      catch { throw new UsageError('input_limit', 'The adapter could not count input tokens. No request was sent.'); }
+      checkCount(count);
+      return guard.run(generate);
     }
   };
 }
