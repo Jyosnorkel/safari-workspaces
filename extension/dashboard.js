@@ -135,6 +135,35 @@
     notice(eligible ? 'Ready to organize. Create a group, then move tabs using their menus.' : 'No eligible web tabs found. Open some regular websites in this window, then scan again.');
     renderGroups();
   }
+  async function snapshotWindow() {
+    const name = `Window ${new Date().toLocaleString()}`.slice(0,80);
+    const {workspace, skipped} = await send('snapshot-window', {windowId, name, requestId: crypto.randomUUID()});
+    await loadSaved();
+    notice(`Saved ${workspace.tabs.length} web tabs. ${skipped} restricted or unavailable tabs skipped. All tabs remain open. Export a backup for a separate copy.`);
+  }
+  async function exportBackup(id) {
+    const {json} = await send('export-backup', id ? {id} : {});
+    const url = URL.createObjectURL(new Blob([json], {type: 'application/json'}));
+    const link = e('a'); link.href = url;
+    link.download = `safari-workspaces-${new Date().toISOString().replace(/[:.]/g,'-')}.json`;
+    document.body.append(link); link.click(); link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    notice('Backup download requested. Keep the JSON file somewhere safe; it contains full URLs and titles.');
+  }
+  $('snapshot-window').addEventListener('click', () => run(snapshotWindow));
+  $('export-all').addEventListener('click', () => run(() => exportBackup()));
+  $('import-backup').addEventListener('click', () => { if (!busy) $('backup-file').click(); });
+  $('backup-file').addEventListener('change', () => run(async () => {
+    const file = $('backup-file').files[0]; $('backup-file').value = '';
+    if (!file) return;
+    if (file.size > C.MAX_BACKUP_BYTES) throw new Error('Choose a backup file smaller than 10 MB.');
+    const json = await file.text();
+    const workspaces = C.decodeBackup(json);
+    const count = workspaces.reduce((sum, workspace) => sum + workspace.tabs.length, 0);
+    if (!await confirm('Import these snapshots?', `Save ${workspaces.length} workspaces containing ${count} URLs on this Mac? Existing snapshots are kept. No tabs will open or close. Importing the same file again adds another copy.`, 'Import snapshots')) return;
+    const result = await send('import-backup', {json});
+    await loadSaved(); notice(`Imported ${result.imported} snapshots. Review saved URLs before choosing Restore.`);
+  }));
   async function loadSaved() {
     const {workspaces} = await send('list');
     $('saved-count').textContent = workspaces.length;
@@ -177,7 +206,7 @@
         } finally { await loadSaved(); }
       },'primary');
       restore.disabled = pending.length > 0;
-      actions.append(restore); card.append(actions);
+      actions.append(button('Export backup', () => exportBackup(workspace.id)), restore); card.append(actions);
       const detail = e('details'), summary = e('summary','', 'Saved tabs & recovery details');
       const list = e('ol');
       for (const tab of workspace.tabs) {

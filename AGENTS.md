@@ -32,7 +32,7 @@ The user wants a shippable app, developed in tested iterations with regular GitH
 
 Groups live in our dashboard. Investigate native Safari Tab Group feasibility but do not assume the API exists or block the MVP on it. “Unload” means save and close. URL restoration does not restore unsaved forms, scroll position, authentication, history or full page state; explain this before closing. Start with one normal window. Accounts, cloud sync, multiple-browser support and drag/drop are optional.
 
-Short permission-based excerpts are an improvement after real title/URL grouping works. Context must be bounded, optional, treated as untrusted data and have metadata fallback. Other useful later work: export/import backup, workspace notes/checkpoints, user grouping instructions, multi-window support and new-tab suggestions. Do not add unrelated agent/image infrastructure to target prizes.
+Short permission-based excerpts are an improvement after real title/URL grouping works. Context must be bounded, optional, treated as untrusted data and have metadata fallback. Export/import backup and a non-closing whole-window snapshot are now explicitly requested MVP features. Other useful later work: workspace notes/checkpoints, user grouping instructions, multi-window support and new-tab suggestions. Do not add unrelated agent/image infrastructure to target prizes.
 
 ## API controls approved by the user
 
@@ -108,6 +108,12 @@ Remaining priorities: integrate reviewed agent fixes and isolated Safari tests; 
 - Run appropriate automated checks and native build; distinguish mock, WebKit UI, real Safari and real Meta evidence. No finished claim without evidence.
 - Recheck this file at milestones. Update docs/requirements progress and README honestly; do not mark manual/AI/submission checks complete merely because code exists.
 - No unrequested spending, deployment, hackathon submission, messages outside project GitHub collaboration or unrelated publication.
+
+## Browser safety and backup milestone — October 30
+
+User instruction: DO NOT CLOSE ANY CURRENT WINDOWS; DO NOT QUIT SAFARI. This overrides all earlier testing plans, restart checks and cleanup conventions. No DELETE WebDriver session/window endpoints, driver shutdown, Safari quit/restart, bulk tab operations or extension save-and-close tests during this milestone. Use only a fresh automation tab, leave it open and retain its connection for reuse. Do not assume WebDriver handles represent personal windows or that teardown is harmless. Stop and ask for help if isolation is uncertain.
+
+Implement a scan → save entire window snapshot → export portable JSON backup flow. Import must validate the whole file before writing, keep existing snapshots, reset operation journals, and open/close no tabs. Include pinned HTTP(S) URLs in snapshot-only backups; keep pinned tabs excluded from closing/group actions. Backups preserve URL/title/order, including duplicates, and do not recover unsaved forms or full browser state. Keep real browsing inventories private.
 
 ## Baseline status before this iteration
 

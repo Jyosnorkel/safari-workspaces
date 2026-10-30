@@ -101,6 +101,22 @@
     }
     return {workspace: record, closedTabIds};
   }
+  async function importBackup(json) {
+    // Validate the entire file before a single storage mutation; imported journals are discarded.
+    const workspaces = C.decodeBackup(json);
+    const all = await read();
+    const records = workspaces.map(workspace => ({
+      version: 1, id: crypto.randomUUID(), name: workspace.name,
+      createdAt: workspace.createdAt, updatedAt: new Date().toISOString(),
+      tabs: workspace.tabs.map((tab, index) => ({...tab, index, id: crypto.randomUUID()})),
+      close: {state: 'not-requested', results: []}, restore: {state: 'not-started', results: {}}
+    }));
+    for (const record of records) all[record.id] = verifiedRecord(record, record.id);
+    await api.storage.local.set({[C.KEY]: all});
+    const stored = await read();
+    for (const record of records) if (JSON.stringify(canonical(stored[record.id])) !== JSON.stringify(canonical(record))) throw new Error('Backup import could not be verified. Refresh saved workspaces before retrying.');
+    return {imported: records.length};
+  }
   async function restore({id, windowId, newSessionId, previousSessionId}) {
     await normalWindow(windowId);
     const record = (await read())[id];
@@ -151,8 +167,26 @@
         await normalWindow(message.windowId);
         return {tabs: C.inventory(await api.tabs.query({windowId: message.windowId}))};
       }
+      case 'snapshot-window': {
+        await normalWindow(message.windowId);
+        const inventory = C.inventory(await api.tabs.query({windowId: message.windowId}));
+        const candidates = inventory.filter(tab => C.restorable(tab.url) && (tab.eligible || tab.pinned));
+        // Snapshot-only operation: pinned URLs may be backed up, never passed to close.
+        const record = C.snapshot(message.name, candidates.map(tab => ({...tab, pinned: false})), message.requestId);
+        const previous = (await read())[record.id];
+        if (previous) return {workspace: verifiedRecord(previous, record.id), repeated: true};
+        verifiedRecord(record, record.id);
+        await write(record);
+        return {workspace: record, skipped: inventory.length - candidates.length};
+      }
       case 'list': return {workspaces: Object.values(await read()).sort((a,b) => b.createdAt.localeCompare(a.createdAt))};
       case 'save': return save(message);
+      case 'import-backup': return importBackup(message.json);
+      case 'export-backup': {
+        const all = await read();
+        const records = message.id ? [verifiedRecord(all[message.id], message.id)] : Object.entries(all).map(([id, record]) => verifiedRecord(record, id));
+        return {json: C.encodeBackup(records)};
+      }
       case 'restore': return restore(message);
       case 'resolve': {
         const record = (await read())[message.id];

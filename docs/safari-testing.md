@@ -1,3 +1,15 @@
+## Current safety override — October 30, 2026
+
+The user prohibits closing any current window or quitting Safari. Historical test plans below do not authorize teardown, restart or save-and-close tests now. The new harness in `scripts/safari-backup-smoke.mjs` leaves its fresh session/window and driver alive, writes a private connection file in the temporary folder, rejects DELETE commands, and refuses navigation unless its initial automation session has exactly one blank tab. Do not rerun it to create more sessions when a retained session already exists.
+
+A fresh SafariDriver window opened separately from the observed personal window. Two temporary extension loads returned success, but their content/background test scripts did not produce a dashboard. Native extension execution remains unverified; a help request was sent to the user. No session/window DELETE, Safari quit, driver termination or actual-tab save-and-close was invoked.
+
+`node scripts/safari-backup-ui.mjs /absolute/private/session.json` reuses only a single disposable localhost test tab. It exercises the real dashboard/core/coordinator JavaScript in Safari with **simulated extension APIs and sample tabs**, not the installed extension. The DOM handler test passed: three sample web tabs (including one pinned tab and a duplicate URL) were snapshotted and exported; importing the export produced a second saved snapshot. Its programmatic DOM clicks do not prove physical interaction, extension integration or that Safari completed a backup file download. Physical WebDriver clicks were inconsistent and a captured screenshot was blank; do not label visual testing passed. No personal inventories or test connection files belong in Git.
+
+Version 0.2.3: 68 automated checks pass; native build in a separate temporary output directory and strict signature verification pass. The already-loaded native app was not rebuilt/reloaded, and its permissions were not changed.
+
+---
+
 # Safari integration verification
 
 ## Code-level findings

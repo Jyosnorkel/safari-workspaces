@@ -13,6 +13,8 @@ Scan tabs → get meaningful Meta AI group suggestions → review and edit → s
 - A toolbar popup opens the workspace dashboard in the current normal Safari window.
 - Scan available tab titles and URLs; exclude private tabs and leave pinned and restricted tabs untouched.
 - Create and rename groups, move tabs between them, and exclude individual tabs.
+- Save an entire window without closing tabs, including pinned web URLs.
+- Export versioned JSON backups and preview/import them without replacing existing snapshots or opening tabs; see [backup format](docs/backup-format.md).
 - Save ordered URL/title snapshots to local extension storage, with persistent IDs and timestamps.
 - Write and read back snapshots before closing selected tabs; recheck live tab URLs before closing.
 - Track partial restoration and provide controls for uncertain results after an interruption.
@@ -50,7 +52,7 @@ Open http://localhost:8765/ in Safari. The existing test page still describes th
 
 - The native 0.2.2 build and strict code-signature verification passed on October 30, 2026.
 - Live Safari popup rendering and current-window scanning were verified. A live storage-verification failure was reproduced and fixed with regression coverage; full save/close/restore retesting and restart persistence are **not yet verified**.
-- `node scripts/check.mjs` passes 18 automated checks for the workspace coordinator and domain rules using a simulated browser API. Syntax and manifest resource checks are included. These do not replace Safari testing.
+- `node scripts/check.mjs` passes 68 automated checks for the workspace coordinator and domain rules using a simulated browser API. Syntax and manifest resource checks are included. These do not replace Safari testing.
 - Completed snapshots support an explicit **Restore another copy** action. New restore sessions are protected against replayed requests and stale dashboards.
 - Unsaved forms, browsing history, scroll position and complete page state are not saved. Restoration reopens URLs only.
 - Groups live in the extension dashboard. Native Safari Tab Groups are not controlled.
@@ -80,6 +82,6 @@ Project source is released under the [MIT License](LICENSE). Apple's SDKs and de
 ## Next milestones
 
 1. Verify the manual Safari journey, including persistence and partial failures.
-2. Add export/import backup and improve recovery guidance.
+2. Verify backup downloads/import in Safari and improve recovery guidance.
 3. Connect a real Meta model and add editable suggestion review.
 4. Measure grouping quality and restoration on realistic sessions, then document a reproducible judge setup.

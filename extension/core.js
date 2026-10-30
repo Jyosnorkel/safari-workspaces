@@ -78,5 +78,36 @@
       return {id: String(t.id), title: title(t.title).slice(0,250), url: `${url.origin}${url.pathname}`};
     });
   }
-  globalThis.WorkspaceCore = {KEY, restorable, inventory, snapshot, suggestions, aiInventory};
+  // Portable v1 backups contain URL snapshots only, never live tab IDs or operation journals.
+  const BACKUP_FORMAT = 'safari-workspaces-backup';
+  const MAX_BACKUP_BYTES = 10 * 1024 * 1024;
+  function backupWorkspaces(value) {
+    if (!Array.isArray(value) || !value.length || value.length > 100) throw new Error('A backup must contain between 1 and 100 workspaces.');
+    let total = 0;
+    return value.map(workspace => {
+      if (!record(workspace) || typeof workspace.name !== 'string' || !workspace.name.trim() || workspace.name.length > 80 ||
+          typeof workspace.createdAt !== 'string' || !Number.isFinite(Date.parse(workspace.createdAt)) ||
+          !Array.isArray(workspace.tabs) || !workspace.tabs.length || workspace.tabs.length > MAX_TABS) throw new Error('Invalid workspace in backup.');
+      total += workspace.tabs.length;
+      if (total > 5000) throw new Error('A backup may contain at most 5,000 tabs.');
+      return {name: workspace.name.trim(), createdAt: workspace.createdAt, tabs: workspace.tabs.map(tab => {
+        if (!record(tab) || !restorable(tab.url) || tab.url.length > 32768 || typeof tab.title !== 'string' || tab.title.length > 8192) throw new Error('Invalid tab in backup. Only HTTP and HTTPS URLs are supported.');
+        return {title: title(tab.title), url: tab.url};
+      })};
+    });
+  }
+  function encodeBackup(workspaces, now = new Date().toISOString()) {
+    const value = {format: BACKUP_FORMAT, version: 1, exportedAt: now, workspaces: backupWorkspaces(workspaces)};
+    const json = JSON.stringify(value, null, 2);
+    if (new TextEncoder().encode(json).length > MAX_BACKUP_BYTES) throw new Error('Backup exceeds the 10 MB size limit. Export fewer snapshots.');
+    return json;
+  }
+  function decodeBackup(json) {
+    if (typeof json !== 'string' || new TextEncoder().encode(json).length > MAX_BACKUP_BYTES) throw new Error('Choose a backup file smaller than 10 MB.');
+    let value;
+    try { value = JSON.parse(json); } catch { throw new Error('This file is not valid JSON.'); }
+    if (!record(value) || value.format !== BACKUP_FORMAT || value.version !== 1) throw new Error('Unsupported backup format or version.');
+    return backupWorkspaces(value.workspaces);
+  }
+  globalThis.WorkspaceCore = {KEY, restorable, inventory, snapshot, suggestions, aiInventory, encodeBackup, decodeBackup, MAX_BACKUP_BYTES};
 })();

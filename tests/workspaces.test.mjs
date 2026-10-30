@@ -39,7 +39,7 @@ function harness(initialTabs = [tab(1),tab(2)], initialStore = {}) {
       create:async options=>{h.events.push(`create:${options.url}`); if(h.failCreate.has(options.url)) throw new Error('Create denied'); const t=tab(h.nextId++,options); h.tabs.set(t.id,t); return clone(t);}
     }
   };
-  h.context=vm.createContext({browser,crypto:webcrypto,URL,console});
+  h.context=vm.createContext({browser,crypto:webcrypto,URL,TextEncoder,console});
   vm.runInContext(core,h.context); vm.runInContext(background,h.context);
   h.C=h.context.WorkspaceCore;
   h.send=(type,values={})=>h.listener({channel:'workspace',type,...values},{id:'test',url:'safari-web-extension://test/dashboard.html'});
@@ -224,4 +224,69 @@ test('non-normal windows cannot scan, save or restore',async()=>{
   assert.equal((await h.send('scan',{windowId:1})).ok,false);
   assert.equal((await h.save({close:true})).ok,false);
   assert.equal((await h.send('restore',{id:workspace.id,windowId:1})).ok,false);
+});
+
+
+test('whole-window snapshot preserves pinned web tabs, duplicates and order without closing anything', async () => {
+  const h = harness([tab(2,{pinned:true,url:'https://example.com/same'}),tab(1,{url:'https://example.com/same'}),tab(3,{incognito:true}),tab(4,{url:'safari-web-extension://test/dashboard.html'})]);
+  const response = await h.send('snapshot-window',{windowId:1,name:'Window backup',requestId:webcrypto.randomUUID()});
+  assert.equal(response.ok,true); assert.equal(response.workspace.tabs.length,2);
+  assert.equal(response.workspace.tabs[0].index,1);
+  assert.equal(response.workspace.close.state,'not-requested'); assert.equal(h.tabs.size,4);
+  assert.equal(h.events.some(event=>event.startsWith('remove:')),false);
+});
+test('backup export/import round trip keeps URLs, title text and duplicates but resets operation journals', async () => {
+  const h = harness([tab(1,{title:'<script>alert(1)</script>',url:'https://example.com/path?q=private#fragment'}),tab(2,{url:'https://example.com/path?q=private#fragment'})]);
+  const original = (await h.save()).workspace;
+  const exported = await h.send('export-backup'); assert.equal(exported.ok,true);
+  const portable = JSON.parse(exported.json);
+  assert.equal(portable.version,1); assert.equal(portable.workspaces[0].tabs[0].id,undefined);
+  assert.equal(portable.workspaces[0].close,undefined);
+  assert.equal((await h.send('import-backup',{json:exported.json})).imported,1);
+  const records = (await h.send('list')).workspaces;
+  const imported = records.find(record=>record.id!==original.id);
+  assert.equal(imported.tabs[0].url,original.tabs[0].url); assert.equal(imported.tabs[0].title,original.tabs[0].title);
+  assert.notEqual(imported.tabs[0].id,original.tabs[0].id);
+  assert.equal(imported.tabs.length,2); assert.equal(imported.restore.state,'not-started');
+  assert.equal(h.tabs.size,2); assert.equal(h.events.some(event=>/^(remove|create):/.test(event)),false);
+});
+test('invalid backup files are rejected before any write or tab mutation',async () => {
+  const h = harness(); await h.save();
+  const json = (await h.send('export-backup')).json;
+  const baseline = h.writes;
+  const bad = JSON.parse(json); bad.workspaces.push({...bad.workspaces[0],tabs:[{title:'Unsafe',url:'javascript:alert(1)'}]});
+  for (const input of ['not json',JSON.stringify({...JSON.parse(json),version:999}),JSON.stringify(bad),'x'.repeat(10*1024*1024+1)]) {
+    assert.equal((await h.send('import-backup',{json:input})).ok,false);
+    assert.equal(h.writes,baseline);
+  }
+  assert.equal(h.tabs.size,2);
+});
+test('snapshot-only write failure leaves every original tab open',async () => {
+  const h = harness(); h.failWrite=1;
+  assert.equal((await h.send('snapshot-window',{windowId:1,name:'Backup',requestId:webcrypto.randomUUID()})).ok,false);
+  assert.equal(h.tabs.size,2); assert.equal(h.events.some(event=>event.startsWith('remove:')),false);
+});
+
+test('portable backup bounds reject oversized collections and unreadable exports without writes', async () => {
+  const h=harness(); const original=(await h.save()).workspace;
+  const portable=JSON.parse((await h.send('export-backup')).json);
+  for (const mutate of [
+    value=>value.workspaces[0].tabs[0].url='file:///private/example',
+    value=>value.workspaces[0].tabs[0].title='x'.repeat(8193),
+    value=>value.workspaces[0].tabs=Array(501).fill(value.workspaces[0].tabs[0]),
+    value=>value.workspaces=Array(101).fill(value.workspaces[0])
+  ]) {
+    const value=clone(portable); mutate(value); const before=h.writes;
+    assert.equal((await h.send('import-backup',{json:JSON.stringify(value)})).ok,false);
+    assert.equal(h.writes,before);
+  }
+  h.store[h.C.KEY][original.id].tabs[0].url='javascript:alert(1)';
+  assert.equal((await h.send('export-backup')).ok,false);
+});
+test('private windows and empty eligible windows cannot create a window snapshot',async () => {
+  const h=harness([tab(1,{url:'safari://settings'})]);
+  const values={windowId:1,name:'Backup',requestId:webcrypto.randomUUID()};
+  assert.equal((await h.send('snapshot-window',values)).ok,false);
+  h.private=true; assert.equal((await h.send('snapshot-window',values)).ok,false);
+  assert.equal(h.writes,0); assert.equal(h.tabs.size,1);
 });
