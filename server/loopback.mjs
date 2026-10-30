@@ -33,7 +33,11 @@ export function createLoopbackServer({service,token,allowedOrigin,port=8788,maxB
   const server=http.createServer(async(request,response)=>{
     const reply=(status,data)=>{response.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});response.end(JSON.stringify(data));};
     const host=`127.0.0.1:${server.address()?.port}`;
-    if(request.headers.host!==host||!['127.0.0.1','::ffff:127.0.0.1'].includes(request.socket.remoteAddress)||request.headers.origin!==allowedOrigin) return reply(403,{ok:false,error:{code:'origin_denied',message:'Local service origin is not allowed.'}});
+    if(request.headers.host!==host||!['127.0.0.1','::ffff:127.0.0.1'].includes(request.socket.remoteAddress)) return reply(403,{ok:false,error:{code:'origin_denied',message:'The request must use the local service address on this Mac.'}});
+    if(request.headers.origin!==allowedOrigin) return reply(403,{ok:false,error:{code:'origin_denied',message:request.headers.origin===undefined
+      ? 'Safari did not send an Origin header. Update the extension and local service to v0.3.1 or newer; status checks now use POST.'
+      : request.headers.origin==='null' ? 'Safari sent an opaque Origin. This connection was rejected; do not change the paired origin to null.'
+      : 'The request origin differs from the paired dashboard origin. Check the exact dashboard origin and restart only the local AI service after re-pairing.'}});
     response.setHeader('Access-Control-Allow-Origin',allowedOrigin);response.setHeader('Vary','Origin');
     if(request.method==='OPTIONS') {
       if(!['GET','POST'].includes(request.headers['access-control-request-method'])||String(request.headers['access-control-request-headers']||'').split(',').some(h=>!['authorization','content-type'].includes(h.trim().toLowerCase()))) return reply(403,{ok:false,error:{code:'preflight_denied',message:'Unsupported local request.'}});
@@ -42,7 +46,14 @@ export function createLoopbackServer({service,token,allowedOrigin,port=8788,maxB
     }
     if(!safeEqual(request.headers.authorization,`Bearer ${token}`)) return reply(401,{ok:false,error:{code:'unauthorized',message:'Enter the local service token to connect.'}});
     try {
-      if(request.method==='GET'&&request.url==='/v1/status') return reply(200,{ok:true,usage:await service.status()});
+      if(['GET','POST'].includes(request.method)&&request.url==='/v1/status') {
+        if(request.method==='POST') {
+          if(request.headers['content-type']!=='application/json') return reply(415,{ok:false,error:{code:'content_type',message:'Use application/json.'}});
+          const input=await bodyJson(request,128);
+          if(!input||typeof input!=='object'||Array.isArray(input)||Object.keys(input).length) throw new UsageError('invalid_input','Status requests must contain an empty JSON object.');
+        }
+        return reply(200,{ok:true,usage:await service.status()});
+      }
       if(request.method!=='POST'||request.url!=='/v1/suggestions') return reply(404,{ok:false,error:{code:'not_found',message:'Local endpoint not found.'}});
       if(request.headers['content-type']!=='application/json') return reply(415,{ok:false,error:{code:'content_type',message:'Use application/json.'}});
       const input=await bodyJson(request,maxBodyBytes);

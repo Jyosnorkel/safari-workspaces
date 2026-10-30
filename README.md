@@ -54,9 +54,9 @@ Open http://localhost:8765/ in Safari. The existing test page still describes th
 
 ## Verification status and known limitations
 
-- The v0.3.0 native build and strict code-signature verification passed on October 30, 2026; the packaged AI client matches source.
+- The v0.3.1 native build and strict code-signature verification passed on October 30, 2026; the packaged AI client matches source.
 - Live Safari popup rendering and current-window scanning were verified. A live storage-verification failure was reproduced and fixed with regression coverage; full save/close/restore retesting and restart persistence are **not yet verified**.
-- `node scripts/check.mjs` passes 94 automated checks for workspace rules, fake-DOM review flows, fake Meta providers, authenticated local HTTP contracts and usage budgets. Syntax and native resource checks are included. These do not replace Safari testing.
+- `node scripts/check.mjs` passes 96 automated checks for workspace rules, fake-DOM review flows, fake Meta providers, authenticated local HTTP contracts and usage budgets. Syntax and native resource checks are included. These do not replace Safari testing.
 - Completed snapshots support an explicit **Restore another copy** action. New restore sessions are protected against replayed requests and stale dashboards.
 - Unsaved forms, browsing history, scroll position and complete page state are not saved. Restoration reopens URLs only.
 - Groups live in the extension dashboard. Native Safari Tab Groups are not controlled.

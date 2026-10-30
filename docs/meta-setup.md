@@ -70,7 +70,7 @@ Supported scope: one user, one local Mac/filesystem and one shared ledger. This 
 node --test tests/ai.test.mjs
 ```
 
-32 fake-provider/local-only tests cover original durable-budget behavior plus endpoint/schema construction, output bounds, strict response parsing, separate count/generation admissions, slow-count timing, whole-operation concurrency, timeout continuation, daily preflight, key alias precedence, Host/Origin/token checks, CORS, request-body bounds, private pairing and client error propagation. No test runs Safari or a live Meta call.
+34 fake-provider/local-only tests cover original durable-budget behavior plus endpoint/schema construction, output bounds, strict response parsing, separate count/generation admissions, slow-count timing, whole-operation concurrency, timeout continuation, daily preflight, key alias precedence, Host/Origin/token checks, CORS, request-body bounds, private pairing and client error propagation. No test runs Safari or a live Meta call.
 
 Primary Meta documentation checked October 30, 2026:
 
@@ -79,3 +79,9 @@ Primary Meta documentation checked October 30, 2026:
 - [Responses schemas — Token Counts Body and Resource](https://dev.meta.ai/docs/api-reference/responses/schemas#token-counts-body): accepts our `model`, `instructions`, `input`, `reasoning`, `background`, `text`, `tools`, `store`, `stream` and `max_output_tokens`; returns `object:response.input_tokens` and integer `input_tokens`.
 - [Structured output](https://dev.meta.ai/docs/structured-output): Responses uses `text.format.strict` and requires the strict object schema rules followed by this adapter.
 - [Reasoning](https://dev.meta.ai/docs/reasoning): Responses nests `reasoning.effort`; `minimal` is supported and `none` is unsupported by Muse Spark. Output cap includes reasoning and visible tokens.
+
+## v0.3.1 status connection patch
+
+The user reported origin rejection despite an exact match between the displayed dashboard origin and saved pairing. The wire Origin was not captured, so the precise browser behavior remains unconfirmed. The packaged client now uses an authenticated JSON `POST /v1/status` with `{}` instead of GET. Fetch's [Origin-header algorithm](https://fetch.spec.whatwg.org/#append-a-request-origin-header) includes a non-GET/HEAD path; privileged extension GET requests can bypass normal CORS processing. This patch avoids depending on GET's Origin behavior without accepting missing/null/wildcard origins. Status still never calls Meta or consumes attempts.
+
+The local server retains GET compatibility when a correct Origin is supplied, accepts POST status with an empty JSON object only, and distinguishes missing, opaque and mismatched Origin errors without logging credentials or inventories. Restart only the local AI service after updating the code; keep the existing pairing and usage ledger. Refresh the extension and reload its dashboard to load the new client. Safari does not need to quit. Live success still requires user confirmation.

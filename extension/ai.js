@@ -10,8 +10,10 @@
     const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),35000);
     try {
       const response=await fetch(`${baseURL}${path}`,{
-        method:path==='/v1/status'?'GET':'POST',headers:{Authorization:`Bearer ${token.trim()}`,...(path==='/v1/status'?{}:{'Content-Type':'application/json'})},
-        ...(path==='/v1/status'?{}:{body:JSON.stringify({tabs,consent})}),signal:controller.signal,
+        // Privileged extension GET requests can omit Origin when CORS is bypassed.
+        // POST uses Fetch's non-GET Origin path while retaining strict server checks.
+        method:'POST',headers:{Authorization:`Bearer ${token.trim()}`,'Content-Type':'application/json'},
+        body:JSON.stringify(path==='/v1/status'?{}:{tabs,consent}),signal:controller.signal,mode:'cors',
         credentials:'omit',cache:'no-store',redirect:'error'
       });
       const data=await response.json();

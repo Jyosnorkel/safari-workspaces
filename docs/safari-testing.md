@@ -1,3 +1,9 @@
+## v0.3.1 user-reported connection issue
+
+The paired and displayed dashboard origins matched, but the user received origin_denied on status. The actual incoming browser Origin was not captured. Client status now uses POST JSON rather than GET, keeping strict origin/token validation, and the server returns clearer missing/opaque/mismatched-origin diagnostics. All 96 automated checks pass; the normal-path native app is v0.3.1/build6 with a valid signature. No Safari interaction or real model requests occurred during the patch. Live confirmation is pending after the user refreshes the service and extension; no Safari quit/session closure is needed.
+
+---
+
 ## v0.3.0 integration evidence — October 30, 2026
 
 94 automated checks pass, including 32 fake-provider AI cases, 10 fake-DOM dashboard review cases and the actual extension-client/local-HTTP/fake-provider contract. Native v0.3.0/build5 and strict signature verification pass; the packaged AI client matches source. No Safari interaction or real Meta requests occurred during this integration.

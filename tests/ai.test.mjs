@@ -233,3 +233,31 @@ test('shared usage directory rejects relative overrides that would fork budgets 
  assert.equal(resolveStateDirectory('/private/tmp/explicit-ledger',home),'/private/tmp/explicit-ledger');
  for(const override of ['state','../state','~/state',' ',{}])assert.throws(()=>resolveStateDirectory(override,home),/absolute path/);
 });
+
+
+test('POST status uses exact Origin and authentication without a provider call; unsafe origins remain blocked',async t=>{
+ const f=await localFixture(t);
+ const status=await fetch(f.base+'/v1/status',{method:'POST',headers:{...f.headers,'Content-Type':'application/json'},body:'{}'});
+ assert.equal(status.status,200);assert.equal((await status.json()).usage.configured,true);
+ for(const [origin,diagnostic] of [[undefined,/did not send an Origin/],['null',/opaque Origin/],['safari-web-extension://different',/differs from the paired/]]) {
+  const headers={Authorization:`Bearer ${f.token}`,'Content-Type':'application/json'};
+  if(origin!==undefined)headers.Origin=origin;
+  const response=await fetch(f.base+'/v1/status',{method:'POST',headers,body:'{}'});
+  assert.equal(response.status,403);const data=await response.json();
+  assert.equal(data.error.code,'origin_denied');assert.match(data.error.message,diagnostic);assert.equal(data.usage,undefined);
+  assert(!JSON.stringify(data).includes(f.token));
+ }
+ const bad=await fetch(f.base+'/v1/status',{method:'POST',headers:{...f.headers,'Content-Type':'application/json'},body:'{"consent":true}'});
+ assert.equal(bad.status,400);assert.equal(f.calls(),0);
+});
+test('client status explicitly uses POST JSON to trigger non-GET Origin handling without inference',async()=>{
+ const requests=[];
+ const context=vm.createContext({location:{origin:'safari-web-extension://test'},AbortController,setTimeout,clearTimeout,fetch:async(url,options)=>{
+  requests.push({url,options});return {ok:true,json:async()=>({ok:true,usage:{configured:true}})};
+ }});
+ vm.runInContext(await readFile(new URL('../extension/ai.js',import.meta.url),'utf8'),context);
+ await context.WorkspaceAI.status({token:'a'.repeat(64)});
+ assert.equal(requests.length,1);assert.equal(requests[0].url,'http://127.0.0.1:8788/v1/status');
+ assert.equal(requests[0].options.method,'POST');assert.equal(requests[0].options.mode,'cors');
+ assert.equal(requests[0].options.body,'{}');assert.equal(requests[0].options.headers['Content-Type'],'application/json');
+});
