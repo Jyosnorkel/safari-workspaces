@@ -10,7 +10,9 @@ button.addEventListener('click', async () => {
     const url = api.runtime.getURL('dashboard.html');
     const existing = (await api.tabs.query({windowId: win.id})).find(tab => tab.url === url);
     if (existing) await api.tabs.update(existing.id, {active: true});
-    else await api.tabs.create({windowId: win.id, url});
-    window.close();
+    else await api.tabs.create({windowId: win.id, url, active: true});
+    // Safari can close the newly activated tab when window.close() races a tab
+    // creation. Switching to the dashboard dismisses the popup naturally.
+    status.textContent = 'Workspace manager opened.';
   } catch (error) { status.textContent = error.message; button.disabled = false; }
 });

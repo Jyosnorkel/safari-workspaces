@@ -9,13 +9,22 @@
     if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Workspace storage is unreadable. No tabs were closed.');
     return value;
   };
+  // Safari storage may return object properties in a different order. Compare
+  // canonical JSON values while retaining array order and every saved field.
+  function canonical(value) {
+    if (Array.isArray(value)) return value.map(canonical);
+    if (value && typeof value === 'object') return Object.fromEntries(
+      Object.keys(value).sort().map(key => [key, canonical(value[key])])
+    );
+    return value;
+  }
   async function write(record) {
     record.updatedAt = new Date().toISOString();
     const all = await read();
     all[record.id] = record;
     await api.storage.local.set({[C.KEY]: all});
     const stored = (await read())[record.id];
-    if (JSON.stringify(stored) !== JSON.stringify(record)) throw new Error('Could not verify the saved workspace. Stopping before further tab changes.');
+    if (JSON.stringify(canonical(stored)) !== JSON.stringify(canonical(record))) throw new Error('Could not verify the saved workspace. Stopping before further tab changes.');
   }
   async function normalWindow(windowId) {
     if (!Number.isInteger(windowId)) throw new Error('Select a normal Safari window first.');

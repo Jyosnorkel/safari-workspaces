@@ -7,18 +7,28 @@ import {webcrypto} from 'node:crypto';
 const core = readFileSync(new URL('../extension/core.js', import.meta.url),'utf8');
 const background = readFileSync(new URL('../extension/background.js', import.meta.url),'utf8');
 const clone = value => structuredClone(value);
+function reverseKeys(value) {
+  if (Array.isArray(value)) return value.map(reverseKeys);
+  if (value && typeof value === 'object') return Object.fromEntries(Object.keys(value).reverse().map(key => [key,reverseKeys(value[key])]));
+  return value;
+}
 const tab = (id, overrides = {}) => ({id, windowId: 1, index: id, title: `Page ${id}`, url: `https://example.com/${id}`, incognito: false, pinned: false, ...overrides});
 function harness(initialTabs = [tab(1),tab(2)], initialStore = {}) {
   const h = {store: clone(initialStore), tabs: new Map(initialTabs.map(t=>[t.id,clone(t)])), events: [], writes:0, gets:0, nextId:100, failWrite:0, failReadback:false, failCreate:new Set(), failRemove:new Set(), private:false};
   const browser = {
     runtime: {id:'test', getURL:path=>`safari-web-extension://test/${path}`, onMessage:{addListener: fn=>h.listener=fn}},
     storage: {local: {
-      get: async key => { h.gets++; return {[key]:clone(h.store[key])}; },
+      get: async key => { h.gets++; return {[key]:h.reorderKeys ? reverseKeys(clone(h.store[key])) : clone(h.store[key])}; },
       set: async values => {
         h.writes++; h.events.push('write');
         if (h.writes === h.failWrite) throw new Error('Storage full');
         if (h.onWrite) await h.onWrite(values);
         if (!h.failReadback) Object.assign(h.store,clone(values));
+        if (h.corruptStored && h.store['workspaces.v1']) {
+          const record=Object.values(h.store['workspaces.v1'])[0];
+          if (h.corruptStored==='title') record.tabs[0].title='Changed after saving';
+          if (h.corruptStored==='order') record.tabs.reverse();
+        }
       }
     }},
     windows: {get:async id=>({id, incognito:h.private, type:'normal'})},
@@ -139,3 +149,22 @@ test('completed snapshots support deliberate new sessions, but same request and 
   const stale=await h.send('restore',{...request,newSessionId:webcrypto.randomUUID()});
   assert.equal(stale.ok,false); assert.match(stale.error,/changed in another/);
 });
+
+
+test('storage property reordering does not reject an otherwise complete snapshot',async()=>{
+  const h=harness(); h.reorderKeys=true;
+  const result=await h.save({close:true});
+  assert.equal(result.ok,true,result.error);
+  assert.equal(result.workspace.close.state,'closed');
+  assert.equal(h.tabs.size,0);
+});
+
+for (const mutation of ['title','order']) {
+  test(`storage verification still rejects changed ${mutation} before any close`,async()=>{
+    const h=harness(); h.corruptStored=mutation;
+    const result=await h.save({close:true});
+    assert.equal(result.ok,false); assert.match(result.error,/verify/);
+    assert.equal(h.tabs.size,2);
+    assert.equal(h.events.some(event=>event.startsWith('remove:')),false);
+  });
+}

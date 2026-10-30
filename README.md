@@ -48,9 +48,9 @@ Open http://localhost:8765/ in Safari. The existing test page still describes th
 
 ## Verification status and known limitations
 
-- The native 0.2 build succeeded during development on October 28, 2026.
-- The full workspace journey, restart persistence, and failure recovery have **not yet been verified end to end in Safari**.
-- `node scripts/check.mjs` passes 14 automated checks for the workspace coordinator and domain rules using a simulated browser API. Syntax and manifest resource checks are included. These do not replace Safari testing.
+- The native 0.2.2 build and strict code-signature verification passed on October 30, 2026.
+- Live Safari popup rendering and current-window scanning were verified. A live storage-verification failure was reproduced and fixed with regression coverage; full save/close/restore retesting and restart persistence are **not yet verified**.
+- `node scripts/check.mjs` passes 18 automated checks for the workspace coordinator and domain rules using a simulated browser API. Syntax and manifest resource checks are included. These do not replace Safari testing.
 - Completed snapshots support an explicit **Restore another copy** action. New restore sessions are protected against replayed requests and stale dashboards.
 - Unsaved forms, browsing history, scroll position and complete page state are not saved. Restoration reopens URLs only.
 - Groups live in the extension dashboard. Native Safari Tab Groups are not controlled.

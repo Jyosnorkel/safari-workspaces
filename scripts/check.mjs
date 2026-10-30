@@ -9,5 +9,5 @@ for(const file of readdirSync(path.join(root,'extension')).filter(f=>f.endsWith(
 }
 const manifest=JSON.parse(readFileSync(path.join(root,'extension/manifest.json'),'utf8'));
 for(const file of [...manifest.background.scripts,manifest.action.default_popup]) readFileSync(path.join(root,'extension',file));
-const tests=spawnSync(process.execPath,['--test','tests/workspaces.test.mjs'],{cwd:root,stdio:'inherit'});
+const tests=spawnSync(process.execPath,['--test',...readdirSync(path.join(root,'tests')).filter(f=>f.endsWith('.test.mjs')).map(f=>path.join(root,'tests',f))],{cwd:root,stdio:'inherit'});
 process.exit(tests.status??1);
