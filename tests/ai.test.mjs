@@ -261,3 +261,26 @@ test('client status explicitly uses POST JSON to trigger non-GET Origin handling
  assert.equal(requests[0].options.method,'POST');assert.equal(requests[0].options.mode,'cors');
  assert.equal(requests[0].options.body,'{}');assert.equal(requests[0].options.headers['Content-Type'],'application/json');
 });
+
+
+test('explicit re-pair atomically changes only origin, retaining token, private permissions and usage bytes',async t=>{
+ const {rePairConnection}=await import('../server/connection.mjs');
+ const f=await fixture(t),path=join(f.dir,'connection.json');
+ const before=await createConnection(path,'safari-web-extension://old');
+ const ledger='{"version":1,"daily":7,"test":"preserve byte for byte"}';
+ await writeFile(join(f.dir,'usage.json'),ledger,{mode:0o600});
+ const changed=await rePairConnection(path,'safari-web-extension://new');
+ assert.equal(changed.allowedOrigin,'safari-web-extension://new');assert.equal(changed.token,before.token);
+ assert.deepEqual(await readConnection(path),changed);assert.equal((await stat(path)).mode&0o077,0);
+ assert.equal(await readFile(join(f.dir,'usage.json'),'utf8'),ledger);
+ const bytes=await readFile(path,'utf8');await rePairConnection(path,'safari-web-extension://new');
+ assert.equal(await readFile(path,'utf8'),bytes);
+ await assert.rejects(rePairConnection(path,'null'),hasCode('invalid_config'));
+ assert.equal(await readFile(path,'utf8'),bytes);
+ const {spawnSync}=await import('node:child_process');
+ const {fileURLToPath}=await import('node:url');
+ const cli=spawnSync(process.execPath,[fileURLToPath(new URL('../server/pair.mjs',import.meta.url)),'--re-pair','safari-web-extension://cli-new'],{env:{AI_STATE_DIR:f.dir},encoding:'utf8'});
+ assert.equal(cli.status,0,cli.stderr);assert(!cli.stdout.includes(before.token));
+ const after=await readConnection(path);assert.equal(after.allowedOrigin,'safari-web-extension://cli-new');assert.equal(after.token,before.token);
+ assert.equal(await readFile(join(f.dir,'usage.json'),'utf8'),ledger);
+});

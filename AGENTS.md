@@ -132,3 +132,7 @@ All 94 automated checks pass, including fake-model HTTP/client contracts, servic
 ## v0.3.1 connection follow-up
 
 A user-reported status request was rejected even though the displayed origin exactly matched saved pairing. No wire Origin was captured, so the cause remains an inference. Client status now uses JSON POST with an empty body object, preserving strict Host/Origin/token checks; missing/null origins remain rejected with more useful diagnostics. All 96 automated checks and the native build/signature pass. The normal build/Build/Products/Debug app path now contains v0.3.1/build6. No Safari control, app quit, session/window closing or real Meta call occurred. User must restart only their local AI service and refresh the extension/dashboard to verify the patched connection. Preserve pairing and usage data.
+
+## Explicit re-pair command
+
+`node server/pair.mjs --re-pair <new-dashboard-origin>` updates only the allowed origin, preserving the existing token and usage ledger with a private atomic write/readback. Stop only the local AI service before running it, then restart that service in the same configured terminal. No extension rebuild or Safari quit/session closure is needed. Normal pairing still refuses different existing origins. Never delete usage.json to repair a connection. Verification uses fake temporary files and checks the real CLI, not the user's credentials.

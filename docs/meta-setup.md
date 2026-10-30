@@ -32,7 +32,14 @@ Use Node.js 20.12 or newer on the Mac running Safari. No npm dependencies are ne
 
 The default state directory is `~/Library/Application Support/Safari Workspaces/AI`. It is shared across repository copies, so changing worktrees does not silently start a fresh budget. `AI_STATE_DIR` may override it with one private persistent absolute directory (relative paths are rejected to prevent per-checkout budget resets); **every service using this key must share the same directory**. `connection.json` holds the local pairing token; `usage.json` holds counts/timestamps only. Do not serve or publish this directory. Port 8788 is fixed for the packaged client; the server binds only to IPv4 loopback.
 
-If Safari changes the extension origin after reinstalling, preserve `usage.json` and stop the local AI service before deliberately replacing only `connection.json` and pairing again. Pairing never overwrites an existing different-origin connection. This service restart does not require quitting Safari or closing any windows.
+If the dashboard origin changes, stop **only the local AI service** with Ctrl+C in its terminal, then run:
+
+```sh
+node server/pair.mjs --re-pair 'PASTE_THE_NEW_DASHBOARD_ORIGIN_HERE'
+node server/start.mjs
+```
+
+Replace the placeholder with the exact origin shown in the dashboard. `--re-pair` updates only the allowed origin, preserves your existing token and `usage.json`, writes privately/atomically and verifies the result. Ordinary pairing still refuses to overwrite a different origin. No Safari restart or rebuild is required for this service-side change. Click **Connect & check status** again with your existing local pairing token. Never delete the usage ledger to re-pair.
 
 ## Approved limits and accounting
 
@@ -70,7 +77,7 @@ Supported scope: one user, one local Mac/filesystem and one shared ledger. This 
 node --test tests/ai.test.mjs
 ```
 
-34 fake-provider/local-only tests cover original durable-budget behavior plus endpoint/schema construction, output bounds, strict response parsing, separate count/generation admissions, slow-count timing, whole-operation concurrency, timeout continuation, daily preflight, key alias precedence, Host/Origin/token checks, CORS, request-body bounds, private pairing and client error propagation. No test runs Safari or a live Meta call.
+35 fake-provider/local-only tests cover original durable-budget behavior plus endpoint/schema construction, output bounds, strict response parsing, separate count/generation admissions, slow-count timing, whole-operation concurrency, timeout continuation, daily preflight, key alias precedence, Host/Origin/token checks, CORS, request-body bounds, private pairing and client error propagation. No test runs Safari or a live Meta call.
 
 Primary Meta documentation checked October 30, 2026:
 
