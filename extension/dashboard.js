@@ -2,7 +2,8 @@
   const api = globalThis.browser;
   const C = WorkspaceCore;
   const $ = id => document.getElementById(id);
-  let tabs = [], windowId, busy = false, generation = 0;
+  let tabs = [], windowId, busy = false, generation = 0, reviewRevision = 0;
+  let pairedToken = '', usage = null, pendingSuggestions = null;
   let groups = [{id: 'ungrouped', name: 'Ungrouped', reason: ''}];
   const assignments = new Map(), excluded = new Set(), requests = new Map();
   const e = (tag, className, text) => {
@@ -14,6 +15,155 @@
   function notice(message, error = false) {
     $('status').textContent = message;
     $('status').classList.toggle('error', error);
+  }
+  const ai = () => globalThis.WorkspaceAI;
+  const aiTabs = () => tabs.filter(tab => tab.eligible && !excluded.has(tab.id));
+  const attemptsPerSuggestion = () => Number.isSafeInteger(usage?.requestsPerSuggestion) && usage.requestsPerSuggestion > 0 ? usage.requestsPerSuggestion : 2;
+  function aiStatus(message, error = false) {
+    $('ai-status').textContent = message;
+    $('ai-status').classList.toggle('error', error);
+  }
+  function reviewChanged(message = 'Your review changed. Previous suggestions were discarded; request fresh suggestions when ready.') {
+    reviewRevision++; requests.clear();
+    if (pendingSuggestions) { pendingSuggestions = null; renderSuggestions(); aiStatus(message); }
+    updateAIControls();
+  }
+  function updateAIControls() {
+    const payload = C.aiInventory(aiTabs());
+    $('ai-data-count').textContent = `Preview the exact model input · ${payload.length} tabs`;
+    $('ai-data-preview').textContent = JSON.stringify(payload, null, 2);
+    const retryAt = usage?.retryAt ? new Date(usage.retryAt).getTime() : 0;
+    const cooling = retryAt > Date.now();
+    const daily = Number.isFinite(usage?.remainingToday) ? usage.remainingToday : 0;
+    const minute = Number.isFinite(usage?.remainingThisMinute) ? usage.remainingThisMinute : 0;
+    const cost = attemptsPerSuggestion();
+    const ready = pairedToken && usage?.enabled && usage?.configured && !usage?.busy && !cooling && daily >= cost && minute >= cost;
+    $('suggest').disabled = busy || !ready || !payload.length || !$('ai-consent').checked;
+    $('suggest').textContent = cooling ? `✦ Cooldown · ${Math.ceil((retryAt - Date.now()) / 1000)}s` : '✦ Suggest with Meta';
+    $('suggest').title = !pairedToken ? 'Connect the local service first.' : !usage?.configured ? 'Configure Meta in the local service first.' : usage?.busy ? 'The service is busy. Refresh its status when ready.' : daily < cost ? 'Not enough remote attempts remain today.' : cooling || minute < cost ? 'Wait for the minute cooldown, then refresh status.' : !payload.length ? 'Scan and include an eligible tab first.' : !$('ai-consent').checked ? 'Review and agree to the data disclosure first.' : 'Request suggestions without changing your current groups.';
+    $('ai-refresh').disabled = busy || !pairedToken;
+    $('ai-disconnect').disabled = busy || !pairedToken;
+    $('ai-badge').textContent = pairedToken && usage ? usage.configured ? 'Service connected' : 'Provider not configured' : 'Disconnected';
+    $('ai-badge').classList.toggle('connected', Boolean(pairedToken && usage));
+    if (!usage) { $('ai-usage').textContent = 'Usage is available after connecting. A full suggestion uses two remote attempts: token count and generation.'; return; }
+    const reset = usage.dailyResetAt ? new Date(usage.dailyResetAt).toLocaleString() : 'unavailable';
+    const cooldown = cooling ? ` Cooldown ends ${new Date(retryAt).toLocaleTimeString()}.` : minute < cost && daily >= cost ? ' Refresh status when the minute cooldown has ended.' : '';
+    $('ai-usage').textContent = `${usage.attemptsToday ?? '—'} remote attempts used today · ${daily} remaining today · ${minute} remaining this minute. Limits: ${usage.perMinute ?? 2}/minute and ${usage.perDay ?? 20}/day (${usage.timezone || 'UTC'}). A full suggestion uses ${cost} attempts (token count + generation): at most ${Math.floor((usage.perDay ?? 20) / cost)} full suggestions/day at these limits. Daily reset: ${reset}.${cooldown}`;
+  }
+  async function checkService(token = pairedToken) {
+    if (!ai()?.status) throw new Error('The AI connector is unavailable in this build. Manual workspaces remain usable.');
+    const response = await ai().status({token});
+    if (!response?.ok || !response.usage) throw new Error('The local service returned an invalid status.');
+    return response.usage;
+  }
+  async function connectAI() {
+    const token = $('ai-token').value.trim();
+    if (!token) throw new Error('Enter the local pairing token, not your Meta API key.');
+    aiStatus('Requesting access to the local service only…');
+    if (api?.permissions?.request && !await api.permissions.request({origins: ['http://127.0.0.1/*']})) {
+      pairedToken = ''; usage = null;
+      aiStatus('Local-service access was denied. Manual workspaces remain available. Connect again if you want to grant local access.', true);
+      updateAIControls(); return;
+    }
+    try {
+      const status = await checkService(token);
+      pairedToken = token; usage = status;
+      aiStatus(status.enabled && status.configured ? 'Connected. Review the exact input and agree to the disclosure before requesting suggestions. This status check made no model call.' : 'Local service connected, but Meta suggestions are disabled or the provider is not configured. Configure the service before requesting suggestions.');
+    } catch (error) {
+      pairedToken = ''; usage = null;
+      aiStatus(`Could not connect: ${error.message}. Check the running service, pairing token, and exact allowed dashboard origin.`, true);
+    }
+    updateAIControls();
+  }
+  async function refreshAI() {
+    try { usage = await checkService(); aiStatus('Local service status refreshed. No model request was made.'); }
+    catch (error) { usage = null; aiStatus(`Could not refresh service status: ${error.message}`, true); }
+    updateAIControls();
+  }
+  async function suggestAI() {
+    const requestTabs = aiTabs().map(tab => ({...tab}));
+    if (!pairedToken || !usage?.enabled || !usage?.configured || !$('ai-consent').checked || !requestTabs.length) throw new Error('Connect the service, include tabs and agree to the disclosure first.');
+    const baseline = reviewRevision;
+    const payload = C.aiInventory(requestTabs);
+    if (!await confirm('Send these tabs for Meta suggestions?', `Send ${payload.length} tab titles and sanitized URL paths through http://127.0.0.1:8788 to its configured Meta model provider? Titles and paths may be sensitive. This uses up to ${attemptsPerSuggestion()} remote attempts. Page text is not sent. Your manual groups stay unchanged. A valid response replaces any older unaccepted suggestion preview.`, 'Send & suggest')) return;
+    if (baseline !== reviewRevision) throw new Error('Your review changed. Review the updated input before requesting suggestions.');
+    $('ai-consent').checked = false;
+    aiStatus('Requesting Meta suggestions: token count and generation. Your manual groups are unchanged…');
+    notice('Waiting for suggestions. No tabs will be opened or closed.');
+    try {
+      const response = await ai().suggest({token: pairedToken, tabs: payload, consent: true});
+      if (response?.usage) usage = response.usage;
+      const validated = C.suggestions(response?.result, requestTabs);
+      if (baseline !== reviewRevision) throw new Error('Your review changed during the request. Suggestions were not applied.');
+      const proposedGroups = validated.groups.map(group => ({...group, id: `proposal-${crypto.randomUUID()}`}));
+      const proposedAssignments = new Map();
+      for (let i = 0; i < validated.groups.length; i++) for (const id of validated.groups[i].tabIds) proposedAssignments.set(String(id), proposedGroups[i].id);
+      pendingSuggestions = {groups: proposedGroups, assignments: proposedAssignments, tabs: requestTabs, revision: baseline};
+      renderSuggestions();
+      aiStatus(`Received ${proposedGroups.length} proposed groups. Review, rename or move tabs below, then accept explicitly. Your manual groups are unchanged.`);
+      notice('Suggestions are ready to review. They have not changed your groups or snapshots.');
+    } catch (error) {
+      if (error.usage) usage = error.usage;
+      else usage = null; // Require an explicit status refresh; do not make hidden follow-up calls.
+      const retry = error.retryAt ? ` Retry after ${new Date(error.retryAt).toLocaleString()}; refresh status before trying again.` : '';
+      aiStatus(`Suggestions failed: ${error.message}${error.code ? ` (${error.code})` : ''}.${retry} Your manual groups and saved workspaces are unchanged.`, true);
+      notice('Suggestions were not applied. You can keep organizing tabs manually.', true);
+    }
+    updateAIControls();
+  }
+  function renderSuggestions() {
+    $('ai-review').hidden = !pendingSuggestions;
+    $('ai-candidates').replaceChildren();
+    if (!pendingSuggestions) return;
+    const candidate = pendingSuggestions;
+    $('ai-review-summary').textContent = `${candidate.groups.length} proposed groups for ${candidate.tabs.length} included tabs. Move uncertain tabs to “Leave ungrouped”.`;
+    const buckets = [...candidate.groups, {id: 'proposal-ungrouped', name: 'Leave ungrouped', reason: 'These tabs will remain visibly ungrouped.'}];
+    for (const group of buckets) {
+      const members = candidate.tabs.filter(tab => (candidate.assignments.get(String(tab.id)) || 'proposal-ungrouped') === group.id);
+      const card = e('article', 'group'), header = e('div', 'group-header');
+      if (group.id === 'proposal-ungrouped') header.append(e('h3', '', group.name));
+      else {
+        const input = e('input'); input.type = 'text'; input.value = group.name; input.maxLength = 80;
+        input.setAttribute('aria-label', `Proposed group name: ${group.name}`);
+        input.addEventListener('input', () => { group.name = input.value; });
+        input.addEventListener('change', renderSuggestions);
+        header.append(input);
+      }
+      header.append(e('span', 'count', `${members.length} tabs`)); card.append(header);
+      if (group.reason) card.append(e('p', 'group-reason', group.reason));
+      const list = e('div', 'tabs');
+      for (const tab of members) {
+        const row = e('div', 'tab'), content = e('div', 'tab-content');
+        content.append(e('div', 'tab-title', tab.title), e('div', 'tab-url', C.aiInventory([tab])[0].url));
+        const move = e('select'); move.setAttribute('aria-label', `Proposed group for ${tab.title}`);
+        for (const target of buckets) {
+          const option = e('option', '', target.name || 'Unnamed proposal'); option.value = target.id; option.selected = target.id === group.id; move.append(option);
+        }
+        move.addEventListener('change', () => { candidate.assignments.set(String(tab.id), move.value); renderSuggestions(); });
+        content.append(move); row.append(content); list.append(row);
+      }
+      if (!members.length) list.append(e('div', 'empty', 'Empty proposals are omitted when accepted.'));
+      card.append(list); $('ai-candidates').append(card);
+    }
+  }
+  async function acceptSuggestions() {
+    const candidate = pendingSuggestions;
+    if (!candidate) return;
+    if (candidate.revision !== reviewRevision) { reviewChanged(); throw new Error('Your review changed. Request fresh suggestions.'); }
+    const raw = {groups: candidate.groups.map(group => ({name: group.name.trim(), reason: group.reason, tabIds: candidate.tabs.filter(tab => candidate.assignments.get(String(tab.id)) === group.id).map(tab => String(tab.id))})).filter(group => group.tabIds.length)};
+    const validated = C.suggestions(raw, candidate.tabs);
+    if (!await confirm('Accept reviewed suggestions?', `Apply these group assignments to ${candidate.tabs.length} included tabs? Existing unchecked tabs keep their groups. This updates only the review; no tabs are saved, closed or restored.`, 'Accept groups')) return;
+    if (candidate.revision !== reviewRevision) throw new Error('Your review changed. Suggestions were not applied.');
+    const added = validated.groups.map(group => ({...group, id: crypto.randomUUID()}));
+    for (const tab of candidate.tabs) assignments.delete(tab.id);
+    for (let i = 0; i < validated.groups.length; i++) for (const id of validated.groups[i].tabIds) {
+      const original = candidate.tabs.find(tab => String(tab.id) === String(id)); assignments.set(original.id, added[i].id);
+    }
+    groups.push(...added.map(({id, name, reason}) => ({id, name, reason})));
+    groups = groups.filter(group => group.id === 'ungrouped' || tabs.some(tab => assignments.get(tab.id) === group.id));
+    pendingSuggestions = null; reviewRevision++; requests.clear(); renderSuggestions(); renderGroups();
+    aiStatus('Reviewed suggestions accepted. You can still rename, move or exclude tabs before saving.');
+    notice('Your reviewed groups are ready. Nothing was saved or closed automatically.');
   }
   async function send(type, values = {}) {
     const response = await api.runtime.sendMessage({channel: 'workspace', type, ...values});
@@ -33,6 +183,7 @@
       document.querySelector('main').inert = false;
       document.querySelector('main').removeAttribute('aria-busy');
       document.querySelector('aside').inert = false;
+      updateAIControls();
     }
   }
   function confirm(title, text, accept) {
@@ -53,6 +204,7 @@
     node.addEventListener('click', () => run(action)); return node;
   }
   function renderGroups() {
+    updateAIControls();
     $('groups').replaceChildren();
     if (!tabs.length) {
       $('groups').append(e('div','empty','No tabs scanned yet. Scan this window to organize your work.'));
@@ -62,9 +214,17 @@
       const card = e('section','group'), header = e('div','group-header');
       const name = e('input'); name.type = 'text'; name.maxLength = 80; name.value = group.name;
       name.setAttribute('aria-label', `Name for ${group.name}`);
-      name.addEventListener('input', () => {group.name = name.value; requests.clear();});
+      name.addEventListener('input', () => {group.name = name.value; reviewChanged();});
+      name.addEventListener('change',renderGroups);
       header.append(name,e('span','count',`${selected(group.id).length} selected`));
       card.append(header);
+      const selectionActions = e('div','group-select-actions');
+      for (const [label,include] of [['Select all',true],['Select none',false]]) selectionActions.append(button(label,async()=>{
+        for (const tab of assigned(group.id).filter(tab=>tab.eligible)) if (include) excluded.delete(tab.id); else excluded.add(tab.id);
+        reviewChanged(); renderGroups();
+      }));
+      if (group.id !== 'ungrouped' && !assigned(group.id).length) selectionActions.append(button('Remove empty group',async()=>{ groups=groups.filter(item=>item.id!==group.id); reviewChanged(); renderGroups(); }));
+      card.append(selectionActions);
       if (group.reason) card.append(e('p','group-reason', group.reason));
       const list = e('div','tabs');
       for (const tab of assigned(group.id)) {
@@ -74,7 +234,7 @@
         checkbox.setAttribute('aria-label', `Include ${tab.title}`);
         checkbox.addEventListener('change', () => {
           if (checkbox.checked) excluded.delete(tab.id); else excluded.add(tab.id);
-          requests.clear(); renderGroups();
+          reviewChanged(); renderGroups();
         });
         const content = e('div','tab-content');
         const title = e('div','tab-title', tab.title); title.title = tab.title;
@@ -87,7 +247,7 @@
             option.selected = target.id === group.id; move.append(option);
           }
           move.addEventListener('change', () => {
-            assignments.set(tab.id,move.value); requests.clear(); renderGroups();
+            assignments.set(tab.id,move.value); reviewChanged(); renderGroups();
           });
           content.append(move);
         }
@@ -121,7 +281,7 @@
       notice(`${workspace.name}: ${workspace.tabs.length} tabs saved; ${closed} closed. ${workspace.tabs.length-closed} left open.${repeated ? ' This request was already processed.' : ''}`);
       // Keep all review edits. Remove only tabs confirmed closed, including late-navigation failures.
       const removed = new Set(closedTabIds || []);
-      tabs = tabs.filter(t => !removed.has(t.id)); renderGroups();
+      tabs = tabs.filter(t => !removed.has(t.id)); reviewChanged('Tabs changed. Previous AI suggestions were discarded; scan again before requesting a suggestion.'); renderGroups();
     } else notice(`${workspace.name}: saved ${workspace.tabs.length} tabs locally. Tabs remain open.${repeated ? ' Already saved; no duplicate created.' : ''}`);
   }
   async function scan() {
@@ -130,6 +290,7 @@
     const response = await send('scan',{windowId});
     tabs = response.tabs; groups = [{id:'ungrouped',name:'Ungrouped',reason:''}];
     assignments.clear(); excluded.clear(); requests.clear(); generation++;
+    reviewChanged('A new scan replaced the inventory. Previous suggestions were discarded.'); $('ai-consent').checked = false;
     const eligible = tabs.filter(t=>t.eligible).length;
     $('scan-info').textContent = `${tabs.length} tabs scanned · ${eligible} eligible · ${tabs.length-eligible} left untouched`;
     notice(eligible ? 'Ready to organize. Create a group, then move tabs using their menus.' : 'No eligible web tabs found. Open some regular websites in this window, then scan again.');
@@ -223,9 +384,24 @@
   $('new-group').addEventListener('click',()=> {
     if (busy) return;
     if (!tabs.length) return notice('Scan this window before creating a group.',true);
-    groups.push({id:crypto.randomUUID(),name:`Workspace ${groups.length}`,reason:''}); renderGroups();
+    groups.push({id:crypto.randomUUID(),name:`Workspace ${groups.length}`,reason:''}); reviewChanged(); renderGroups();
     $('groups').lastElementChild.querySelector('input').focus();
   });
+  $('ai-origin').textContent = ai()?.clientOrigin || (globalThis.location.origin !== 'null' ? globalThis.location.origin : `${globalThis.location.protocol}//${globalThis.location.host}`);
+  $('ai-token').addEventListener('input',()=>{ if (pairedToken) { pairedToken=''; usage=null; aiStatus('Pairing token changed. Connect to check the new token before requesting suggestions.'); updateAIControls(); } });
+  $('ai-connect').addEventListener('click',()=>run(connectAI));
+  $('ai-refresh').addEventListener('click',()=>run(refreshAI));
+  $('ai-disconnect').addEventListener('click',()=>{
+    if (busy) return;
+    pairedToken=''; usage=null; $('ai-token').value=''; $('ai-consent').checked=false;
+    aiStatus('Disconnected. The pairing token was cleared from this page. Manual workspaces and existing review remain available.'); updateAIControls();
+  });
+  $('ai-consent').addEventListener('change',updateAIControls);
+  $('suggest').addEventListener('click',()=>run(suggestAI));
+  $('ai-discard').addEventListener('click',()=>{ if (busy) return; pendingSuggestions=null; renderSuggestions(); aiStatus('Suggestions discarded. Your manual groups are unchanged.'); });
+  $('ai-accept').addEventListener('click',()=>run(acceptSuggestions));
+  // Only update the local countdown; never poll the service or retry model calls.
+  setInterval(updateAIControls,1000);
   renderGroups();
   run(async()=> {
     if (!api?.runtime?.sendMessage) throw new Error('This page must be opened from the Safari Workspaces extension toolbar. Enable the extension in Safari Settings → Extensions.');
