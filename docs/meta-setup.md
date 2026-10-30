@@ -30,7 +30,7 @@ Use Node.js 20.12 or newer on the Mac running Safari. No npm dependencies are ne
 3. Connect in the dashboard. Safari may ask to allow access to the local service; the only service URL is `http://127.0.0.1:8788`. Status shows configuration, usage and cooldown without exposing the key.
 4. Scan a normal window, review the disclosure, and explicitly choose to send eligible titles and sanitized URLs for suggestions. The service removes URL credentials, query strings and fragments again. Titles and paths can still be sensitive. Page contents are not sent. Suggestion results require review before applying; they cannot directly close or restore tabs.
 
-The default state directory is `~/Library/Application Support/Safari Workspaces/AI`. It is shared across repository copies, so changing worktrees does not silently start a fresh budget. `AI_STATE_DIR` may override it with one private persistent absolute directory; **every service using this key must share the same directory**. `connection.json` holds the local pairing token; `usage.json` holds counts/timestamps only. Do not serve or publish this directory. Port 8788 is fixed for the packaged client; the server binds only to IPv4 loopback.
+The default state directory is `~/Library/Application Support/Safari Workspaces/AI`. It is shared across repository copies, so changing worktrees does not silently start a fresh budget. `AI_STATE_DIR` may override it with one private persistent absolute directory (relative paths are rejected to prevent per-checkout budget resets); **every service using this key must share the same directory**. `connection.json` holds the local pairing token; `usage.json` holds counts/timestamps only. Do not serve or publish this directory. Port 8788 is fixed for the packaged client; the server binds only to IPv4 loopback.
 
 If Safari changes the extension origin after reinstalling, preserve `usage.json` and stop the local AI service before deliberately replacing only `connection.json` and pairing again. Pairing never overwrites an existing different-origin connection. This service restart does not require quitting Safari or closing any windows.
 
@@ -70,7 +70,7 @@ Supported scope: one user, one local Mac/filesystem and one shared ledger. This 
 node --test tests/ai.test.mjs
 ```
 
-31 fake-provider/local-only tests cover original durable-budget behavior plus endpoint/schema construction, output bounds, strict response parsing, separate count/generation admissions, slow-count timing, whole-operation concurrency, timeout continuation, daily preflight, key alias precedence, Host/Origin/token checks, CORS, request-body bounds, private pairing and client error propagation. No test runs Safari or a live Meta call.
+32 fake-provider/local-only tests cover original durable-budget behavior plus endpoint/schema construction, output bounds, strict response parsing, separate count/generation admissions, slow-count timing, whole-operation concurrency, timeout continuation, daily preflight, key alias precedence, Host/Origin/token checks, CORS, request-body bounds, private pairing and client error propagation. No test runs Safari or a live Meta call.
 
 Primary Meta documentation checked October 30, 2026:
 

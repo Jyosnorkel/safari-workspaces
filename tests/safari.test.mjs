@@ -64,7 +64,9 @@ test('manifest popup and background resources are included in the native extensi
   const manifest=JSON.parse(readFileSync(path.join(root,'extension/manifest.json'),'utf8'));
   const project=readFileSync(path.join(root,'native/Safari Dev Lab/Safari Dev Lab.xcodeproj/project.pbxproj'),'utf8');
   const phase=project.match(/8FFCB11B3090F03E0088828C \/\* Resources \*\/ = \{[\s\S]*?\n\t\t\};/)[0];
-  for(const file of ['manifest.json',manifest.action.default_popup,'popup.js','popup.css','dashboard.html','dashboard.js','dashboard.css',...manifest.background.scripts]) {
+  const dashboard=readFileSync(path.join(root,'extension/dashboard.html'),'utf8');
+  const dashboardFiles=Array.from(dashboard.matchAll(/(?:src|href)="([^"]+\.(?:js|css))"/g),match=>match[1]);
+  for(const file of ['manifest.json',manifest.action.default_popup,'popup.js','popup.css','dashboard.html',...dashboardFiles,...manifest.background.scripts]) {
     assert(existsSync(path.join(root,'extension',file)),`${file} exists`);
     assert(phase.includes(`${file} in Resources`),`${file} belongs to the extension copy phase`);
   }

@@ -1,10 +1,11 @@
 {
   "manifest_version": 3,
   "name": "Safari Workspaces",
-  "version": "0.2.3",
+  "version": "0.3.0",
   "description": "Review, save and restore Safari workspaces. Keep related tabs together and resume later.",
   "permissions": ["tabs", "storage"],
+  "optional_host_permissions": ["http://127.0.0.1/*"],
   "background": {"scripts": ["core.js", "background.js"], "persistent": false},
   "action": {"default_title": "Safari Workspaces", "default_popup": "popup.html"},
-  "content_security_policy": {"extension_pages": "script-src 'self'; object-src 'none'"}
+  "content_security_policy": {"extension_pages": "script-src 'self'; object-src 'none'; connect-src http://127.0.0.1:8788"}
 }

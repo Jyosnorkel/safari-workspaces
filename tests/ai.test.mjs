@@ -222,3 +222,14 @@ test('extension client uses authenticated fixed loopback, exposes limit errors a
   vm.runInContext(source,context);const client=context.WorkspaceAI;assert.equal(client.clientOrigin,'safari-web-extension://test');await assert.rejects(client.status({token:'not-valid'}),hasCode('local_token_required'));assert.equal(requests.length,0);
   await assert.rejects(client.suggest({token:'b'.repeat(64),tabs:[{id:'1'}],consent:true}),error=>error.code==='minute_limit'&&error.retryAt===123&&error.usage.remainingThisMinute===0);assert.equal(requests.length,1);assert.equal(requests[0].url,'http://127.0.0.1:8788/v1/suggestions');assert.equal(requests[0].options.redirect,'error');
 });
+
+
+test('shared usage directory rejects relative overrides that would fork budgets across checkouts',async()=>{
+ const {resolveStateDirectory}=await import('../server/connection.mjs');
+ const home='/private/tmp/fake-home';
+ const expected=join(home,'Library','Application Support','Safari Workspaces','AI');
+ assert.equal(resolveStateDirectory(undefined,home),expected);
+ assert.equal(resolveStateDirectory('',home),expected);
+ assert.equal(resolveStateDirectory('/private/tmp/explicit-ledger',home),'/private/tmp/explicit-ledger');
+ for(const override of ['state','../state','~/state',' ',{}])assert.throws(()=>resolveStateDirectory(override,home),/absolute path/);
+});

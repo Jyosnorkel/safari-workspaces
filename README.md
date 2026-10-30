@@ -19,7 +19,9 @@ Scan tabs → get meaningful Meta AI group suggestions → review and edit → s
 - Write and read back snapshots before closing selected tabs; recheck live tab URLs before closing.
 - Track partial restoration and provide controls for uncertain results after an interruption.
 
-**Meta integration is not implemented yet.** The suggestion button is disabled. Input sanitization and response-validation helpers exist, but no model requests are made. No API credentials are required to try the manual workflow.
+The Meta integration includes a local authenticated service, the official Responses/token-count transport, durable request limits and an editable suggestion preview. **Real account/model access and packaged Safari-to-service connectivity remain unverified.** Tests use fake providers. Manual grouping and backups work without an AI connection.
+
+To use your existing terminal key, follow [local Meta setup](docs/meta-setup.md). The key remains in the local service environment; the extension receives only a separate pairing token. Suggestions require disclosure/consent and explicit acceptance. Default limits are one in flight, two outbound attempts per minute and twenty per UTC day, with no retries. Token counting and generation consume separate attempts.
 
 ## Build and try locally
 
@@ -40,6 +42,8 @@ The native host still uses the starter name **Safari Dev Lab**. The web extensio
 
 The Xcode project is at `native/Safari Dev Lab/Safari Dev Lab.xcodeproj`. It references the files in `extension/` directly; rebuild after editing them.
 
+Current development safety rule: keep all existing Safari sessions/windows open and do not quit Safari. Do not perform the save-and-close or restart test steps on your personal browsing windows. Browser integration checks remain pending until a suitable disposable test session is available.
+
 For a local HTTP test page:
 
 ```sh
@@ -50,9 +54,9 @@ Open http://localhost:8765/ in Safari. The existing test page still describes th
 
 ## Verification status and known limitations
 
-- The native 0.2.2 build and strict code-signature verification passed on October 30, 2026.
+- The v0.3.0 native build and strict code-signature verification passed on October 30, 2026; the packaged AI client matches source.
 - Live Safari popup rendering and current-window scanning were verified. A live storage-verification failure was reproduced and fixed with regression coverage; full save/close/restore retesting and restart persistence are **not yet verified**.
-- `node scripts/check.mjs` passes 68 automated checks for the workspace coordinator and domain rules using a simulated browser API. Syntax and manifest resource checks are included. These do not replace Safari testing.
+- `node scripts/check.mjs` passes 94 automated checks for workspace rules, fake-DOM review flows, fake Meta providers, authenticated local HTTP contracts and usage budgets. Syntax and native resource checks are included. These do not replace Safari testing.
 - Completed snapshots support an explicit **Restore another copy** action. New restore sessions are protected against replayed requests and stale dashboards.
 - Unsaved forms, browsing history, scroll position and complete page state are not saved. Restoration reopens URLs only.
 - Groups live in the extension dashboard. Native Safari Tab Groups are not controlled.
@@ -60,14 +64,16 @@ Open http://localhost:8765/ in Safari. The existing test page still describes th
 
 ## Privacy and AI plan
 
-Workspaces are stored locally in Safari extension storage. The current code sends no browsing data to a remote service. Saved snapshots contain full URLs, which can contain sensitive query parameters; treat local snapshots accordingly.
+Workspaces are stored locally in Safari extension storage. No model call runs until a configured local service receives an authenticated, explicitly consented suggestion request. Saved snapshots and exported backups contain full URLs, which can contain sensitive query parameters; keep them private.
 
-Future Meta inference will require explicit disclosure of the data being sent and a credential arrangement that keeps shared secrets out of the extension. Planned model input uses titles and URLs with credentials, queries and fragments removed. Titles and paths can still contain sensitive information. Model output will be treated as suggestions, validated against existing tab IDs, and never used as a source of restoration URLs.
+Meta input uses only included eligible tab titles and URLs with credentials, queries and fragments removed. Titles and paths can still contain sensitive information; the UI previews this exact input. Model output is validated against existing tab IDs and staged for user review. It never supplies restoration URLs or instructions to close tabs. Private, pinned and restricted tabs are excluded from inference. No page excerpts are sent.
 
 ## Source layout
 
 - `extension/`: popup, dashboard, browser operation coordinator and domain rules.
 - `native/`: Swift macOS host and Safari Web Extension target.
+- `server/`: paired local transport, Meta adapter and durable attempt limits.
+- [MVP goals](docs/GOALS.md): webpage milestones, implementation evidence and remaining checks.
 - `scripts/`: build, demo server, and automated checks.
 - `demo/`: local development test page.
 
@@ -83,5 +89,5 @@ Project source is released under the [MIT License](LICENSE). Apple's SDKs and de
 
 1. Verify the manual Safari journey, including persistence and partial failures.
 2. Verify backup downloads/import in Safari and improve recovery guidance.
-3. Connect a real Meta model and add editable suggestion review.
+3. Verify the integrated Meta connection and editable review against an actual configured account, with consent and the approved limits.
 4. Measure grouping quality and restoration on realistic sessions, then document a reproducible judge setup.

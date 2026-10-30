@@ -1,3 +1,11 @@
+## v0.3.0 integration evidence — October 30, 2026
+
+94 automated checks pass, including 32 fake-provider AI cases, 10 fake-DOM dashboard review cases and the actual extension-client/local-HTTP/fake-provider contract. Native v0.3.0/build5 and strict signature verification pass; the packaged AI client matches source. No Safari interaction or real Meta requests occurred during this integration.
+
+The next browser gate is an explicitly requested local status connection, which costs no model attempt, to verify Safari's actual localhost permission and Origin header. The service requires one exact paired origin and bearer token; the Node HTTP contract injects Origin and does not prove this Safari behavior. Do not weaken authentication to bypass an integration failure. Live model access then needs configured opt-in and data-sharing consent. Current sessions/windows must stay open and Safari must not quit.
+
+---
+
 ## Current safety override — October 30, 2026
 
 The user prohibits closing any current window or quitting Safari. Historical test plans below do not authorize teardown, restart or save-and-close tests now. The new harness in `scripts/safari-backup-smoke.mjs` leaves its fresh session/window and driver alive, writes a private connection file in the temporary folder, rejects DELETE commands, and refuses navigation unless its initial automation session has exactly one blank tab. Do not rerun it to create more sessions when a retained session already exists.

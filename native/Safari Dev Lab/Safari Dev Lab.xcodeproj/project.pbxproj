@@ -26,6 +26,7 @@
 		BB0000000000000000000003 /* dashboard.html in Resources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000003 /* dashboard.html */; };
 		BB0000000000000000000004 /* dashboard.css in Resources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000004 /* dashboard.css */; };
 		BB0000000000000000000005 /* dashboard.js in Resources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000005 /* dashboard.js */; };
+		BB0000000000000000000006 /* ai.js in Resources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000006 /* ai.js */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -75,6 +76,7 @@
 		AA0000000000000000000003 /* dashboard.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; name = dashboard.html; path = ../../../extension/dashboard.html; sourceTree = "<group>"; };
 		AA0000000000000000000004 /* dashboard.css */ = {isa = PBXFileReference; lastKnownFileType = text.css; name = dashboard.css; path = ../../../extension/dashboard.css; sourceTree = "<group>"; };
 		AA0000000000000000000005 /* dashboard.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = dashboard.js; path = ../../../extension/dashboard.js; sourceTree = "<group>"; };
+		AA0000000000000000000006 /* ai.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = ai.js; path = ../../../extension/ai.js; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -155,6 +157,7 @@
 				AA0000000000000000000003 /* dashboard.html */,
 				AA0000000000000000000004 /* dashboard.css */,
 				AA0000000000000000000005 /* dashboard.js */,
+				AA0000000000000000000006 /* ai.js */,
 				8FFCB12F3090F03F0088828C /* popup.js */,
 				8FFCB1303090F03F0088828C /* popup.html */,
 				8FFCB1313090F03F0088828C /* manifest.json */,
@@ -269,6 +272,7 @@
 				BB0000000000000000000003 /* dashboard.html in Resources */,
 				BB0000000000000000000004 /* dashboard.css in Resources */,
 				BB0000000000000000000005 /* dashboard.js in Resources */,
+				BB0000000000000000000006 /* ai.js in Resources */,
 				8FFCB1333090F03F0088828C /* popup.js in Resources */,
 				8FFCB1353090F03F0088828C /* manifest.json in Resources */,
 				8FFCB1343090F03F0088828C /* popup.html in Resources */,
@@ -447,7 +451,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
@@ -461,7 +465,7 @@
 					"@executable_path/../../../../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 10.14;
-				MARKETING_VERSION = 0.2.3;
+				MARKETING_VERSION = 0.3.0;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
@@ -481,7 +485,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
@@ -495,7 +499,7 @@
 					"@executable_path/../../../../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 10.14;
-				MARKETING_VERSION = 0.2.3;
+				MARKETING_VERSION = 0.3.0;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
@@ -518,7 +522,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
@@ -533,7 +537,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 0.2.3;
+				MARKETING_VERSION = 0.3.0;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
@@ -559,7 +563,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
@@ -574,7 +578,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 0.2.3;
+				MARKETING_VERSION = 0.3.0;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,

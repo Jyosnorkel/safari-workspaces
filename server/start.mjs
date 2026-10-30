@@ -1,12 +1,10 @@
 import {resolve} from 'node:path';
-import {homedir} from 'node:os';
 import {createAIService} from './ai-service.mjs';
 import {createMetaProvider} from './meta-provider.mjs';
 import {createLoopbackServer} from './loopback.mjs';
-import {readConnection} from './connection.mjs';
-const root=resolve(homedir(),'Library','Application Support','Safari Workspaces','AI');
-const directory=resolve(process.env.AI_STATE_DIR||root);
+import {readConnection, resolveStateDirectory} from './connection.mjs';
 try {
+  const directory=resolveStateDirectory(process.env.AI_STATE_DIR);
   const connection=await readConnection(resolve(directory,'connection.json'));
   const service=createAIService({env:process.env,provider:createMetaProvider(),statePath:resolve(directory,'usage.json')});
   const {server,listen}=createLoopbackServer({service,...connection});

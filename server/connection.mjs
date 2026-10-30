@@ -1,8 +1,16 @@
 import {mkdir,open,readFile,stat} from 'node:fs/promises';
-import {dirname} from 'node:path';
+import {dirname, isAbsolute, resolve} from 'node:path';
+import {homedir} from 'node:os';
 import {randomBytes} from 'node:crypto';
 import {validClientOrigin} from './loopback.mjs';
 import {UsageError} from './usage-guard.mjs';
+export function resolveStateDirectory(override, home = homedir()) {
+  if (override !== undefined && override !== '') {
+    if (typeof override !== 'string' || !isAbsolute(override)) throw new UsageError('invalid_config','AI_STATE_DIR must be an absolute path shared by all service copies.');
+    return resolve(override);
+  }
+  return resolve(home,'Library','Application Support','Safari Workspaces','AI');
+}
 export async function readConnection(path) {
   const metadata=await stat(path);
   if((metadata.mode & 0o077)!==0) throw new UsageError('invalid_config','Local connection file must be readable only by its owner (chmod 600).');
