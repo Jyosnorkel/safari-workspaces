@@ -136,3 +136,7 @@ A user-reported status request was rejected even though the displayed origin exa
 ## Explicit re-pair command
 
 `node server/pair.mjs --re-pair <new-dashboard-origin>` updates only the allowed origin, preserving the existing token and usage ledger with a private atomic write/readback. Stop only the local AI service before running it, then restart that service in the same configured terminal. No extension rebuild or Safari quit/session closure is needed. Normal pairing still refuses different existing origins. Never delete usage.json to repair a connection. Verification uses fake temporary files and checks the real CLI, not the user's credentials.
+
+## Provider diagnostics follow-up
+
+User reported generic provider_error after reaching suggestions, then asked whether rate limits were too aggressive. Limits remain unchanged. Safe server-side diagnostics now distinguish provider HTTP429, authentication/credit/request errors, incomplete output-token exhaustion and invalid responses using fixed text and allowlisted fields/codes. Never forward arbitrary provider messages or model output. This is a service-only update requiring only a local AI service restart; do not rebuild/toggle Safari unnecessarily. The original provider status was discarded, so the actual prior failure cause remains unverified. No live diagnostic/retry calls are authorized or made by this patch.

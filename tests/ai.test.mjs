@@ -284,3 +284,33 @@ test('explicit re-pair atomically changes only origin, retaining token, private 
  const after=await readConnection(path);assert.equal(after.allowedOrigin,'safari-web-extension://cli-new');assert.equal(after.token,before.token);
  assert.equal(await readFile(join(f.dir,'usage.json'),'utf8'),ledger);
 });
+
+test('Meta diagnostics distinguish HTTP status, output exhaustion and refusal without exposing response text',async()=>{
+ const secret='FAKE-KEY-AND-PRIVATE-TAB-TEXT';
+ const options={tabs:[{id:'1',title:secret,url:'https://example.com/private'}],model:'fake',apiKey:secret,maxOutputTokens:512};
+ for(const status of [400,401,402,403,404,429,503]) {
+  let calls=0;
+  const provider=createMetaProvider({fetchImpl:async()=>{calls++;return new Response(JSON.stringify({error:{message:secret,type:secret,param:'max_output_tokens',code:'rate_limit_exceeded'}}),{status});}});
+  await assert.rejects(provider.generate(options),error=>error.message.includes(`HTTP ${status}`)&&error.message.includes('max_output_tokens')&&!error.message.includes(secret));
+  assert.equal(calls,1);
+ }
+ const incomplete=createMetaProvider({fetchImpl:async()=>jsonResponse({status:'incomplete',incomplete_details:{reason:'max_output_tokens'},output:[{type:'message',content:[{type:'output_text',text:secret}]}]})});
+ await assert.rejects(incomplete.generate(options),error=>/512-token output cap/.test(error.message)&&!error.message.includes(secret));
+ const unknown=createMetaProvider({fetchImpl:async()=>new Response(JSON.stringify({error:{message:secret,param:secret,code:secret}}),{status:400})});
+ await assert.rejects(unknown.generate(options),error=>!error.message.includes(secret)&&!error.message.includes('Field:'));
+});
+test('service preserves safe Meta diagnostics and original budgets without retries or cap increases',async t=>{
+ for(const mode of ['count-failure','rate-limit','output-limit']) {
+  const f=await fixture(t);let calls=0;
+  const provider=createMetaProvider({fetchImpl:async(url,options)=>{
+   calls++;assert.equal(JSON.parse(options.body).max_output_tokens,512);
+   if(url.endsWith('/input_tokens')&&mode!=='count-failure')return jsonResponse({object:'response.input_tokens',input_tokens:100});
+   if(mode==='output-limit')return jsonResponse({status:'incomplete',incomplete_details:{reason:'max_output_tokens'},output:[]});
+   return new Response(JSON.stringify({error:{message:'FAKE-PRIVATE-PROVIDER-TEXT',param:'model'}}),{status:mode==='count-failure'?400:429});
+  }});
+  const service=createAIService({env:{...fakeEnv,META_API_PROVIDER_ID:'meta'},provider,statePath:f.statePath,now:f.now});
+  await assert.rejects(service.suggest(tabs,{consent:true}),error=>error.code==='provider_error'&&!error.message.includes('FAKE-PRIVATE-PROVIDER-TEXT')&&(mode==='count-failure'?/Token count: Meta HTTP 400/.test(error.message):mode==='rate-limit'?/Meta HTTP 429/.test(error.message):/512-token output cap/.test(error.message)));
+  assert.equal(calls,mode==='count-failure'?1:2);
+  const usage=await service.status();assert.equal(usage.attemptsToday,calls);assert.equal(usage.perMinute,2);assert.equal(usage.perDay,20);assert.equal(usage.maxOutputTokens,512);
+ }
+});

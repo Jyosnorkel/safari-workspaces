@@ -1,4 +1,5 @@
 import {UsageGuard, UsageError} from './usage-guard.mjs';
+import {MetaProviderError} from './meta-provider.mjs';
 
 function number(env, key, fallback) {
   const raw = env[key];
@@ -69,7 +70,7 @@ export function createAIService({env = process.env, provider, statePath, now = D
         if (signal.aborted) throw new UsageError('timeout', 'The request was cancelled before generation. The reserved budget is retained.');
         let result;
         try { result = await provider.generate({...options, signal}); }
-        catch { throw new UsageError('provider_error', 'The provider request failed and counts against your budget. No automatic retry was made.'); }
+        catch(error) { throw new UsageError('provider_error', `${error instanceof MetaProviderError?error.message:'The provider request failed.'} This attempt counts against your budget. No automatic retry was made.`); }
         return validateGroups(result, input);
       };
       if (provider.remoteTokenCount) {
@@ -78,7 +79,7 @@ export function createAIService({env = process.env, provider, statePath, now = D
         return guard.run(async (signal, reserve) => {
           let count;
           try { count = await provider.countInputTokens({...options, signal}); }
-          catch { throw new UsageError('provider_error', 'The provider token-count request failed. The reserved budget is retained; no generation or retry was made.'); }
+          catch(error) { throw new UsageError('provider_error', `Token count: ${error instanceof MetaProviderError?error.message:'The provider request failed.'} The reserved budget is retained; no generation or retry was made.`); }
           checkCount(count);
           await reserve();
           return generate(signal);

@@ -77,7 +77,7 @@ Supported scope: one user, one local Mac/filesystem and one shared ledger. This 
 node --test tests/ai.test.mjs
 ```
 
-35 fake-provider/local-only tests cover original durable-budget behavior plus endpoint/schema construction, output bounds, strict response parsing, separate count/generation admissions, slow-count timing, whole-operation concurrency, timeout continuation, daily preflight, key alias precedence, Host/Origin/token checks, CORS, request-body bounds, private pairing and client error propagation. No test runs Safari or a live Meta call.
+37 fake-provider/local-only tests cover original durable-budget behavior plus endpoint/schema construction, output bounds, strict response parsing, separate count/generation admissions, slow-count timing, whole-operation concurrency, timeout continuation, daily preflight, key alias precedence, Host/Origin/token checks, CORS, request-body bounds, private pairing and client error propagation. No test runs Safari or a live Meta call.
 
 Primary Meta documentation checked October 30, 2026:
 
@@ -92,3 +92,11 @@ Primary Meta documentation checked October 30, 2026:
 The user reported origin rejection despite an exact match between the displayed dashboard origin and saved pairing. The wire Origin was not captured, so the precise browser behavior remains unconfirmed. The packaged client now uses an authenticated JSON `POST /v1/status` with `{}` instead of GET. Fetch's [Origin-header algorithm](https://fetch.spec.whatwg.org/#append-a-request-origin-header) includes a non-GET/HEAD path; privileged extension GET requests can bypass normal CORS processing. This patch avoids depending on GET's Origin behavior without accepting missing/null/wildcard origins. Status still never calls Meta or consumes attempts.
 
 The local server retains GET compatibility when a correct Origin is supplied, accepts POST status with an empty JSON object only, and distinguishes missing, opaque and mismatched Origin errors without logging credentials or inventories. Restart only the local AI service after updating the code; keep the existing pairing and usage ledger. Refresh the extension and reload its dashboard to load the new client. Safari does not need to quit. Live success still requires user confirmation.
+
+## Diagnosing failed suggestions without raising limits
+
+The local limiter's cooldown/daily/concurrency errors are separate from provider failures. Safe diagnostics now distinguish Meta HTTP status (including 429), allowlisted request fields/codes, incomplete responses caused by the configured output-token cap, refusals and invalid response structures. Raw provider messages, generated text, tab metadata and keys are never forwarded to the dashboard. Token-count failures are identified separately and cannot trigger generation. No automatic retries or cap increases are introduced.
+
+The old generic error discarded the original provider status, so it cannot establish whether a past failure was a rate limit or exhausted output allowance. Restart only the local AI service to load these diagnostic changes; the extension does not need rebuilding or re-pairing. A later explicitly consented suggestion will show the new diagnostic if it fails. Requests/minute, requests/day and output tokens are different controls; keep the approved 2/minute, 20/day and 512-token cap until evidence supports a deliberate change. Testing used only fake provider responses; no diagnostic live calls were made.
+
+Reference: [Meta error handling](https://dev.meta.ai/docs/error-handling) and [Responses API](https://dev.meta.ai/docs/protocols/responses).
