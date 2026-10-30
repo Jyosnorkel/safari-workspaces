@@ -14,7 +14,7 @@ function reverseKeys(value) {
 }
 const tab = (id, overrides = {}) => ({id, windowId: 1, index: id, title: `Page ${id}`, url: `https://example.com/${id}`, incognito: false, pinned: false, ...overrides});
 function harness(initialTabs = [tab(1),tab(2)], initialStore = {}) {
-  const h = {store: clone(initialStore), tabs: new Map(initialTabs.map(t=>[t.id,clone(t)])), events: [], writes:0, gets:0, nextId:100, failWrite:0, failReadback:false, failCreate:new Set(), failRemove:new Set(), private:false};
+  const h = {store: clone(initialStore), tabs: new Map(initialTabs.map(t=>[t.id,clone(t)])), events: [], writes:0, gets:0, nextId:100, failWrite:0, failReadback:false, failCreate:new Set(), failRemove:new Set(), private:false, windowType:'normal'};
   const browser = {
     runtime: {id:'test', getURL:path=>`safari-web-extension://test/${path}`, onMessage:{addListener: fn=>h.listener=fn}},
     storage: {local: {
@@ -31,7 +31,7 @@ function harness(initialTabs = [tab(1),tab(2)], initialStore = {}) {
         }
       }
     }},
-    windows: {get:async id=>({id, incognito:h.private, type:'normal'})},
+    windows: {get:async id=>({id, incognito:h.private, type:h.windowType})},
     tabs: {
       query:async ({windowId})=>[...h.tabs.values()].filter(t=>t.windowId===windowId).map(clone),
       get:async id=> {h.events.push(`get:${id}`); if (h.onGet) h.onGet(id); const t=h.tabs.get(id); if (!t) throw new Error('Tab closed'); return clone(t);},
@@ -168,3 +168,60 @@ for (const mutation of ['title','order']) {
     assert.equal(h.events.some(event=>event.startsWith('remove:')),false);
   });
 }
+test('pending navigation aborts save before writes or closes, even when the old URL matches',async()=>{
+  const h=harness(); h.tabs.get(2).pendingUrl='https://example.org/destination';
+  const result=await h.save({close:true});
+  assert.equal(result.ok,false); assert.match(result.error,/navigating/);
+  assert.equal(h.writes,0); assert.equal(h.tabs.size,2);
+  assert.equal(h.events.some(e=>e.startsWith('remove:')),false);
+});
+test('navigation starting after snapshot leaves that tab open with its recovery URL saved',async()=>{
+  const h=harness(); h.onWrite=()=>{h.tabs.get(2).pendingUrl='https://example.org/destination';};
+  const result=await h.save({close:true});
+  assert.equal(result.ok,true); assert.equal(result.workspace.close.state,'partial');
+  assert.equal(h.tabs.has(1),false); assert.equal(h.tabs.has(2),true);
+  assert.equal(result.workspace.close.results[1].state,'left-open');
+  assert.match(result.workspace.close.results[1].error,/navigating/);
+  assert.equal(result.workspace.tabs[1].url,'https://example.com/2');
+});
+test('malformed saved snapshots and journals cannot start any restore or recovery writes',async()=>{
+  const mutations=[
+    r=>{r.tabs[0].url='javascript:alert(1)';},
+    r=>{r.tabs[1].id=r.tabs[0].id;},
+    r=>{r.tabs[0].id='not-a-durable-id';},
+    r=>{r.tabs[1].index=r.tabs[0].index;},
+    r=>{r.tabs[0].title={text:'not-a-title'};},
+    r=>{r.restore.results[r.tabs[0].id]={state:'unknown'};},
+    r=>{r.restore.results[webcrypto.randomUUID()]={state:'opened'};},
+    r=>{r.restore.state='complete';},
+    r=>{r.restore.results=[];},
+    r=>{r.restore=null;},
+    r=>{r.close.results=[{tabId:webcrypto.randomUUID(),state:'closed'}];},
+    r=>{r.restoreHistory='invalid';},
+    r=>{r.name={};},
+    r=>{r.id=webcrypto.randomUUID();}
+  ];
+  for(const mutate of mutations){
+    const original=harness(); const {workspace}=await original.save();
+    const stored=original.store[original.C.KEY][workspace.id]; mutate(stored);
+    const h=harness([],original.store); const before=clone(h.store);
+    const restored=await h.send('restore',{id:workspace.id,windowId:1});
+    assert.equal(restored.ok,false); assert.match(restored.error,/snapshot or recovery journal is invalid/);
+    assert.equal(h.events.some(e=>e.startsWith('create:')),false); assert.equal(h.writes,0);
+    const resolved=await h.send('resolve',{id:workspace.id,tabId:workspace.tabs[0].id,resolution:'opened'});
+    assert.equal(resolved.ok,false); assert.equal(h.writes,0); assert.deepEqual(h.store,before);
+  }
+});
+test('malformed storage envelope and malformed request IDs change no tabs',async()=>{
+  const h=harness(); h.store[h.C.KEY]=[];
+  assert.equal((await h.save({close:true})).ok,false); assert.equal(h.tabs.size,2);
+  const j=harness();
+  const invalid=await j.save({close:true,requestId:'------------------------------------'});
+  assert.equal(invalid.ok,false); assert.equal(j.writes,0); assert.equal(j.tabs.size,2);
+});
+test('non-normal windows cannot scan, save or restore',async()=>{
+  const h=harness(); const {workspace}=await h.save(); h.windowType='popup';
+  assert.equal((await h.send('scan',{windowId:1})).ok,false);
+  assert.equal((await h.save({close:true})).ok,false);
+  assert.equal((await h.send('restore',{id:workspace.id,windowId:1})).ok,false);
+});

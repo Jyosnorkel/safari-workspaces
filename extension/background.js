@@ -3,6 +3,38 @@
   const api = globalThis.browser;
   const C = WorkspaceCore;
   let queue = Promise.resolve();
+  const uuid = value => typeof value === 'string' && /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(value);
+  const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
+  const timestamp = value => typeof value === 'string' && Number.isFinite(Date.parse(value));
+  function verifiedRecord(record, id) {
+    const invalid = () => { throw new Error('This workspace snapshot or recovery journal is invalid. No tabs were changed. Keep the saved data for recovery.'); };
+    if (!object(record) || record.version !== 1 || !uuid(id) || record.id !== id ||
+        typeof record.name !== 'string' || !record.name.trim() || record.name.length > 80 ||
+        !timestamp(record.createdAt) || !timestamp(record.updatedAt) ||
+        !Array.isArray(record.tabs) || !record.tabs.length || record.tabs.length > 500) invalid();
+    const ids = new Set();
+    let lastIndex = -1;
+    for (const tab of record.tabs) {
+      if (!object(tab) || !uuid(tab.id) || ids.has(tab.id) || typeof tab.title !== 'string' ||
+          typeof tab.url !== 'string' || !C.restorable(tab.url) || !Number.isSafeInteger(tab.index) || tab.index <= lastIndex) invalid();
+      ids.add(tab.id); lastIndex = tab.index;
+    }
+    if (!object(record.close) || !['not-requested','closing','closed','partial'].includes(record.close.state) ||
+        !Array.isArray(record.close.results) || !object(record.restore) ||
+        !['not-started','restoring','complete','partial'].includes(record.restore.state) ||
+        !object(record.restore.results) || (record.restore.sessionId !== undefined && !uuid(record.restore.sessionId))) invalid();
+    const closedIds = new Set();
+    for (const result of record.close.results) {
+      if (!object(result) || !ids.has(result.tabId) || closedIds.has(result.tabId) || !['closed','left-open'].includes(result.state)) invalid();
+      closedIds.add(result.tabId);
+    }
+    for (const [tabId, result] of Object.entries(record.restore.results)) {
+      if (!ids.has(tabId) || !object(result) || !['pending','opened','failed'].includes(result.state)) invalid();
+    }
+    if (record.restore.state === 'complete' && !record.tabs.every(tab => record.restore.results[tab.id]?.state === 'opened')) invalid();
+    if (record.restoreHistory !== undefined && (!Array.isArray(record.restoreHistory) || record.restoreHistory.length > 20)) invalid();
+    return record;
+  }
   const read = async () => {
     const value = (await api.storage.local.get(C.KEY))[C.KEY];
     if (value === undefined) return {};
@@ -30,18 +62,19 @@
     if (!Number.isInteger(windowId)) throw new Error('Select a normal Safari window first.');
     const win = await api.windows.get(windowId);
     if (win.incognito) throw new Error('Private browsing is excluded from this MVP. Use a normal Safari window.');
+    if (win.type !== 'normal') throw new Error('Workspace operations require a normal Safari window.');
     return win;
   }
   async function currentTab(original, windowId) {
     const tab = await api.tabs.get(original.id);
-    if (tab.incognito || tab.pinned || tab.windowId !== windowId || tab.url !== original.url) throw new Error('Tab changed, moved, became pinned, or is no longer available. Left open.');
+    if (tab.incognito || tab.pinned || tab.pendingUrl || tab.windowId !== windowId || tab.url !== original.url) throw new Error('Tab changed, is navigating, moved, became pinned, or is no longer available. Left open.');
     return tab;
   }
   async function save({name, tabs, windowId, close = false, requestId}) {
     await normalWindow(windowId);
-    if (typeof requestId !== 'string' || !/^[a-f0-9-]{36}$/i.test(requestId)) throw new Error('Invalid save request.');
+    if (!uuid(requestId)) throw new Error('Invalid save request.');
     const previous = (await read())[requestId];
-    if (previous) return {workspace: previous, repeated: true};
+    if (previous) return {workspace: verifiedRecord(previous, requestId), repeated: true};
     if (!Array.isArray(tabs) || tabs.length > 500) throw new Error('Invalid tab selection.');
     // Read live tab data instead of trusting stale titles/URLs from the dashboard.
     const live = [];
@@ -71,9 +104,10 @@
   async function restore({id, windowId, newSessionId, previousSessionId}) {
     await normalWindow(windowId);
     const record = (await read())[id];
-    if (!record || record.version !== 1 || !Array.isArray(record.tabs)) throw new Error('Workspace not found or unsupported.');
+    if (!record) throw new Error('Workspace not found or unsupported.');
+    verifiedRecord(record, id);
     if (newSessionId && newSessionId !== record.restore.sessionId) {
-      if (!/^[a-f0-9-]{36}$/i.test(newSessionId)) throw new Error('Invalid restore session.');
+      if (!uuid(newSessionId)) throw new Error('Invalid restore session.');
       if (record.restore.state !== 'complete' || (previousSessionId ?? null) !== (record.restore.sessionId ?? null)) {
         throw new Error('This workspace changed in another manager. Refresh saved workspaces before starting another copy.');
       }
@@ -122,7 +156,9 @@
       case 'restore': return restore(message);
       case 'resolve': {
         const record = (await read())[message.id];
-        if (!record || !['opened','failed'].includes(message.resolution) || record.restore.results[message.tabId]?.state !== 'pending') throw new Error('No uncertain restore to resolve.');
+        if (!record) throw new Error('No uncertain restore to resolve.');
+        verifiedRecord(record, message.id);
+        if (!['opened','failed'].includes(message.resolution) || record.restore.results[message.tabId]?.state !== 'pending') throw new Error('No uncertain restore to resolve.');
         record.restore.results[message.tabId] = {state: message.resolution, resolvedAt: new Date().toISOString()};
         record.restore.state = 'partial';
         await write(record); return {workspace: record};
