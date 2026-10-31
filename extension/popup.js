@@ -12,29 +12,73 @@ function isDashboard(candidate, dashboardURL) {
   } catch { return false; }
 }
 
-button.addEventListener('click', async () => {
-  if (opening) return;
-  opening = true;
-  button.disabled = true;
-  status.textContent = 'Opening your workspace manager…';
-  try {
-    const api = globalThis.browser;
-    if (!api?.tabs || !api?.windows || !api?.runtime?.getURL) throw new Error('Open this popup from the enabled Safari extension.');
-    const win = await api.windows.getCurrent();
-    if (win.incognito) throw new Error('Use a normal Safari window. Private browsing is excluded.');
-    if (!Number.isInteger(win.id) || (win.type && win.type !== 'normal')) throw new Error('Open a normal Safari window, then try again.');
-    const url = api.runtime.getURL('dashboard.html');
-    const existing = (await api.tabs.query({windowId: win.id})).find(tab => Number.isInteger(tab.id) && isDashboard(tab.url, url));
-    if (existing) await api.tabs.update(existing.id, {active: true});
-    else await api.tabs.create({windowId: win.id, url, active: true});
-    // Let tab activation dismiss the popup; explicit close can race Safari.
-    status.textContent = 'Workspace manager opened.';
-  } catch (error) {
-    status.textContent = error.message || 'Could not open the workspace manager. Try again.';
-    button.disabled = false;
-    opening = false;
+function setBusy(value) {
+  opening = value;
+  for (const id of ['open','save-snapshot','ai-organise','refresh-tabs']) {
+    const control = document.getElementById(id);
+    if (control) control.disabled = value;
   }
-});
+}
+async function currentWindow() {
+  const api = globalThis.browser;
+  if (!api?.windows?.getCurrent || !api?.runtime?.getURL) throw new Error('Open this popup from the enabled Safari extension.');
+  const win = await api.windows.getCurrent();
+  if (win.incognito) throw new Error('Use a normal Safari window. Private browsing is excluded.');
+  if (!Number.isInteger(win.id) || (win.type && win.type !== 'normal')) throw new Error('Open a normal Safari window, then try again.');
+  return win;
+}
+async function send(type, values) {
+  const response = await browser.runtime.sendMessage({channel:'workspace',type,...values});
+  if (!response?.ok) throw new Error(response?.error || 'Safari could not complete this action. Try refreshing tabs.');
+  return response;
+}
+async function action(work) {
+  if (opening) return;
+  setBusy(true);
+  try { await work(); }
+  catch (error) { status.textContent = error.message || 'Could not complete this action. Try again.'; }
+  finally { setBusy(false); }
+}
+async function openManager(ai = false) {
+  status.textContent = ai ? 'Opening AI organise. Review the tabs and data sharing before requesting suggestions…' : 'Opening your workspace manager…';
+  const win = await currentWindow(), api = globalThis.browser;
+  const url = api.runtime.getURL('dashboard.html');
+  const existing = (await api.tabs.query({windowId:win.id})).find(tab => Number.isInteger(tab.id) && isDashboard(tab.url,url));
+  if (existing) {
+    if (ai) {
+      let response;
+      try { response = await api.runtime.sendMessage({channel:'workspace-dashboard',type:'ai-organise',windowId:win.id}); } catch {}
+      if (!response?.ok) { await api.tabs.update(existing.id,{active:true,url:url+'#ai'}); return; }
+    }
+    await api.tabs.update(existing.id,{active:true});
+  } else await api.tabs.create({windowId:win.id,url:url + (ai ? '#ai' : ''),active:true});
+  status.textContent = 'Workspace manager opened.';
+}
+button.addEventListener('click', () => action(() => openManager()));
+document.getElementById('ai-organise')?.addEventListener?.('click', () => action(() => openManager(true)));
+async function refreshTabs() {
+  const win = await currentWindow();
+  status.textContent = 'Refreshing tabs…';
+  const result = await send('scan',{windowId:win.id});
+  const eligible = result.tabs.filter(tab => tab.eligible).length;
+  document.getElementById('tab-count').textContent = `${result.tabs.length} tabs · ${eligible} available to organise`;
+  document.getElementById('scan-time').textContent = `Updated ${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`;
+  // A loaded manager merges fresh metadata without replacing the user's grouping.
+  await browser.runtime.sendMessage({channel:'workspace-dashboard',type:'refresh-inventory',windowId:win.id}).catch(() => {});
+  status.textContent = 'Tabs refreshed. No data sent to AI.';
+}
+document.getElementById('refresh-tabs')?.addEventListener?.('click', () => action(refreshTabs));
+let snapshotRequestId;
+document.getElementById('save-snapshot')?.addEventListener?.('click', () => action(async () => {
+  const win = await currentWindow();
+  snapshotRequestId ||= crypto.randomUUID();
+  status.textContent = 'Saving this window…';
+  const {workspace} = await send('snapshot-window',{windowId:win.id,name:`Window ${new Date().toLocaleString()}`.slice(0,80),requestId:snapshotRequestId});
+  status.textContent = `Saved ${workspace.tabs.length} tabs. All tabs remain open.`;
+  snapshotRequestId = undefined;
+}));
+// Refresh on popup opening, locally only. The manager refreshes every five minutes.
+if (globalThis.browser?.runtime?.sendMessage && document.getElementById('refresh-tabs')?.addEventListener) action(refreshTabs);
 
 // The toolbar popup uses the same durable import/restore operation as the dashboard.
 // Safari may dismiss this popup when the new window is focused; the background
@@ -54,8 +98,7 @@ document.body.addEventListener('drop', async event => {
   event.preventDefault();
   dropArea.classList.toggle('is-over', false);
   if (opening || !isFileDrag(event.dataTransfer)) return;
-  opening = true;
-  button.disabled = true;
+  setBusy(true);
   try {
     const files = Array.from(event.dataTransfer.files || []);
     if (files.length !== 1) throw new Error('Drop one Safari Workspaces JSON backup at a time.');
@@ -76,7 +119,6 @@ document.body.addEventListener('drop', async event => {
   } catch (error) {
     status.textContent = error.message || 'Backup could not be restored. Open Saved workspaces to check recovery.';
   } finally {
-    opening = false;
-    button.disabled = false;
+    setBusy(false);
   }
 });

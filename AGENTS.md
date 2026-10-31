@@ -170,3 +170,10 @@ Eligible whole rows move between dashboard cards/chips; AI proposal rows move on
 ## v0.5.1 toolbar popup backup drop — October 31
 
 The small manually opened toolbar popup now accepts a single file dropped anywhere inside it, with a visible highlighted backup drop area. It delegates to the unchanged drop-backup background operation; that operation continues independently if Safari dismisses the popup. No proximity detection or native menu-bar component is added. Invalid/multiple/oversized/private-window inputs are rejected, external URL navigation prevented and concurrent popup operations suppressed. 134 automated fake-browser/model checks pass. Native v0.5.1/build10 and strict signature checks pass; packaged popup matches source. Actual Safari popup drag/focus behavior remains unverified. No live Safari interaction, model calls or window closures occurred.
+
+
+## v0.6.0 straightforward popup and automatic local scans — October 31
+
+Removed slogans and made popup Save snapshot, AI organise and Refresh tabs primary. Snapshot saves current window without closing. AI entry opens review/settings without inference, preserving consent gates. Dashboard AI settings are collapsed by default. Initial popup/dashboard scans and five-minute visible/idle dashboard refresh merge inventories while preserving stable groups, exclusions and custom order. Changed/new identities become ungrouped; changed inventory invalidates proposals/consent; unchanged inventory preserves them and DOM. Authenticated extension-only same-window popup messages refresh/reveal. No automatic Meta/service-status calls. No background scans when manager is hidden/closed; timers pause while editing/dragging/busy.
+
+140 automated checks pass. Fictional-data internal-browser layout/counts/snapshot/AI reveal checked. Native v0.6.0/build11 signature and packaged scripts verified. Real Safari actions/timer messaging remain unverified. Existing backup reload backend unchanged. No Safari control, window closing or live inference occurred.

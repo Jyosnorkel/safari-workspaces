@@ -45,3 +45,20 @@ test('popup shows background validation/recovery errors and remains usable',asyn
  const h=dropHarness({failure:'Invalid backup. No tabs were changed.'});await h.drop(h.event());
  assert.equal(h.sent.length,1);assert.match(h.status.textContent,/Invalid backup/);assert.equal(h.button.disabled,false);
 });
+
+async function actionHarness() {
+ const nodes=new Map(),sent=[],created=[];
+ for(const id of ['open','status','save-snapshot','ai-organise','refresh-tabs','tab-count','scan-time','backup-drop'])nodes.set(id,{textContent:'',disabled:false,listeners:{},addEventListener(type,fn){this.listeners[type]=fn;},classList:{toggle(){}}});
+ const browser={windows:{getCurrent:async()=>({id:1,type:'normal'})},runtime:{getURL:path=>`safari-web-extension://test/${path}`,sendMessage:async message=>{sent.push(message);if(message.type==='scan')return {ok:true,tabs:[{eligible:true},{eligible:false}]};if(message.type==='snapshot-window')return {ok:true,workspace:{tabs:[{},{}]}};return undefined;}},tabs:{query:async()=>[],create:async options=>created.push(options)}};
+ vm.runInNewContext(source,{URL,crypto:{randomUUID:()=> '5c6d9a98-c1ca-4d15-b673-ac94a190dd27'},document:{getElementById:id=>nodes.get(id),body:{addEventListener(){}}},browser});
+ for(let i=0;i<10;i++)await new Promise(resolve=>setImmediate(resolve));
+ return {nodes,sent,created,click:id=>nodes.get(id).listeners.click()};
+}
+test('popup refreshes local inventory on opening and snapshot saves without closing or AI calls',async()=>{
+ const h=await actionHarness();assert.match(h.nodes.get('tab-count').textContent,/2 tabs · 1 available/);assert.equal(h.sent.filter(m=>m.type==='scan').length,1);
+ await h.click('save-snapshot');const saves=h.sent.filter(m=>m.type==='snapshot-window');assert.equal(saves.length,1);assert.equal(saves[0].windowId,1);assert.match(h.nodes.get('status').textContent,/All tabs remain open/);
+ await h.click('refresh-tabs');assert.equal(h.sent.filter(m=>m.type==='scan').length,2);assert.equal(h.sent.some(m=>['suggest','save','restore'].includes(m.type)),false);
+});
+test('popup AI organise opens the AI review settings without submitting model input',async()=>{
+ const h=await actionHarness();await h.click('ai-organise');assert.equal(h.created.length,1);assert.match(h.created[0].url,/#ai$/);assert.equal(h.sent.some(m=>m.type==='suggest'),false);
+});

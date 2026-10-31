@@ -37,10 +37,10 @@ async function harness(options={}) {
   const findById=id=>nodes.get(id)||[...nodes.values()].flatMap(all).find(node=>node.attributes.id===id);
   const document={getElementById:findById,createElement:tag=>new Element(tag),querySelector:selector=>selector==='main'?main:selector==='aside'?aside:null,body};
   nodes.get('confirm').showModal=()=>{ if(h.autoConfirm)queueMicrotask(()=>{nodes.get('confirm').returnValue='accept';nodes.get('confirm').dispatch('close');}); };
-  const browser={permissions:{request:async permission=>{h.permissionCalls++;h.requestedPermission=permission;return h.permission;}},windows:{getCurrent:async()=>({id:1,incognito:false})},runtime:{sendMessage:async message=>{
+  const browser={permissions:{request:async permission=>{h.permissionCalls++;h.requestedPermission=permission;return h.permission;}},windows:{getCurrent:async()=>({id:1,incognito:false})},runtime:{id:'test',getURL:path=>`safari-web-extension://test/${path}`,onMessage:{addListener:fn=>h.runtimeListener=fn},sendMessage:async message=>{
     h.sent.push(structuredClone(message));
     if(message.type==='list')return {ok:true,workspaces:h.workspaces||[]};
-    if(message.type==='scan')return {ok:true,tabs:structuredClone(h.tabs)};
+    if(message.type==='scan'){if(h.scanDeferred)return await h.scanDeferred;return {ok:true,tabs:structuredClone(h.tabs)};}
     if(message.type==='snapshot-window')return {ok:true,workspace:{tabs:h.tabs},skipped:0};
     if(message.type==='export-backup')return {ok:true,json:'{"workspaces":[]}'};
     if(message.type==='import-backup')return {ok:true,imported:1};
@@ -61,8 +61,9 @@ async function harness(options={}) {
   class FakeURL extends URL {}
   Object.assign(FakeURL,url);
   h.body=body;
-  h.context=vm.createContext({TextEncoder,document,browser,WorkspaceAI,crypto:webcrypto,URL:FakeURL,localStorage:{setItem:()=>h.storageWrites++,getItem:()=>null},Blob,location:{origin:'null',protocol:'safari-web-extension:',host:'fake-test'},console,setInterval:fn=>{h.countdown=fn;},setTimeout:()=>{},queueMicrotask});
+  h.context=vm.createContext({TextEncoder,document,browser,WorkspaceAI,crypto:webcrypto,URL:FakeURL,localStorage:{setItem:()=>h.storageWrites++,getItem:()=>null},Blob,location:{origin:'null',protocol:'safari-web-extension:',host:'fake-test'},console,setInterval:(fn,ms)=>{if(ms===1000)h.countdown=fn;else if(ms===300000)h.autoScan=fn;},setTimeout:()=>{},queueMicrotask});
   vm.runInContext(core,h.context);vm.runInContext(source,h.context);
+  h.document=document;
   h.node=findById;
   h.find=(root,predicate)=>all(nodes.get(root)).find(predicate);
   h.findAll=(root,predicate)=>all(nodes.get(root)).filter(predicate);
@@ -201,7 +202,7 @@ test('collapse is associated with its body, persists through renaming/moving and
   assert.equal(h.node(`group-body-${id}`).hidden,true);assert.equal(chipFor(h,'Renamed').children[1].textContent,'1');
   let key=chipFor(h,'Renamed').dispatch('keydown',{key:'Enter'});await settle();assert(key.defaultPrevented);assert.equal(h.node(`group-body-${id}`).hidden,false);assert.equal(h.node(`manual-group-${id}`).hidden,false);
   key=h.node(`group-toggle-${id}`).dispatch('keydown',{key:' '});await settle();assert(key.defaultPrevented);assert.equal(h.node(`group-body-${id}`).hidden,true);
-  await h.scan();assert.equal(chipFor(h,'Ungrouped').attributes['aria-expanded'],'true');assert.equal(chipFor(h,'Renamed'),undefined);
+  await h.scan();assert.equal(chipFor(h,'Ungrouped').attributes['aria-expanded'],'true');assert.equal(chipFor(h,'Renamed').attributes['aria-expanded'],'false');
 });
 test('external, forged and invalid-target drops are ignored without navigating or changing assignments',async()=>{
   const h=await harness();await h.scan();await h.click('new-group');
@@ -227,13 +228,13 @@ test('collapse and same-group drop preserve AI preview; an actual drag move inva
 });
 test('busy dashboard rejects stale drag events and keyboard collapse without changing the review',async()=>{
   const h=await harness();await h.scan();await h.click('new-group');const id=groupIdOf(chipFor(h,'Workspace 1'));
-  const drag=await startDrag(h,'Page 1');h.autoConfirm=false;
-  // Hold the fake scan confirmation open to simulate an in-flight UI operation.
+  const drag=await startDrag(h,'Page 1');let resolveScan;h.scanDeferred=new Promise(resolve=>resolveScan=resolve);
+  // Hold Safari's scan response to simulate an in-flight UI operation.
   h.node('scan').click();await settle();
   const rejected=h.label('groups','Drag Page 1 to a group chip').dispatch('dragstart',{dataTransfer:transfer()});assert(rejected.defaultPrevented);
   await drop(h,chipFor(h,'Workspace 1'),drag.data);assert.equal(selectedGroup(h,'Page 1'),'ungrouped');
   chipFor(h,'Workspace 1').dispatch('keydown',{key:'Enter'});assert.equal(h.node(`group-body-${id}`).hidden,false);
-  h.node('confirm').returnValue='cancel';h.node('confirm').dispatch('close');await settle();
+  resolveScan({ok:true,tabs:structuredClone(h.tabs)});await settle();
 });
 
 
@@ -295,4 +296,45 @@ test('proposal grip order survives explicit acceptance and forged proposal paylo
  await h.click('ai-accept');
  const rows=h.findAll('groups',node=>node.attributes['aria-label']?.startsWith('Move Page')).map(node=>node.attributes['aria-label']);
  assert.deepEqual(rows,['Move Page 2','Move Page 1']);
+});
+
+test('initial and five-minute scans keep stable groups, exclusions and ordering; changed identities become ungrouped',async()=>{
+ const h=await harness({tabs:[sample(1),sample(2),sample(3)]});
+ assert.equal(h.sent.filter(message=>message.type==='scan').length,1);
+ await h.click('new-group');const id=groupIdOf(chipFor(h,'Workspace 1'));
+ await h.change(h.label('groups','Group for Page 1'),id);await h.change(h.label('groups','Group for Page 2'),id);
+ await h.change(h.label('groups','Include Page 1'),false);
+ h.label('groups','Drag Page 2 to a group chip').dispatch('keydown',{key:'ArrowUp',altKey:true});await settle();
+ h.tabs=[sample(1),sample(2),sample(3,{url:'https://changed.test/',title:'Changed'}),sample(4)];
+ h.autoScan();await settle();
+ assert.equal(selectedGroup(h,'Page 1'),id);assert.equal(h.label('groups','Include Page 1').checked,false);
+ assert.equal(selectedGroup(h,'Page 2'),id);assert.equal(selectedGroup(h,'Changed'),'ungrouped');assert.equal(selectedGroup(h,'Page 4'),'ungrouped');
+ const card=h.node(`manual-group-${id}`);assert.deepEqual(all(card).filter(node=>node.attributes['aria-label']?.startsWith('Move ')).map(node=>node.attributes['aria-label']),['Move Page 2','Move Page 1']);
+ assert.equal(h.statusCalls,0);assert.equal(h.suggestCalls,0);assert.match(h.node('scan-info').textContent,/every 5 minutes while manager is visible/);
+ h.tabs=[sample(1,{url:'https://navigated.test/',title:'Navigated'}),sample(4)];h.autoScan();await settle();
+ assert.equal(selectedGroup(h,'Navigated'),'ungrouped');assert.equal(h.label('groups','Include Navigated').checked,true);assert(named(h,'groups','Workspace 1'));
+});
+test('unchanged automatic scan preserves staged suggestions, consent and DOM while changed inventory invalidates them',async()=>{
+ const h=await harness();await h.connect();await h.consent();await h.click('suggest');await h.consent();
+ const proposal=named(h,'ai-candidates','Research'),row=rowFor(h,'Page 1');
+ h.autoScan();await settle();assert.equal(named(h,'ai-candidates','Research'),proposal);assert.equal(rowFor(h,'Page 1'),row);assert.equal(h.node('ai-consent').checked,true);assert.equal(h.node('ai-review').hidden,false);
+ h.tabs.push(sample(4));h.autoScan();await settle();assert.equal(h.node('ai-review').hidden,true);assert.equal(h.node('ai-consent').checked,false);assert.equal(h.suggestCalls,1);assert.equal(h.statusCalls,1);
+});
+test('automatic scan skips editing, dragging and hidden pages and ignores an answer overtaken by an edit',async()=>{
+ const h=await harness();const count=()=>h.sent.filter(message=>message.type==='scan').length;let before=count();
+ h.document.activeElement={tagName:'INPUT'};h.autoScan();await settle();assert.equal(count(),before);
+ h.document.activeElement=null;h.document.hidden=true;h.autoScan();await settle();assert.equal(count(),before);
+ h.document.hidden=false;const drag=await startDrag(h,'Page 1');h.autoScan();await settle();assert.equal(count(),before);drag.handle.dispatch('dragend');
+ let resolve;h.scanDeferred=new Promise(done=>resolve=done);h.autoScan();await settle();
+ await h.change(named(h,'groups','Ungrouped'),'Edited during refresh','input');
+ resolve({ok:true,tabs:[sample(99)]});await settle();assert(named(h,'groups','Edited during refresh'));assert(rowFor(h,'Page 1'));assert.equal(rowFor(h,'Page 99'),undefined);
+});
+test('dashboard refresh messages require extension sender and matching window; AI intent opens settings without inference',async()=>{
+ const h=await harness();const message={channel:'workspace-dashboard',type:'refresh-inventory',windowId:1};const sender={id:'test',url:'safari-web-extension://test/popup.html'};
+ const before=h.sent.length;
+ assert.equal(h.runtimeListener(message,{...sender,id:'stranger'}),undefined);
+ assert.equal(h.runtimeListener(message,{...sender,url:'https://example.test/'}),undefined);
+ assert.equal(h.runtimeListener({...message,windowId:2},sender),undefined);assert.equal(h.sent.length,before);
+ h.tabs.push(sample(4));const response=await h.runtimeListener(message,sender);assert.equal(response.ok,true);assert(rowFor(h,'Page 4'));
+ const aiResponse=await h.runtimeListener({...message,type:'ai-organise'},sender);assert.equal(aiResponse.ok,true);assert.equal(h.node('ai').open,true);assert.equal(h.statusCalls,0);assert.equal(h.suggestCalls,0);
 });

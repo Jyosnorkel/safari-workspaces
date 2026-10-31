@@ -1,3 +1,7 @@
+## v0.6.0 direct actions and scan refresh
+
+140 fake-browser/model checks pass. New checks cover direct snapshot action, AI entry without inference, initial and five-minute merge scans, preserved review state, changed identities, busy/edit/drag guards and authenticated same-window popup messages. A fictional-data browser preview verified popup layout, counts, snapshot action and AI settings reveal. Native build/signature and packaged script comparisons pass. Actual Safari integration remains pending. Scans stay local; no automatic model calls. Dashboard timer runs only while visible and idle. No Safari was controlled or closed.
+
 ## v0.5.1 toolbar popup backup drop
 
 134 automated checks pass, including popup file-drag feedback, single background handoff, concurrency, invalid selections, private windows and error recovery. The backup coordinator is unchanged. Native build/signature and packaged popup comparison pass. Actual Safari popup drag/focus lifecycle remains unverified; this iteration made no Safari interactions or model calls. Open the toolbar popup manually, then drag a fictional backup onto it to verify. No proximity detection is claimed.

@@ -41,7 +41,7 @@
     const cost = attemptsPerSuggestion();
     const ready = pairedToken && usage?.enabled && usage?.configured && !usage?.busy && !cooling && daily >= cost && minute >= cost;
     $('suggest').disabled = busy || !ready || !payload.length || !$('ai-consent').checked;
-    $('suggest').textContent = cooling ? `✦ Cooldown · ${Math.ceil((retryAt - Date.now()) / 1000)}s` : '✦ Suggest with Meta';
+    $('suggest').textContent = cooling ? `Cooldown · ${Math.ceil((retryAt - Date.now()) / 1000)}s` : 'AI organise';
     $('suggest').title = !pairedToken ? 'Connect the local service first.' : !usage?.configured ? 'Configure Meta in the local service first.' : usage?.busy ? 'The service is busy. Refresh its status when ready.' : daily < cost ? 'Not enough remote attempts remain today.' : cooling || minute < cost ? 'Wait for the minute cooldown, then refresh status.' : !payload.length ? 'Scan and include an eligible tab first.' : !$('ai-consent').checked ? 'Review and agree to the data disclosure first.' : 'Request suggestions without changing your current groups.';
     $('ai-refresh').disabled = busy || !pairedToken;
     $('ai-disconnect').disabled = busy || !pairedToken;
@@ -504,17 +504,42 @@
       tabs = tabs.filter(t => !removed.has(t.id)); reviewChanged('Tabs changed. Previous AI suggestions were discarded; scan again before requesting a suggestion.'); renderGroups();
     } else notice(`${workspace.name}: saved ${workspace.tabs.length} tabs locally. Tabs remain open.${repeated ? ' Already saved; no duplicate created.' : ''}`);
   }
-  async function scan() {
-    if (tabs.length && !await confirm('Rescan this window?','This replaces the current unsaved review and group assignments. Saved workspaces are kept.','Rescan')) return;
-    notice('Reading tabs in this Safari window…');
+  const editingReview = () => {
+    const active = document.activeElement;
+    return Boolean(active && (['INPUT','SELECT','TEXTAREA'].includes(String(active.tagName).toUpperCase()) || active.isContentEditable));
+  };
+  const inventoryValue = inventory => JSON.stringify(inventory.map(tab => [tab.id,tab.windowId,tab.url,tab.title,tab.index,tab.eligible,tab.pinned,tab.incognito,tab.pendingUrl]));
+  async function scan({automatic = false} = {}) {
+    if (automatic && (draggedTab || editingReview() || document.hidden)) return;
+    const baseline = reviewRevision;
+    if (!automatic) notice('Refreshing tabs in this Safari window…');
     const response = await send('scan',{windowId});
-    tabs = response.tabs; groups = [{id:'ungrouped',name:'Ungrouped',reason:''}];
-    assignments.clear(); excluded.clear(); requests.clear(); tabOrder.clear(); collapsedGroups.clear(); clearDrag(); generation++;
-    reviewChanged('A new scan replaced the inventory. Previous suggestions were discarded.'); $('ai-consent').checked = false;
-    const eligible = tabs.filter(t=>t.eligible).length;
-    $('scan-info').textContent = `${tabs.length} tabs scanned · ${eligible} eligible · ${tabs.length-eligible} left untouched`;
-    notice(eligible ? 'Ready to organize. Create a group, then move tabs using their menus.' : 'No eligible web tabs found. Open some regular websites in this window, then scan again.');
-    renderGroups();
+    // A refresh must never replace an edit made while Safari was answering.
+    if (baseline !== reviewRevision || (automatic && (draggedTab || editingReview() || document.hidden))) return;
+    const refreshed = response.tabs;
+    const changed = inventoryValue(tabs) !== inventoryValue(refreshed);
+    if (changed) {
+      const previous = new Map(tabs.map(tab => [tab.id,tab]));
+      const retained = new Set(refreshed.filter(tab => {
+        const old = previous.get(tab.id);
+        return old && old.url === tab.url && old.windowId === tab.windowId && old.eligible === tab.eligible && old.pinned === tab.pinned && old.incognito === tab.incognito;
+      }).map(tab => tab.id));
+      for (const map of [assignments,tabOrder]) for (const id of map.keys()) if (!retained.has(id)) map.delete(id);
+      for (const id of excluded) if (!retained.has(id)) excluded.delete(id);
+      tabs = refreshed; generation++;
+      reviewChanged('Tabs changed. Previous AI suggestions were discarded; your existing group edits were kept.');
+      $('ai-consent').checked = false;
+      renderGroups();
+    }
+    const eligible = tabs.filter(tab=>tab.eligible).length;
+    $('scan-info').textContent = `${tabs.length} tabs · ${eligible} eligible · Updated ${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})} · Refreshes every 5 minutes while manager is visible`;
+    if (!automatic) notice(eligible ? 'Tabs refreshed. Existing groups and exclusions were kept; new or changed tabs are ungrouped.' : 'No eligible web tabs found. Open regular websites in this window, then refresh.');
+  }
+  function revealAI() {
+    $('ai').open = true;
+    if (!pairedToken) $('connection-settings').open = true;
+    $('ai').scrollIntoView?.({block:'start',behavior:'smooth'});
+    (pairedToken ? $('ai-consent') : $('ai-token')).focus();
   }
   async function snapshotWindow() {
     const name = `Window ${new Date().toLocaleString()}`.slice(0,80);
@@ -630,7 +655,7 @@
       detail.append(summary,list); card.append(detail); $('workspaces').append(card);
     }
   }
-  $('scan').addEventListener('click',()=>run(scan));
+  $('scan').addEventListener('click',()=>run(()=>scan()));
   $('refresh').addEventListener('click',()=>run(async()=>{await loadSaved(); notice('Saved workspaces refreshed.');}));
   $('new-group').addEventListener('click',()=> {
     if (busy) return;
@@ -653,11 +678,25 @@
   $('ai-accept').addEventListener('click',()=>run(acceptSuggestions));
   // Only update the local countdown; never poll the service or retry model calls.
   setInterval(updateAIControls,1000);
+  setInterval(()=> {
+    if (!busy && !draggedTab && !editingReview() && !document.hidden && Number.isInteger(windowId)) run(()=>scan({automatic:true}));
+  },5 * 60 * 1000);
+  api?.runtime?.onMessage?.addListener((message,sender)=> {
+    if (message?.channel !== 'workspace-dashboard' || message.windowId !== windowId || sender?.id !== api.runtime.id) return undefined;
+    if (!['refresh-inventory','ai-organise'].includes(message.type)) return undefined;
+    const origin = api.runtime.getURL('');
+    if (!sender.url?.startsWith(origin) || !['popup.html','dashboard.html'].includes(sender.url.slice(origin.length).split(/[?#]/)[0])) return undefined;
+    if (busy || draggedTab || editingReview()) return Promise.resolve({ok:false,error:'Review is busy. Refresh again when ready.'});
+    let result = {ok:false,error:'Could not refresh tabs. Check the manager for details.'};
+    return run(async()=> { await scan(); if (message.type === 'ai-organise') revealAI(); result = {ok:true}; }).then(()=>result);
+  });
+  globalThis.addEventListener?.('hashchange',()=> { if (globalThis.location.hash === '#ai') revealAI(); });
   renderGroups();
   run(async()=> {
     if (!api?.runtime?.sendMessage) throw new Error('This page must be opened from the Safari Workspaces extension toolbar. Enable the extension in Safari Settings → Extensions.');
     const win = await api.windows.getCurrent(); windowId = win.id;
-    if (win.incognito) throw new Error('Private browsing is excluded. Open the manager in a normal Safari window.');
-    await loadSaved(); notice('Connected to Safari. Scan this window to begin.');
+    if (win.incognito || (win.type && win.type !== 'normal')) throw new Error('Private browsing is excluded. Open the manager in a normal Safari window.');
+    await loadSaved(); await scan();
+    if (globalThis.location.hash === '#ai') revealAI();
   });
 })();

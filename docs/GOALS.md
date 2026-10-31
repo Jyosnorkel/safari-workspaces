@@ -25,3 +25,9 @@ Eligible tab rows can be dragged onto manual group cards/chips, and AI proposal 
 131 automated checks pass using fake browser/model APIs, including file drops, forged/stale drags, ordering, write failures, duplicate requests and partial restoration. Native build/signature verification passes. Actual packaged Safari file dropping, physical drags and new-window restoration remain unverified. No Safari interaction or live model requests occurred in this iteration. One initial blank tab is retained in the new window; no tab/window cleanup occurs.
 
 Toolbar popup follow-up v0.5.1: manually opening the small popup exposes a backup drop area using the existing background reload operation. 134 automated checks pass; native build/signature pass. Real Safari popup focus/drop behavior still needs verification. Backup backend unchanged.
+
+## v0.6.0 clearer actions and inventory refresh — October 31
+
+Toolbar popup now leads with Save snapshot, AI organise and Refresh tabs. Slogans removed; dashboard AI connection/data settings collapsed until needed. Snapshot invokes existing non-closing window save. AI action opens setup/review without inference. Inventory refresh runs on popup/dashboard opening and every five minutes while dashboard is visible, skips edits/drag/busy state, preserves stable groups/exclusions/order and leaves changed/new tabs ungrouped. Changed inventories invalidate stale AI proposals and consent; unchanged inventory preserves them. No recurring model/status calls.
+
+140 automated checks pass. Fictional-data internal-browser preview verified popup layout/counts, saving snapshot and opening dashboard AI settings. Native build/signature and packaged resource comparisons pass. Actual Safari popup actions, cross-page messages and timers remain unverified. Backup restore backend unchanged. No Safari control, closing or live inference occurred.
