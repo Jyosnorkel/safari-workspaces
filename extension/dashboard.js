@@ -5,6 +5,7 @@
   let tabs = [], windowId, busy = false, generation = 0, reviewRevision = 0;
   let pairedToken = '', usage = null, pendingSuggestions = null, draggedTab = null, connectionUpdated = false;
   const collapsedGroups = new Set();
+  const tabOrder = new Map();
   let groups = [{id: 'ungrouped', name: 'Ungrouped', reason: ''}];
   const assignments = new Map(), excluded = new Set(), requests = new Map();
   const e = (tag, className, text) => {
@@ -123,6 +124,7 @@
     for (const group of buckets) {
       const members = candidate.tabs.filter(tab => (candidate.assignments.get(String(tab.id)) || 'proposal-ungrouped') === group.id);
       const card = e('article', 'group'), header = e('div', 'group-header');
+      bindProposalTarget(card,candidate,group.id);
       if (group.id === 'proposal-ungrouped') header.append(e('h3', '', group.name));
       else {
         const input = e('input'); input.type = 'text'; input.value = group.name; input.maxLength = 80;
@@ -136,6 +138,7 @@
       const list = e('div', 'tabs');
       for (const tab of members) {
         const row = e('div', 'tab'), content = e('div', 'tab-content');
+        bindProposalRow(row,tab,candidate,group.id);
         content.append(e('div', 'tab-title', tab.title), e('div', 'tab-url', C.aiInventory([tab])[0].url));
         const move = e('select'); move.setAttribute('aria-label', `Proposed group for ${tab.title}`);
         for (const target of buckets) {
@@ -157,6 +160,7 @@
     if (!await confirm('Accept reviewed suggestions?', `Apply these group assignments to ${candidate.tabs.length} included tabs? Existing unchecked tabs keep their groups. This updates only the review; no tabs are saved, closed or restored.`, 'Accept groups')) return;
     if (candidate.revision !== reviewRevision) throw new Error('Your review changed. Suggestions were not applied.');
     const added = validated.groups.map(group => ({...group, id: crypto.randomUUID()}));
+    candidate.tabs.forEach((tab,index)=>tabOrder.set(tab.id,index));
     for (const tab of candidate.tabs) assignments.delete(tab.id);
     for (let i = 0; i < validated.groups.length; i++) for (const id of validated.groups[i].tabIds) {
       const original = candidate.tabs.find(tab => String(tab.id) === String(id)); assignments.set(original.id, added[i].id);
@@ -199,7 +203,7 @@
       dialog.showModal();
     });
   }
-  const assigned = groupId => tabs.filter(t => (assignments.get(t.id) || 'ungrouped') === groupId);
+  const assigned = groupId => tabs.filter(t => (assignments.get(t.id) || 'ungrouped') === groupId).sort((a,b)=>(tabOrder.get(a.id) ?? a.index)-(tabOrder.get(b.id) ?? b.index));
   const selected = groupId => assigned(groupId).filter(t => t.eligible && !excluded.has(t.id));
   function button(label, action, className = '') {
     const node = e('button', className, label); node.type = 'button';
@@ -213,9 +217,10 @@
     draggedTab = null;
     $('group-chips').classList.toggle('is-dragging',false);
     for (const chip of $('group-chips').children) chip.classList.toggle('is-drop-target', false);
+    for (const card of [...$('groups').children,...$('ai-candidates').children]) { card.classList.toggle('is-drop-target',false); for (const list of card.children) for (const row of list.children) row.classList.toggle('is-drop-target',false); }
   }
   function validDrop(groupId, transfer, readToken = false) {
-    if (busy || !draggedTab || draggedTab.generation !== generation || draggedTab.revision !== reviewRevision || !groups.some(group => group.id === groupId)) return false;
+    if (busy || !draggedTab || draggedTab.scope !== 'manual' || draggedTab.generation !== generation || draggedTab.revision !== reviewRevision || !groups.some(group => group.id === groupId)) return false;
     const tab = tabs.find(tab => tab.id === draggedTab.tabId);
     if (!draggableTab(tab) || groupFor(tab.id) !== draggedTab.fromGroup || !Array.from(transfer?.types || []).includes(DRAG_TYPE)) return false;
     // During dragover, browsers protect the data store; read its opaque token only on drop.
@@ -225,6 +230,8 @@
   function moveTab(tabId, targetId) {
     const tab = tabs.find(tab => tab.id === tabId), target = groups.find(group => group.id === targetId);
     if (busy || !draggableTab(tab) || !target || groupFor(tabId) === targetId) return false;
+    assigned(targetId).forEach((item,index)=>tabOrder.set(item.id,index));
+    tabOrder.set(tabId,assigned(targetId).length);
     assignments.set(tabId, targetId);
     reviewChanged(); renderGroups();
     notice(`Moved “${tab.title}” to “${target.name || 'Unnamed group'}”.${excluded.has(tabId) ? ' It remains unchecked.' : ''} No browser tabs were moved or changed.`);
@@ -283,20 +290,125 @@
     handle.setAttribute('aria-label',`Drag ${tab.title} to a group chip`);
     handle.setAttribute('aria-describedby','group-chip-help');
     handle.setAttribute('data-tab-id',String(tab.id));
-    handle.title = 'Drag to a group chip. Use the group menu to move this tab without dragging.';
-    handle.addEventListener('dragstart',event=>{
+    handle.title = 'Drag onto a row to place this tab before it. Option + Up/Down reorders with the keyboard. Drag the row itself to move groups.';
+    handle._startDrag = event=>{
       clearDrag();
       const current = tabs.find(item=>item.id===tab.id);
       if (busy || handleGeneration !== generation || handleRevision !== reviewRevision || !event.dataTransfer || !draggableTab(current) || groupFor(tab.id)!==sourceGroupId) { event.preventDefault(); return; }
       const token = crypto.randomUUID();
       try { event.dataTransfer.setData(DRAG_TYPE,token); event.dataTransfer.effectAllowed='move'; }
       catch { event.preventDefault(); return; }
-      draggedTab = {tabId:tab.id,fromGroup:sourceGroupId,token,generation,revision:reviewRevision};
+      draggedTab = {tabId:tab.id,fromGroup:sourceGroupId,token,generation,revision:reviewRevision,scope:'manual', mode:'order'};
       $('group-chips').classList.toggle('is-dragging',true);
+    };
+    handle.addEventListener('dragstart', event=>{ event.stopPropagation?.(); handle._startDrag(event); });
+    handle.addEventListener('keydown',event=>{
+      if (!event.altKey || !['ArrowUp','ArrowDown'].includes(event.key) || busy || handleGeneration !== generation || handleRevision !== reviewRevision) return;
+      event.preventDefault();
+      const ordered = assigned(sourceGroupId), index = ordered.findIndex(item=>item.id===tab.id), next = index + (event.key==='ArrowUp' ? -1 : 1);
+      if (next < 0 || next >= ordered.length) return;
+      [ordered[index],ordered[next]]=[ordered[next],ordered[index]];
+      ordered.forEach((item,position)=>tabOrder.set(item.id,position));
+      reviewChanged(); renderGroups();
+      for (const card of $('groups').children) for (const section of card.children) for (const list of section.children) for (const row of list.children) for (const control of row.children) if (control.getAttribute?.('data-tab-id')===String(tab.id)) control.focus();
+      notice('Tab order updated. Use Option and Up or Down on the grip to reorder.');
     });
     handle.addEventListener('dragend',clearDrag);
     handle.addEventListener('click',()=>{ if (!busy) notice('Drag this handle to a group chip, or use this tab’s group menu to move it without dragging.'); });
     return handle;
+  }
+  function validProposalDrop(candidate, groupId, transfer, token = false) {
+    if (busy || !draggedTab || draggedTab.scope !== 'proposal' || pendingSuggestions !== candidate || draggedTab.candidate !== candidate || candidate.revision !== reviewRevision || draggedTab.generation !== generation || !Array.from(transfer?.types || []).includes(DRAG_TYPE)) return false;
+    if (![...candidate.groups.map(group=>group.id),'proposal-ungrouped'].includes(groupId)) return false;
+    if (!candidate.tabs.some(tab=>tab.id===draggedTab.tabId && draggableTab(tab)) || (candidate.assignments.get(String(draggedTab.tabId)) || 'proposal-ungrouped') !== draggedTab.fromGroup) return false;
+    return !token || transfer.getData(DRAG_TYPE) === draggedTab.token;
+  }
+  function bindProposalTarget(node,candidate,groupId,beforeId) {
+    node.addEventListener('dragover',event=>{
+      if (Array.from(event.dataTransfer?.types || []).includes('Files')) return;
+      event.preventDefault();
+      const allowed = validProposalDrop(candidate,groupId,event.dataTransfer);
+      node.classList.toggle('is-drop-target',allowed);
+      if (event.dataTransfer) event.dataTransfer.dropEffect = allowed ? 'move' : 'none';
+    });
+    node.addEventListener('dragleave',()=>node.classList.toggle('is-drop-target',false));
+    node.addEventListener('drop',event=>{
+      if (Array.from(event.dataTransfer?.types || []).includes('Files')) return;
+      event.preventDefault(); event.stopPropagation?.();
+      if (validProposalDrop(candidate,groupId,event.dataTransfer,true)) {
+        if (draggedTab.mode === 'order' && draggedTab.fromGroup === groupId && beforeId !== undefined && beforeId !== draggedTab.tabId) {
+          const moving = candidate.tabs.find(tab=>tab.id===draggedTab.tabId);
+          candidate.tabs = candidate.tabs.filter(tab=>tab.id!==moving.id);
+          candidate.tabs.splice(candidate.tabs.findIndex(tab=>tab.id===beforeId),0,moving);
+        } else candidate.assignments.set(String(draggedTab.tabId),groupId);
+        clearDrag(); renderSuggestions();
+        notice('Proposed group updated. Accept reviewed suggestions when ready; current groups remain unchanged.');
+      }
+      clearDrag();
+    });
+  }
+  function bindProposalRow(row,tab,candidate,groupId) {
+    row.draggable = true; row.classList.toggle('draggable-proposal',true);
+    row.setAttribute('aria-label',`Move proposed ${tab.title}`);
+    row.addEventListener('dragstart',event=>{
+      if (event.target !== row && ['INPUT','SELECT','BUTTON','OPTION'].includes(String(event.target?.tagName).toUpperCase())) { event.preventDefault(); return; }
+      clearDrag();
+      if (busy || pendingSuggestions !== candidate || candidate.revision !== reviewRevision || !draggableTab(tab) || !event.dataTransfer) { event.preventDefault(); return; }
+      const token = crypto.randomUUID();
+      event.dataTransfer.setData(DRAG_TYPE,token); event.dataTransfer.effectAllowed='move';
+      draggedTab = {scope:'proposal',candidate,tabId:tab.id,fromGroup:groupId,token,generation,revision:reviewRevision};
+    });
+    row.addEventListener('dragend',clearDrag);
+    bindProposalTarget(row,candidate,groupId,tab.id);
+    const grip = e('button','drag-handle','⠿'); grip.type='button'; grip.draggable=true;
+    grip.setAttribute('aria-label',`Reorder proposed ${tab.title}`);
+    grip.title='Drag to another row in this proposed group to place this tab before it.';
+    grip.addEventListener('dragstart',event=>{
+      event.stopPropagation?.(); clearDrag();
+      if (busy || pendingSuggestions !== candidate || candidate.revision !== reviewRevision || !event.dataTransfer || !draggableTab(tab)) {event.preventDefault();return;}
+      const token=crypto.randomUUID(); event.dataTransfer.setData(DRAG_TYPE,token); event.dataTransfer.effectAllowed='move';
+      draggedTab={scope:'proposal',candidate,tabId:tab.id,fromGroup:groupId,token,generation,revision:reviewRevision,mode:'order'};
+    });
+    grip.addEventListener('dragend',clearDrag); row.append(grip);
+  }
+  function bindRowDrag(row, tab, groupId) {
+    row.draggable = true;
+    row.setAttribute('aria-label', `Move ${tab.title}`);
+    const origin = dragHandle(tab, groupId);
+    row.addEventListener('dragstart', event => {
+      if (event.target !== row && ['INPUT','SELECT','BUTTON','OPTION'].includes(String(event.target?.tagName).toUpperCase())) { event.preventDefault(); return; }
+      // Reuse the same nonce and stale-review checks as the keyboard-accessible grip.
+      row._startDrag(event);
+      if (draggedTab) draggedTab.mode = 'move';
+    });
+    row._startDrag = origin._startDrag;
+    row.addEventListener('dragend', clearDrag);
+    bindManualTarget(row, groupId, tab.id);
+  }
+  function bindManualTarget(node, groupId, beforeId) {
+    node.addEventListener('dragover', event => {
+      if (Array.from(event.dataTransfer?.types || []).includes('Files')) return;
+      event.preventDefault();
+      const valid = validDrop(groupId,event.dataTransfer);
+      const reorder = valid && draggedTab.mode === 'order' && draggedTab.fromGroup === groupId && beforeId !== undefined && beforeId !== draggedTab.tabId;
+      node.classList.toggle('is-drop-target', Boolean(valid && (draggedTab.fromGroup !== groupId || reorder)));
+      if (event.dataTransfer) event.dataTransfer.dropEffect = valid ? 'move' : 'none';
+    });
+    node.addEventListener('dragleave', () => node.classList.toggle('is-drop-target', false));
+    node.addEventListener('drop', event => {
+      if (Array.from(event.dataTransfer?.types || []).includes('Files')) return;
+      event.preventDefault(); event.stopPropagation?.();
+      if (validDrop(groupId,event.dataTransfer,true)) {
+        const source = draggedTab;
+        if (source.mode === 'order' && source.fromGroup === groupId && beforeId !== undefined && beforeId !== source.tabId) {
+          const ordered = assigned(groupId).filter(tab=>tab.id!==source.tabId);
+          ordered.splice(ordered.findIndex(tab=>tab.id===beforeId),0,tabs.find(tab=>tab.id===source.tabId));
+          ordered.forEach((tab,index)=>tabOrder.set(tab.id,index));
+          reviewChanged(); renderGroups(); notice('Tab order updated in this workspace review. Safari’s tab bar is unchanged.');
+        } else moveTab(source.tabId,groupId);
+      }
+      node.classList.toggle('is-drop-target',false); clearDrag();
+    });
   }
   function renderGroups() {
     for (const id of collapsedGroups) if (!groups.some(group=>group.id===id)) collapsedGroups.delete(id);
@@ -312,6 +424,7 @@
       const collapsed = collapsedGroups.has(group.id);
       card.setAttribute('id',`manual-group-${group.id}`); card.setAttribute('aria-label',group.name || 'Unnamed group');
       card.classList.toggle('is-collapsed',collapsed); card.hidden = collapsed;
+      bindManualTarget(card,group.id);
       const body = e('div','group-body'); body.setAttribute('id',`group-body-${group.id}`); body.hidden = collapsed;
       const name = e('input'); name.type = 'text'; name.maxLength = 80; name.value = group.name;
       name.setAttribute('aria-label', `Name for ${group.name}`);
@@ -357,7 +470,7 @@
           content.append(move);
         }
         row.append(checkbox);
-        if (draggableTab(tab)) { row.classList.toggle('draggable-tab',true); row.append(dragHandle(tab,group.id)); }
+        if (draggableTab(tab)) { row.classList.toggle('draggable-tab',true); bindRowDrag(row,tab,group.id); row.append(dragHandle(tab,group.id)); }
         row.append(content); list.append(row);
       }
       if (!assigned(group.id).length) list.append(e('div','empty','Move tabs here using the group menu on any tab.'));
@@ -396,7 +509,7 @@
     notice('Reading tabs in this Safari window…');
     const response = await send('scan',{windowId});
     tabs = response.tabs; groups = [{id:'ungrouped',name:'Ungrouped',reason:''}];
-    assignments.clear(); excluded.clear(); requests.clear(); collapsedGroups.clear(); clearDrag(); generation++;
+    assignments.clear(); excluded.clear(); requests.clear(); tabOrder.clear(); collapsedGroups.clear(); clearDrag(); generation++;
     reviewChanged('A new scan replaced the inventory. Previous suggestions were discarded.'); $('ai-consent').checked = false;
     const eligible = tabs.filter(t=>t.eligible).length;
     $('scan-info').textContent = `${tabs.length} tabs scanned · ${eligible} eligible · ${tabs.length-eligible} left untouched`;
@@ -421,6 +534,37 @@
   $('snapshot-window').addEventListener('click', () => run(snapshotWindow));
   $('export-all').addEventListener('click', () => run(() => exportBackup()));
   $('import-backup').addEventListener('click', () => { if (!busy) $('backup-file').click(); });
+  // Dropping is a deliberate restore gesture; the file picker remains import-only.
+  const fileDrag = transfer => Array.from(transfer?.types || []).includes('Files');
+  document.body.addEventListener('dragover', event => {
+    event.preventDefault(); // External URLs must never navigate away from the manager.
+    if (!fileDrag(event.dataTransfer)) return;
+    document.body.classList.toggle('backup-drop-active', !busy);
+    event.dataTransfer.dropEffect = busy ? 'none' : 'copy';
+  });
+  document.body.addEventListener('dragleave', event => {
+    if (!event.relatedTarget) document.body.classList.toggle('backup-drop-active', false);
+  });
+  document.body.addEventListener('drop', event => {
+    event.preventDefault();
+    document.body.classList.toggle('backup-drop-active', false);
+    if (!fileDrag(event.dataTransfer) || busy) return;
+    const files = Array.from(event.dataTransfer.files || []);
+    run(async () => {
+      if (files.length !== 1) throw new Error('Drop one Safari Workspaces JSON backup at a time.');
+      const file = files[0];
+      if (file.size > C.MAX_BACKUP_BYTES) throw new Error('Choose a backup file smaller than 10 MB.');
+      const json = await file.text();
+      const decoded = C.decodeBackup(json);
+      const total = decoded.reduce((sum, workspace) => sum + workspace.tabs.length, 0);
+      notice(`Saving backup and opening ${total} saved URLs in a new window…`);
+      try {
+        const result = await send('drop-backup', {json, requestId: crypto.randomUUID(), windowId});
+        const opened = result.workspaces.reduce((sum, workspace) => sum + Object.values(workspace.restore.results).filter(item => item.state === 'opened').length, 0);
+        notice(result.repeated && !Number.isInteger(result.windowId) ? 'Snapshots saved. Safari did not confirm the new window; check Safari before restoring from Saved workspaces.' : `${opened}/${total} URLs opened in a new window. Snapshots kept. ${opened < total ? 'Review saved workspaces for recovery.' : 'Your existing windows remain open.'}`);
+      } finally { await loadSaved(); }
+    });
+  });
   $('backup-file').addEventListener('change', () => run(async () => {
     const file = $('backup-file').files[0]; $('backup-file').value = '';
     if (!file) return;
@@ -464,11 +608,11 @@
         const amount = complete ? workspace.tabs.length : workspace.tabs.length-opened;
         const text = complete
           ? `Start a new restore session and open another copy of all ${amount} tabs? Tabs from previous restores may still be open. This is a deliberate new copy.`
-          : `Open ${amount} saved URLs in this window? Already confirmed restores are skipped. The snapshot stays saved. Original tabs may still be open.`;
+          : `Open ${amount} saved URLs in ${workspace.restore.windowId ? 'the original restore window' : 'this window'}? Already confirmed restores are skipped. The snapshot stays saved. Original tabs may still be open.`;
         if (!await confirm(complete ? 'Open another copy?' : 'Restore this workspace?',text,complete ? 'Open another copy' : 'Restore')) return;
         notice('Restoring saved URLs. Keep this window open…');
         try {
-          const response = await send('restore',{id:workspace.id,windowId,...(complete ? {newSessionId:crypto.randomUUID(),previousSessionId:workspace.restore.sessionId || null} : {})});
+          const response = await send('restore',{id:workspace.id,windowId:complete ? windowId : (workspace.restore.windowId ?? windowId),...(complete ? {newSessionId:crypto.randomUUID(),previousSessionId:workspace.restore.sessionId || null} : {})});
           const count = Object.values(response.workspace.restore.results).filter(r=>r.state==='opened').length;
           notice(`${workspace.name}: ${count}/${workspace.tabs.length} tabs restored. ${response.workspace.restore.state === 'complete' ? 'Snapshot kept for reference.' : 'Review failures and retry the remaining tabs.'}`);
         } finally { await loadSaved(); }

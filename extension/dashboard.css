@@ -9,3 +9,8 @@
 .manual-review{position:relative}.group-chips{position:sticky;top:10px;z-index:3;background:#f6f8f2f2;backdrop-filter:blur(10px);border-radius:12px}.group-chips.is-dragging .group-chip{border-style:dashed;border-color:#8ba66c}.group-chips.is-dragging .group-chip::after{content:'Drop';font-size:9px;color:#5a793e}.group-chips.is-dragging .group-chip.is-drop-target{border-style:solid}@media(prefers-reduced-transparency:reduce){.group-chips{background:#f6f8f2;backdrop-filter:none}}
 
 .group.is-collapsed{align-self:start}
+
+/* Whole-row movement with Finder-style destination and insertion feedback. */
+.tab[draggable=true]{cursor:grab;border-radius:7px;transition:background .12s ease,box-shadow .12s ease}.tab[draggable=true]:hover{background:#f0f5e9}.tab[draggable=true]:active{cursor:grabbing}.tab input,.tab select{cursor:default}.group.is-drop-target{border-color:#648d43;box-shadow:0 0 0 3px #92b66a55;background:#f6faef}.tab.is-drop-target{box-shadow:inset 0 3px #648d43;background:#edf5e2}.ai-review .tab.draggable-proposal{grid-template-columns:minmax(0,1fr)}@media(prefers-reduced-motion:reduce){.tab[draggable=true]{transition:none}}
+.backup-drop-hint{padding:14px 17px;border:1px dashed #b7cbaa;border-radius:12px;background:#f0f5e9;color:#567447;font-size:12px}.backup-drop-active::after{content:'Drop backup to open in a new window';position:fixed;inset:20px;z-index:100;display:grid;place-items:center;border:3px dashed #70964e;border-radius:24px;background:#edf6e6eb;color:#234b40;font-size:clamp(20px,3vw,34px);font-weight:600;backdrop-filter:blur(4px);pointer-events:none}
+.ai-review .tab.draggable-proposal{grid-template-columns:23px minmax(0,1fr)}

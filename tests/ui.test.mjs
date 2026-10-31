@@ -44,6 +44,7 @@ async function harness(options={}) {
     if(message.type==='snapshot-window')return {ok:true,workspace:{tabs:h.tabs},skipped:0};
     if(message.type==='export-backup')return {ok:true,json:'{"workspaces":[]}'};
     if(message.type==='import-backup')return {ok:true,imported:1};
+    if(message.type==='drop-backup')return {ok:true,imported:1,workspaces:[],windowId:2};
     throw new Error(`Unexpected fake browser operation: ${message.type}`);
   }}};
   const WorkspaceAI={clientOrigin:'safari-web-extension://fake-test',status:async ({token})=>{
@@ -59,7 +60,8 @@ async function harness(options={}) {
   const url={createObjectURL:()=>{h.downloads=(h.downloads||0)+1;return 'blob:fake-backup';},revokeObjectURL:()=>{}};
   class FakeURL extends URL {}
   Object.assign(FakeURL,url);
-  h.context=vm.createContext({document,browser,WorkspaceAI,crypto:webcrypto,URL:FakeURL,localStorage:{setItem:()=>h.storageWrites++,getItem:()=>null},Blob,location:{origin:'null',protocol:'safari-web-extension:',host:'fake-test'},console,setInterval:fn=>{h.countdown=fn;},setTimeout:()=>{},queueMicrotask});
+  h.body=body;
+  h.context=vm.createContext({TextEncoder,document,browser,WorkspaceAI,crypto:webcrypto,URL:FakeURL,localStorage:{setItem:()=>h.storageWrites++,getItem:()=>null},Blob,location:{origin:'null',protocol:'safari-web-extension:',host:'fake-test'},console,setInterval:fn=>{h.countdown=fn;},setTimeout:()=>{},queueMicrotask});
   vm.runInContext(core,h.context);vm.runInContext(source,h.context);
   h.node=findById;
   h.find=(root,predicate)=>all(nodes.get(root)).find(predicate);
@@ -239,4 +241,58 @@ test('successful local reconnect reports automatic address refresh without a mod
  const h=await harness({connectionUpdated:true});await h.connect();
  assert.match(h.node('ai-status').textContent,/address was updated automatically/);
  assert.equal(h.statusCalls,1);assert.equal(h.suggestCalls,0);assert.equal(h.storageWrites,0);
+});
+
+const rowFor=(h,title)=>h.label('groups',`Move ${title}`);
+test('whole rows move into group cards while protected rows and controls stay protected',async()=>{
+ const h=await harness();await h.scan();await h.click('new-group');
+ const id=groupIdOf(chipFor(h,'Workspace 1')), data=transfer();
+ rowFor(h,'Page 1').dispatch('dragstart',{dataTransfer:data});
+ await drop(h,h.node(`manual-group-${id}`),data);
+ assert.equal(selectedGroup(h,'Page 1'),id);assert.equal(rowFor(h,'Page 3'),undefined);
+ const control=h.label('groups','Include Page 1');const blocked=transfer();
+ rowFor(h,'Page 1').dispatch('dragstart',{target:control,dataTransfer:blocked});assert.equal(blocked.types.length,0);
+ assert.equal(h.sent.some(m=>['save','restore'].includes(m.type)),false);
+});
+test('grip inserts before another row and Option arrows reorder without moving browser tabs',async()=>{
+ const h=await harness({tabs:[sample(1),sample(2),sample(3)]});await h.scan();
+ const drag=await startDrag(h,'Page 3');await drop(h,rowFor(h,'Page 1'),drag.data);
+ const order=()=>h.findAll('groups',node=>node.attributes['aria-label']?.startsWith('Move ')).map(node=>node.attributes['aria-label']);
+ assert.deepEqual(order(),['Move Page 3','Move Page 1','Move Page 2']);
+ h.label('groups','Drag Page 3 to a group chip').dispatch('keydown',{key:'ArrowDown',altKey:true});await settle();
+ assert.deepEqual(order(),['Move Page 1','Move Page 3','Move Page 2']);
+ assert.equal(h.sent.some(m=>['save','restore'].includes(m.type)),false);
+});
+test('proposal rows move between staged AI cards only until explicit acceptance',async()=>{
+ const h=await harness();await h.scan();await h.connect();await h.consent();await h.click('suggest');
+ const row=h.label('ai-candidates','Move proposed Page 1'),data=transfer();row.dispatch('dragstart',{dataTransfer:data});
+ const target=h.findAll('ai-candidates',node=>node.className==='group').at(-1);await drop(h,target,data);
+ assert.equal(h.label('ai-candidates','Proposed group for Page 1').children.find(option=>option.selected).value,'proposal-ungrouped');
+ assert.equal(selectedGroup(h,'Page 1'),'ungrouped');assert.equal(h.node('ai-review').hidden,false);
+ const fresh=transfer();h.label('ai-candidates','Move proposed Page 1').dispatch('dragstart',{dataTransfer:fresh});
+ await drop(h,chipFor(h,'Ungrouped'),fresh);assert.equal(h.node('ai-review').hidden,false);
+});
+const backupFile=(text)=>({size:text.length,text:async()=>text});
+const fileTransfer=(files)=>({types:['Files'],files,dropEffect:'none'});
+const validBackup=()=>JSON.stringify({format:'safari-workspaces-backup',version:1,workspaces:[{name:'Test backup',createdAt:'2026-10-31T12:00:00Z',tabs:[{url:'https://example.test/',title:'Example'}]}]});
+test('file drop validates before requesting one new-window restore and rejects invalid or multiple files',async()=>{
+ const h=await harness();
+ const invalid= h.body.dispatch('drop',{dataTransfer:fileTransfer([backupFile('{bad')])});await settle();assert(invalid.defaultPrevented);assert.equal(h.sent.some(m=>m.type==='drop-backup'),false);
+ h.body.dispatch('drop',{dataTransfer:fileTransfer([backupFile(validBackup()),backupFile(validBackup())])});await settle();assert.equal(h.sent.some(m=>m.type==='drop-backup'),false);
+ h.body.dispatch('drop',{dataTransfer:fileTransfer([backupFile(validBackup())])});
+ h.body.dispatch('drop',{dataTransfer:fileTransfer([backupFile(validBackup())])});await settle();
+ const requests=h.sent.filter(m=>m.type==='drop-backup');assert.equal(requests.length,1);assert.equal(requests[0].windowId,1);assert.match(requests[0].requestId,/^[a-f0-9-]{36}$/);
+ assert.equal(h.sent.some(m=>m.type==='restore'),false);
+});
+test('proposal grip order survives explicit acceptance and forged proposal payloads are rejected',async()=>{
+ const h=await harness();await h.scan();await h.connect();await h.consent();await h.click('suggest');
+ const data=transfer();h.label('ai-candidates','Reorder proposed Page 2').dispatch('dragstart',{dataTransfer:data});
+ const before=h.label('ai-candidates','Move proposed Page 1');
+ await drop(h,before,transfer({[dragType]:'forged'}));
+ assert.deepEqual(h.findAll('ai-candidates',node=>node.attributes['aria-label']?.startsWith('Move proposed')).map(node=>node.attributes['aria-label']),['Move proposed Page 1','Move proposed Page 2']);
+ const valid=transfer();h.label('ai-candidates','Reorder proposed Page 2').dispatch('dragstart',{dataTransfer:valid});
+ await drop(h,h.label('ai-candidates','Move proposed Page 1'),valid);
+ await h.click('ai-accept');
+ const rows=h.findAll('groups',node=>node.attributes['aria-label']?.startsWith('Move Page')).map(node=>node.attributes['aria-label']);
+ assert.deepEqual(rows,['Move Page 2','Move Page 1']);
 });

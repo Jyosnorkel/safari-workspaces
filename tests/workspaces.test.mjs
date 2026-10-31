@@ -31,7 +31,8 @@ function harness(initialTabs = [tab(1),tab(2)], initialStore = {}) {
         }
       }
     }},
-    windows: {get:async id=>({id, incognito:h.private, type:h.windowType})},
+    windows: {get:async id=>({id, incognito:h.private, type:h.windowType}),
+      create:async options=>{h.events.push('window:create'); if(h.failWindow) throw new Error('Window unavailable'); return {id:2,type:'normal',incognito:false};}},
     tabs: {
       query:async ({windowId})=>[...h.tabs.values()].filter(t=>t.windowId===windowId).map(clone),
       get:async id=> {h.events.push(`get:${id}`); if (h.onGet) h.onGet(id); const t=h.tabs.get(id); if (!t) throw new Error('Tab closed'); return clone(t);},
@@ -289,4 +290,93 @@ test('private windows and empty eligible windows cannot create a window snapshot
   assert.equal((await h.send('snapshot-window',values)).ok,false);
   h.private=true; assert.equal((await h.send('snapshot-window',values)).ok,false);
   assert.equal(h.writes,0); assert.equal(h.tabs.size,1);
+});
+
+
+test('dropped backup persists before new window and restores file order without touching existing tabs', async()=>{
+  const h=harness();
+  const saved=await h.save(); const json=h.C.encodeBackup([saved.workspace]); h.events=[];
+  const result=await h.send('drop-backup',{json,requestId:webcrypto.randomUUID(),windowId:1});
+  assert.equal(result.ok,true); assert.equal(result.windowId,2); assert.equal(result.imported,1);
+  assert.equal(result.workspaces[0].restore.state,'complete');
+  assert(h.events.indexOf('write') < h.events.indexOf('window:create'));
+  assert.deepEqual(h.events.filter(e=>e.startsWith('create:')),['create:https://example.com/1','create:https://example.com/2']);
+  assert.equal(h.tabs.get(1).windowId,1); assert.equal(h.tabs.get(2).windowId,1);
+  assert.equal(h.events.some(e=>e.startsWith('remove:')),false);
+  assert.equal(h.tabs.get(100).windowId,2);
+});
+test('dropped backup replays and concurrent messages never open duplicate windows or URLs',async()=>{
+  const h=harness(); const {workspace}=await h.save(); const json=h.C.encodeBackup([workspace]);
+  const request={json,requestId:webcrypto.randomUUID(),windowId:1};
+  const results=await Promise.all([h.send('drop-backup',request),h.send('drop-backup',request)]);
+  assert(results.every(r=>r.ok)); assert.equal(results[1].repeated,true);
+  assert.equal(h.events.filter(e=>e==='window:create').length,1);
+  assert.equal(h.events.filter(e=>e.startsWith('create:')).length,2);
+});
+test('invalid drops and failed storage never create a window',async()=>{
+  for(const mode of ['invalid','write','readback']) {
+    const h=harness(); const {workspace}=await h.save(); const json=h.C.encodeBackup([workspace]); h.events=[];
+    if(mode==='write') h.failWrite=h.writes+1;
+    if(mode==='readback') h.failReadback=true;
+    const result=await h.send('drop-backup',{json:mode==='invalid'?'{}':json,requestId:webcrypto.randomUUID(),windowId:1});
+    assert.equal(result.ok,false); assert.equal(h.events.includes('window:create'),false);
+    assert.equal(h.tabs.size,2);
+  }
+});
+test('uncertain dropped-backup window creation retains snapshots and replay does not create again',async()=>{
+  const h=harness(); const {workspace}=await h.save(); const request={json:h.C.encodeBackup([workspace]),requestId:webcrypto.randomUUID(),windowId:1};
+  h.failWindow=true;
+  assert.equal((await h.send('drop-backup',request)).ok,false);
+  assert.equal(Object.values(h.store[h.C.KEY]).length,2);
+  const restarted=harness([],h.store);
+  const replay=await restarted.send('drop-backup',request);
+  assert.equal(replay.repeated,true); assert.equal(restarted.events.includes('window:create'),false);
+});
+test('dropped backup partial restore keeps complete snapshot and per-tab failures',async()=>{
+  const h=harness(); const {workspace}=await h.save(); h.failCreate.add('https://example.com/2');
+  const result=await h.send('drop-backup',{json:h.C.encodeBackup([workspace]),requestId:webcrypto.randomUUID(),windowId:1});
+  assert.equal(result.ok,true); assert.equal(result.workspaces[0].restore.state,'partial');
+  assert.equal(result.workspaces[0].tabs.length,2); assert.equal(result.workspaces[0].restore.windowId,2);
+});
+test('manual review order is saved and restored without rearranging live tabs',async()=>{
+  const h=harness(); const {workspace}=await h.save({tabs:[tab(2),tab(1)]});
+  assert.deepEqual(Array.from(workspace.tabs,t=>t.url),['https://example.com/2','https://example.com/1']);
+  assert.equal(h.tabs.get(1).index,1); assert.equal(h.tabs.get(2).index,2);
+  await h.send('restore',{id:workspace.id,windowId:1});
+  assert.deepEqual(h.events.filter(e=>e.startsWith('create:')),['create:https://example.com/2','create:https://example.com/1']);
+});
+test('drop interruption after window creation cannot replay the browser side effect',async()=>{
+  const h=harness(); const {workspace}=await h.save();
+  const request={json:h.C.encodeBackup([workspace]),requestId:webcrypto.randomUUID(),windowId:1};
+  h.failWrite=h.writes+3; // import, pending-window journal, then confirmed-window journal
+  assert.equal((await h.send('drop-backup',request)).ok,false);
+  assert.equal(h.events.filter(e=>e==='window:create').length,1);
+  const restarted=harness([],h.store);
+  const replay=await restarted.send('drop-backup',request);
+  assert.equal(replay.repeated,true); assert.equal(restarted.events.length,0);
+});
+test('multi-workspace drop keeps file order and duplicate URLs in one new window',async()=>{
+  const h=harness(); const {workspace}=await h.save();
+  const second={...workspace,name:'Second',tabs:[{...workspace.tabs[0],url:'https://example.com/1'}]};
+  const result=await h.send('drop-backup',{json:h.C.encodeBackup([workspace,second]),requestId:webcrypto.randomUUID(),windowId:1});
+  assert.equal(result.imported,2); assert.equal(h.events.filter(e=>e==='window:create').length,1);
+  assert.deepEqual(h.events.filter(e=>e.startsWith('create:')),['create:https://example.com/1','create:https://example.com/2','create:https://example.com/1']);
+});
+test('multi-workspace interruption retains shared destination before any URL opens',async()=>{
+  const h=harness(); const {workspace}=await h.save();
+  const request={json:h.C.encodeBackup([workspace,{...workspace,name:'Second'}]),requestId:webcrypto.randomUUID(),windowId:1};
+  h.failWrite=h.writes+5; // import, pending window, shared destination, restoring, pending tab
+  assert.equal((await h.send('drop-backup',request)).ok,false);
+  const imported=Object.values(h.store[h.C.KEY]).filter(w=>w.dropRequestId===request.requestId);
+  assert.equal(imported.length,2); assert(imported.every(w=>w.restore.windowId===2));
+  assert.equal(h.events.some(e=>e.startsWith('create:')),false);
+  const restarted=harness([],h.store); const replay=await restarted.send('drop-backup',request);
+  assert.equal(replay.repeated,true); assert.equal(replay.windowId,2);
+  assert.equal(restarted.events.length,0);
+});
+test('malformed saved restore destination is rejected before browser operations',async()=>{
+  const h=harness(); const {workspace}=await h.save();
+  h.store[h.C.KEY][workspace.id].restore.windowId='2'; h.events=[];
+  const result=await h.send('restore',{id:workspace.id,windowId:1});
+  assert.equal(result.ok,false); assert.equal(h.events.length,0);
 });

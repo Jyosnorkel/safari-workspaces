@@ -22,7 +22,8 @@
     if (!object(record.close) || !['not-requested','closing','closed','partial'].includes(record.close.state) ||
         !Array.isArray(record.close.results) || !object(record.restore) ||
         !['not-started','restoring','complete','partial'].includes(record.restore.state) ||
-        !object(record.restore.results) || (record.restore.sessionId !== undefined && !uuid(record.restore.sessionId))) invalid();
+        !object(record.restore.results) || (record.restore.sessionId !== undefined && !uuid(record.restore.sessionId)) ||
+        (record.restore.windowId !== undefined && (!Number.isSafeInteger(record.restore.windowId) || record.restore.windowId < 0))) invalid();
     const closedIds = new Set();
     for (const result of record.close.results) {
       if (!object(result) || !ids.has(result.tabId) || closedIds.has(result.tabId) || !['closed','left-open'].includes(result.state)) invalid();
@@ -79,8 +80,8 @@
     // Read live tab data instead of trusting stale titles/URLs from the dashboard.
     const live = [];
     for (const original of tabs) live.push(await currentTab(original, windowId));
-    live.sort((a, b) => a.index - b.index);
-    const record = C.snapshot(name, live, requestId);
+    // Dashboard order is the user’s review order; browser positions remain untouched.
+    const record = C.snapshot(name, live.map((tab, index) => ({...tab, index})), requestId);
     record.close.state = close ? 'closing' : 'not-requested';
     await write(record); // Full snapshot must be persisted AND read back before any close.
     const closedTabIds = [];
@@ -101,7 +102,7 @@
     }
     return {workspace: record, closedTabIds};
   }
-  async function importBackup(json) {
+  async function importBackup(json, dropRequestId) {
     // Validate the entire file before a single storage mutation; imported journals are discarded.
     const workspaces = C.decodeBackup(json);
     const all = await read();
@@ -109,13 +110,56 @@
       version: 1, id: crypto.randomUUID(), name: workspace.name,
       createdAt: workspace.createdAt, updatedAt: new Date().toISOString(),
       tabs: workspace.tabs.map((tab, index) => ({...tab, index, id: crypto.randomUUID()})),
-      close: {state: 'not-requested', results: []}, restore: {state: 'not-started', results: {}}
+      close: {state: 'not-requested', results: []}, restore: {state: 'not-started', results: {}},
+      ...(dropRequestId ? {dropRequestId} : {})
     }));
     for (const record of records) all[record.id] = verifiedRecord(record, record.id);
     await api.storage.local.set({[C.KEY]: all});
     const stored = await read();
     for (const record of records) if (JSON.stringify(canonical(stored[record.id])) !== JSON.stringify(canonical(record))) throw new Error('Backup import could not be verified. Refresh saved workspaces before retrying.');
-    return {imported: records.length};
+    return {imported: records.length, workspaces: records};
+  }
+  async function dropBackup({json, requestId, windowId}) {
+    if (!uuid(requestId)) throw new Error('Invalid backup drop request.');
+    await normalWindow(windowId);
+    // Decode even on replay: untrusted files are never accepted without full validation.
+    C.decodeBackup(json);
+    let records = Object.values(await read()).filter(record => record.dropRequestId === requestId);
+    if (records.length) {
+      for (const record of records) verifiedRecord(record, record.id);
+      // Replays never repeat window creation or tab creation. Recovery uses normal restore.
+      return {imported: records.length, workspaces: records, windowId: records[0].dropWindow?.id, repeated: true};
+    }
+    records = (await importBackup(json, requestId)).workspaces;
+    const first = records[0];
+    first.dropWindow = {state: 'pending'};
+    await write(first); // Persist intent before the browser side effect.
+    let win;
+    try { win = await api.windows.create({type: 'normal', incognito: false, focused: true, url: 'about:blank'}); }
+    catch (error) {
+      first.dropWindow = {state: 'uncertain'};
+      await write(first);
+      throw new Error('Snapshots were saved, but Safari did not confirm the new window. Check Safari before restoring saved workspaces.');
+    }
+    if (!Number.isInteger(win?.id) || win.incognito || win.type !== 'normal') {
+      throw new Error('Snapshots were saved, but the new normal window could not be confirmed. Check Safari before restoring.');
+    }
+    first.dropWindow = {state: 'created', id: win.id};
+    // Commit the shared destination for every workspace together before any URL opens.
+    const all = await read();
+    for (const record of records) {
+      record.restore.windowId = win.id;
+      record.updatedAt = new Date().toISOString();
+      all[record.id] = verifiedRecord(record, record.id);
+    }
+    await api.storage.local.set({[C.KEY]: all});
+    const stored = await read();
+    for (const record of records) if (JSON.stringify(canonical(stored[record.id])) !== JSON.stringify(canonical(record))) throw new Error('Snapshots were saved, but the restore window could not be verified. Check Safari before retrying.');
+    const restored = [];
+    for (const record of records) {
+      restored.push((await restore({id: record.id, windowId: win.id})).workspace);
+    }
+    return {imported: records.length, workspaces: restored, windowId: win.id};
   }
   async function restore({id, windowId, newSessionId, previousSessionId}) {
     await normalWindow(windowId);
@@ -182,6 +226,7 @@
       case 'list': return {workspaces: Object.values(await read()).sort((a,b) => b.createdAt.localeCompare(a.createdAt))};
       case 'save': return save(message);
       case 'import-backup': return importBackup(message.json);
+      case 'drop-backup': return dropBackup(message);
       case 'export-backup': {
         const all = await read();
         const records = message.id ? [verifiedRecord(all[message.id], message.id)] : Object.entries(all).map(([id, record]) => verifiedRecord(record, id));

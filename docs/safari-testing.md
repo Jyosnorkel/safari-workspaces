@@ -1,3 +1,7 @@
+## v0.5.0 drag-and-drop verification
+
+131 automated checks pass with fake browser/model APIs. Whole-row manual and staged AI dragging, grip ordering, file validation and simultaneous-drop suppression are covered. Background tests verify durable imports before new-window creation, file-order restore, partial failures and replay/interruption safeguards. Native build and strict signature checks pass. These tests do not establish actual Safari drag events, backup-file downloads or packaged new-window restoration. No Safari was controlled or closed. New restore windows retain their initial blank tab. Existing safety restrictions remain in force.
+
 ## v0.4.1 automatic origin repair
 
 116 checks pass, including authentication/Origin restrictions, on-disk origin repair with the unchanged token and usage bytes, hotloaded external pairing changes, and the actual extension client with local HTTP and temporary configuration. Native 0.4.1/build8 is built at the normal app path and signed. The user must load this client and restart only the local AI service once to activate the new protocol. Thereafter Connect/status checks and pre-suggestion handshakes update a changed actual Safari UUID origin without manual file edits or service restart. The local token remains required. The protocol's real Safari activation has not been independently verified; no model calls were made in this iteration.

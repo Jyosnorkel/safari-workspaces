@@ -17,3 +17,9 @@ Current priorities: verify actual Safari-to-service status without a model call,
 Safety constraint: do not close current Safari sessions/windows, delete WebDriver sessions, terminate the retained driver, or quit/restart Safari. No personal tab inventory goes into tests, GitHub or AI requests. Browser verification must distinguish sample APIs, actual extension execution, and actual model inference.
 
 Approved API defaults: one in-flight suggestion; two outbound attempts per rolling minute; twenty per UTC day; no retries. Separate remote token counting counts as an outbound attempt too. Explicit user consent is required for sending sanitized tab metadata. No key belongs in the extension or repository.
+
+## v0.5.0 drag-and-drop iteration — October 31
+
+Eligible tab rows can be dragged onto manual group cards/chips, and AI proposal rows can be dragged between proposal cards before explicit acceptance. Grips reorder dashboard/snapshot tabs, with Option+Up/Down on manual grips. These controls do not rearrange Safari's native tabs. A JSON file dropped anywhere on the dashboard is fully validated and durably imported before one new normal window is created; URLs restore in file order with per-tab recovery. File-picker import stays save-only. Existing windows remain untouched. Interrupted/replayed operations do not automatically create another window.
+
+131 automated checks pass using fake browser/model APIs, including file drops, forged/stale drags, ordering, write failures, duplicate requests and partial restoration. Native build/signature verification passes. Actual packaged Safari file dropping, physical drags and new-window restoration remain unverified. No Safari interaction or live model requests occurred in this iteration. One initial blank tab is retained in the new window; no tab/window cleanup occurs.
