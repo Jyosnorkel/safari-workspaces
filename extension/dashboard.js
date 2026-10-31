@@ -205,6 +205,7 @@
     node.addEventListener('click', () => run(action)); return node;
   }
   const DRAG_TYPE = 'application/x-safari-workspaces-tab';
+  const tabLabel = count => `${count} ${count === 1 ? 'tab' : 'tabs'}`;
   const groupFor = tabId => assignments.get(tabId) || 'ungrouped';
   const draggableTab = tab => tab?.eligible && !tab.pinned && !tab.incognito && Number.isSafeInteger(tab.id) && C.restorable(tab.url);
   function clearDrag() {
@@ -253,7 +254,7 @@
       chip.setAttribute('data-group-id', group.id);
       chip.setAttribute('aria-expanded', String(!collapsed));
       chip.setAttribute('aria-controls', `group-body-${group.id}`);
-      chip.setAttribute('aria-label', `${collapsed ? 'Expand' : 'Collapse'} ${name}, ${count} tabs`);
+      chip.setAttribute('aria-label', `${collapsed ? 'Expand' : 'Collapse'} ${name}, ${tabLabel(count)}`);
       chip.title = 'Click to collapse or expand this group. Drop a tab handle here to move it into this group.';
       chip.classList.toggle('is-collapsed', collapsed);
       chip.append(e('span','group-chip-name',name), e('span','group-chip-count',String(count)), e('span','group-chip-arrow',collapsed ? '▸' : '▾'));
@@ -315,7 +316,7 @@
       name.setAttribute('aria-label', `Name for ${group.name}`);
       name.addEventListener('input', () => {group.name = name.value; reviewChanged(); renderGroupChips();});
       name.addEventListener('change',renderGroups);
-      header.append(name,e('span','count',`${assigned(group.id).length} tabs · ${selected(group.id).length} selected`));
+      header.append(name,e('span','count',`${tabLabel(assigned(group.id).length)} · ${selected(group.id).length} selected`));
       const toggle = e('button','group-toggle',collapsed ? 'Expand ▸' : 'Collapse ▾'); toggle.type='button';
       toggle.setAttribute('id',`group-toggle-${group.id}`); toggle.setAttribute('aria-label',`${collapsed ? 'Expand' : 'Collapse'} ${group.name || 'Unnamed group'}`);
       toggle.setAttribute('aria-expanded',String(!collapsed)); toggle.setAttribute('aria-controls',`group-body-${group.id}`);

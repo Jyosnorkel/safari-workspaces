@@ -184,7 +184,7 @@ test('chip counts include all assigned tabs; cross-group drag preserves unchecke
   const result=await drop(h,chipFor(h,'Workspace 1'),drag.data);
   assert(result.over.defaultPrevented);assert(result.event.defaultPrevented);
   assert.equal(selectedGroup(h,'Page 1'),targetId);assert.equal(h.label('groups','Include Page 1').checked,false);
-  assert.equal(chipFor(h,'Workspace 1').children[1].textContent,'1');assert.equal(chipFor(h,'Ungrouped').children[1].textContent,'2');
+  assert.equal(chipFor(h,'Workspace 1').children[1].textContent,'1');assert.match(chipFor(h,'Workspace 1').attributes['aria-label'],/, 1 tab$/);assert.match(chipFor(h,'Ungrouped').attributes['aria-label'],/, 2 tabs$/);assert.equal(chipFor(h,'Ungrouped').children[1].textContent,'2');
   assert.equal(h.sent.length,sent);assert.equal(h.suggestCalls,0);assert.match(h.node('status').textContent,/remains unchecked/);
 });
 test('collapse is associated with its body, persists through renaming/moving and supports native-button keyboard toggles',async()=>{
