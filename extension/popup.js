@@ -1,6 +1,8 @@
 const button = document.getElementById('open');
 const status = document.getElementById('status');
 let opening = false;
+let liveRevision = 0;
+let workspaceButtons = [];
 
 function isDashboard(candidate, dashboardURL) {
   if (typeof candidate !== 'string') return false;
@@ -18,6 +20,7 @@ function setBusy(value) {
     const control = document.getElementById(id);
     if (control) control.disabled = value;
   }
+  for (const control of workspaceButtons) control.disabled = value;
 }
 async function currentWindow() {
   const api = globalThis.browser;
@@ -56,6 +59,68 @@ async function openManager(ai = false) {
 }
 button.addEventListener('click', () => action(() => openManager()));
 document.getElementById('ai-organise')?.addEventListener?.('click', () => action(() => openManager(true)));
+function popupNode(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+async function loadLiveGroups(windowId) {
+  const container = document.getElementById('live-groups');
+  if (!container) return;
+  const response = await send('live-groups-get',{windowId});
+  liveRevision = response.revision;
+  workspaceButtons = [];
+  container.replaceChildren();
+  const groups = response.groups.filter(group => group.tabs.length);
+  if (!groups.length) {
+    container.append(popupNode('p','workspace-empty','Organise tabs in the manager to see your workspaces here.'));
+    return;
+  }
+  for (const group of groups) {
+    const card = popupNode('section','live-workspace');
+    const header = popupNode('div','workspace-header');
+    const focus = popupNode('button','workspace-focus'); focus.type = 'button';
+    focus.setAttribute('aria-label',`Switch to ${group.name}, ${group.tabs.length} tabs`);
+    focus.append(popupNode('span','workspace-name',group.name),popupNode('span','workspace-count',String(group.tabs.length)));
+    focus.title = 'Return to the last-used tab in this workspace';
+    focus.addEventListener('click',()=>action(async()=> {
+      await send('live-groups-focus',{windowId,groupId:group.id,expectedRevision:liveRevision});
+      status.textContent = `Switched to ${group.name}.`;
+    }));
+    const toggle = popupNode('button','workspace-disclosure','▸'); toggle.type = 'button';
+    toggle.setAttribute('aria-label',`Show tabs in ${group.name}`);
+    toggle.setAttribute('aria-expanded','false');
+    const list = popupNode('div','workspace-tabs'); list.hidden = true;
+    list.id = `workspace-tabs-${group.id}`;
+    toggle.setAttribute('aria-controls',list.id);
+    toggle.addEventListener('click',()=> {
+      if (opening) return;
+      list.hidden = !list.hidden;
+      toggle.textContent = list.hidden ? '▸' : '▾';
+      toggle.setAttribute('aria-expanded',String(!list.hidden));
+      toggle.setAttribute('aria-label',`${list.hidden ? 'Show' : 'Hide'} tabs in ${group.name}`);
+    });
+    header.append(focus,toggle);card.append(header,list);
+    workspaceButtons.push(focus,toggle);
+    for (const tab of group.tabs) {
+      const jump = popupNode('button','workspace-tab'); jump.type = 'button';
+      const title = tab.title || 'Untitled tab';
+      jump.setAttribute('aria-label',`Switch to tab: ${title}`);
+      if (tab.active) jump.setAttribute('aria-current','page');
+      jump.append(popupNode('span','workspace-tab-title',title));
+      // Text only: never turn saved/model-provided URLs into navigation instructions.
+      let host = ''; try { host = new URL(tab.url).hostname; } catch {}
+      jump.append(popupNode('small','workspace-tab-host',host));
+      jump.addEventListener('click',()=>action(async()=> {
+        await send('live-groups-focus',{windowId,groupId:group.id,tabId:tab.id,expectedRevision:liveRevision});
+        status.textContent = `Switched to ${title}.`;
+      }));
+      workspaceButtons.push(jump);list.append(jump);
+    }
+    container.append(card);
+  }
+}
 async function refreshTabs() {
   const win = await currentWindow();
   status.textContent = 'Refreshing tabs…';
@@ -65,6 +130,7 @@ async function refreshTabs() {
   document.getElementById('scan-time').textContent = `Updated ${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`;
   // A loaded manager merges fresh metadata without replacing the user's grouping.
   await browser.runtime.sendMessage({channel:'workspace-dashboard',type:'refresh-inventory',windowId:win.id}).catch(() => {});
+  await loadLiveGroups(win.id);
   status.textContent = 'Tabs refreshed. No data sent to AI.';
 }
 document.getElementById('refresh-tabs')?.addEventListener?.('click', () => action(refreshTabs));

@@ -205,8 +205,163 @@
     await write(record);
     return {workspace: record};
   }
+  // Live groups describe existing browser tabs; they are not recovery snapshots.
+  // Session storage survives event-page suspension without carrying browser tab IDs
+  // into the next browser session. Older Safari falls back to local + onStartup reset.
+  const LIVE_KEY = 'workspaces.live.v1';
+  const liveStorage = api.storage.session || api.storage.local;
+  let liveResetFailed = false;
+  const safeId = value => Number.isSafeInteger(value) && value >= 0;
+  const groupId = value => value === 'ungrouped' || uuid(value);
+  function validateLiveGroups(groups) {
+    if (!Array.isArray(groups) || groups.length > 100) throw new Error('Invalid live workspace groups.');
+    const groupIds = new Set(), tabIds = new Set();
+    for (const group of groups) {
+      if (!object(group) || !groupId(group.id) || groupIds.has(group.id) || typeof group.name !== 'string' ||
+          !group.name.trim() || group.name.length > 80 || (group.reason !== undefined && (typeof group.reason !== 'string' || group.reason.length > 2000)) ||
+          !Array.isArray(group.tabs) || group.tabs.length > 500) throw new Error('Invalid live workspace groups.');
+      groupIds.add(group.id);
+      for (const tab of group.tabs) {
+        if (!object(tab) || !safeId(tab.id) || tabIds.has(tab.id) || typeof tab.url !== 'string' || tab.url.length > 8192 ||
+            !C.restorable(tab.url) || (tab.excluded !== undefined && typeof tab.excluded !== 'boolean')) throw new Error('Invalid live workspace tab assignment.');
+        tabIds.add(tab.id);
+      }
+      if (group.lastTabId !== undefined && (!safeId(group.lastTabId) || !group.tabs.some(tab => tab.id === group.lastTabId))) throw new Error('Invalid live workspace history.');
+    }
+    if (tabIds.size > 500) throw new Error('A live workspace window supports at most 500 tabs.');
+    return groups;
+  }
+  async function readLive() {
+    if (liveResetFailed) throw new Error('Live workspaces could not be reset for this browser session. Saved snapshots are unchanged.');
+    const all = (await liveStorage.get(LIVE_KEY))[LIVE_KEY];
+    if (all === undefined) return {};
+    if (!object(all)) throw new Error('Live workspace data is unreadable. Saved snapshots are unchanged.');
+    for (const [key, record] of Object.entries(all)) {
+      if (!object(record) || !safeId(record.windowId) || String(record.windowId) !== key || !uuid(record.revision)) throw new Error('Live workspace data is unreadable. Saved snapshots are unchanged.');
+      validateLiveGroups(record.groups);
+    }
+    return all;
+  }
+  async function writeLive(all) {
+    await liveStorage.set({[LIVE_KEY]: all});
+    const stored = await readLive();
+    if (JSON.stringify(canonical(stored)) !== JSON.stringify(canonical(all))) throw new Error('Could not verify live workspaces. Refresh before switching tabs.');
+  }
+  async function liveInventory(windowId) {
+    const raw = await api.tabs.query({windowId});
+    const metadata = new Map(raw.filter(tab => object(tab)).map(tab => [tab.id,tab]));
+    return C.inventory(raw).map(tab => ({...tab,active:Boolean(metadata.get(tab.id)?.active),pendingUrl:metadata.get(tab.id)?.pendingUrl}));
+  }
+  const matchesLive = (tab, saved, windowId) => tab && tab.id === saved.id && tab.windowId === windowId &&
+    tab.url === saved.url && !tab.incognito && !tab.pinned && C.restorable(tab.url);
+  async function liveView(windowId) {
+    await normalWindow(windowId);
+    const all = await readLive(), record = all[windowId];
+    if (!record) return {all, record:null, revision:null, groups:[]};
+    const inventory = await liveInventory(windowId);
+    const current = new Map(inventory.map(tab => [tab.id, tab]));
+    let changed = false;
+    const groups = record.groups.map(group => {
+      const tabs = group.tabs.filter(saved => {
+        const tab = current.get(saved.id);
+        const valid = matchesLive(tab, saved, windowId) && tab.eligible;
+        if (!valid) changed = true;
+        return valid;
+      });
+      const result = {...group,tabs};
+      if (result.lastTabId !== undefined && !tabs.some(tab => tab.id === result.lastTabId)) delete result.lastTabId;
+      return result;
+    });
+    if (changed) {
+      record.groups = groups; // Pruning is not a competing manual edit.
+      await writeLive(all);
+    }
+    // Pending navigation is temporarily hidden, but retained in the registry until
+    // its final URL is known. This does not discard a group on a transient request.
+    const visible = groups.map(group => ({...group,tabs:group.tabs.flatMap(saved => {
+      const tab = current.get(saved.id);
+      return tab.pendingUrl ? [] : [{id:tab.id,url:tab.url,title:tab.title,active:Boolean(tab.active),excluded:Boolean(saved.excluded)}];
+    })}));
+    return {all,record,revision:record.revision,groups:visible};
+  }
+  async function getLiveGroups({windowId}) {
+    const {revision,groups} = await liveView(windowId);
+    return {revision,groups};
+  }
+  async function setLiveGroups({windowId,expectedRevision,groups}) {
+    await normalWindow(windowId);
+    validateLiveGroups(groups);
+    if (expectedRevision !== null && !uuid(expectedRevision)) throw new Error('Invalid live workspace revision. Refresh the manager.');
+    const all = await readLive(), previous = all[windowId];
+    if ((previous?.revision ?? null) !== expectedRevision) throw new Error('Live workspaces changed in another manager. Refresh before replacing them.');
+    const live = new Map((await liveInventory(windowId)).map(tab => [tab.id,tab]));
+    const normalized = groups.map(group => {
+      const tabs = group.tabs.map(saved => {
+        const tab = live.get(saved.id);
+        if (!matchesLive(tab,saved,windowId) || !tab.eligible || tab.pendingUrl) throw new Error('Tabs changed while organising. Refresh before publishing live workspaces.');
+        return {id:saved.id,url:saved.url,excluded:Boolean(saved.excluded)};
+      });
+      const old = previous?.groups.find(item => item.id === group.id);
+      const active = tabs.find(saved => live.get(saved.id)?.active);
+      const lastTabId = active?.id ?? (tabs.some(tab => tab.id === old?.lastTabId) ? old.lastTabId : undefined);
+      return {id:group.id,name:group.name.trim(),reason:group.reason || '',tabs,...(lastTabId !== undefined ? {lastTabId} : {})};
+    });
+    all[windowId] = {windowId,revision:crypto.randomUUID(),groups:normalized};
+    await writeLive(all);
+    return getLiveGroups({windowId});
+  }
+  async function focusLiveGroup({windowId,expectedRevision,groupId:targetGroupId,tabId}) {
+    if (!uuid(expectedRevision) || !groupId(targetGroupId) || (tabId !== undefined && !safeId(tabId))) throw new Error('Refresh live workspaces before switching tabs.');
+    const {all,record,revision,groups} = await liveView(windowId);
+    if (!record || revision !== expectedRevision) throw new Error('Live workspaces changed. Refresh before switching tabs.');
+    const visible = groups.find(group => group.id === targetGroupId);
+    const savedGroup = record.groups.find(group => group.id === targetGroupId);
+    if (!visible || !visible.tabs.length) throw new Error('This workspace has no available live tabs. Refresh the list.');
+    const chosen = tabId !== undefined ? visible.tabs.find(tab => tab.id === tabId)
+      : visible.tabs.find(tab => tab.id === savedGroup.lastTabId) || visible.tabs[0];
+    if (!chosen) throw new Error('This tab is no longer in this workspace. Refresh the list.');
+    savedGroup.lastTabId = chosen.id;
+    await writeLive(all); // A failed state write changes no browser tab selection.
+    const tab = await api.tabs.get(chosen.id);
+    if (!matchesLive(tab,chosen,windowId) || tab.pendingUrl) throw new Error('This tab changed or is navigating. Refresh the list before switching.');
+    await api.tabs.update(chosen.id,{active:true});
+    return {tabId:chosen.id};
+  }
+  api.tabs.onActivated?.addListener(info => {
+    const task = queue.then(async () => {
+      if (!safeId(info?.windowId) || !safeId(info?.tabId)) return;
+      await normalWindow(info.windowId);
+      const all = await readLive(), record = all[info.windowId];
+      if (!record) return;
+      const group = record.groups.find(group => group.tabs.some(tab => tab.id === info.tabId));
+      const saved = group?.tabs.find(tab => tab.id === info.tabId);
+      if (!saved || group.lastTabId === info.tabId) return;
+      const tab = await api.tabs.get(info.tabId);
+      if (!matchesLive(tab,saved,info.windowId) || tab.pendingUrl) return;
+      group.lastTabId = info.tabId; await writeLive(all);
+    });
+    queue = task.catch(() => {});
+  });
+  api.runtime.onStartup?.addListener(() => {
+    // Also clear session storage: browser restoration must not inherit prior tab IDs.
+    const task = queue.then(async () => {
+      try { await writeLive({}); }
+      catch { liveResetFailed = true; }
+    });
+    queue = task.catch(() => { liveResetFailed = true; });
+  });
+  api.windows.onRemoved?.addListener(windowId => {
+    const task = queue.then(async () => {
+      const all = await readLive();
+      if (all[windowId]) { delete all[windowId]; await writeLive(all); }
+    });
+    queue = task.catch(() => {});
+  });
   async function handle(message) {
     switch (message.type) {
+      case 'live-groups-get': return getLiveGroups(message);
+      case 'live-groups-set': return setLiveGroups(message);
+      case 'live-groups-focus': return focusLiveGroup(message);
       case 'scan': {
         await normalWindow(message.windowId);
         return {tabs: C.inventory(await api.tabs.query({windowId: message.windowId}))};
@@ -248,6 +403,8 @@
   api.runtime.onMessage.addListener((message, sender) => {
     if (sender.id !== api.runtime.id || !sender.url?.startsWith(api.runtime.getURL(''))) return undefined;
     if (message?.channel !== 'workspace') return undefined;
+    if (['live-groups-get','live-groups-set','live-groups-focus'].includes(message.type) &&
+        !['popup.html','dashboard.html'].includes(sender.url.slice(api.runtime.getURL('').length).split(/[?#]/)[0])) return undefined;
     const result = queue.then(async () => {
       try { return {ok: true, ...await handle(message)}; }
       catch (error) { return {ok: false, error: error.message || 'Operation failed.'}; }

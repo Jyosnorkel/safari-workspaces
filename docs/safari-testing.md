@@ -1,3 +1,7 @@
+## v0.7.0 live workspace switching
+
+161 automated checks pass using fake browser/model APIs. The actual popup and background coordinator are tested together against fictional tabs. Coverage includes last-used selection, fresh identity/protection checks, stale revisions, invalid memberships, pending navigation, failed writes, startup/session reset, dashboard hydration and competing-manager recovery. Internal-browser fictional-data preview verified group creation/assignment in the dashboard followed by popup expansion, tab selection and workspace selection. Native build/signature and packaged background/popup/dashboard comparisons pass. Actual Safari tabs.onActivated, toolbar dismissal, storage.session and browser-startup behavior remain unverified. No real Safari was controlled, closed or restarted, and no live AI requests occurred.
+
 ## v0.6.0 direct actions and scan refresh
 
 140 fake-browser/model checks pass. New checks cover direct snapshot action, AI entry without inference, initial and five-minute merge scans, preserved review state, changed identities, busy/edit/drag guards and authenticated same-window popup messages. A fictional-data browser preview verified popup layout, counts, snapshot action and AI settings reveal. Native build/signature and packaged script comparisons pass. Actual Safari integration remains pending. Scans stay local; no automatic model calls. Dashboard timer runs only while visible and idle. No Safari was controlled or closed.

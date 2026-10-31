@@ -39,6 +39,16 @@ async function harness(options={}) {
   nodes.get('confirm').showModal=()=>{ if(h.autoConfirm)queueMicrotask(()=>{nodes.get('confirm').returnValue='accept';nodes.get('confirm').dispatch('close');}); };
   const browser={permissions:{request:async permission=>{h.permissionCalls++;h.requestedPermission=permission;return h.permission;}},windows:{getCurrent:async()=>({id:1,incognito:false})},runtime:{id:'test',getURL:path=>`safari-web-extension://test/${path}`,onMessage:{addListener:fn=>h.runtimeListener=fn},sendMessage:async message=>{
     h.sent.push(structuredClone(message));
+    if(message.type==='live-groups-get') {
+      if(h.liveGetError)return {ok:false,error:h.liveGetError};
+      return {ok:true,...structuredClone(h.liveRegistry || {revision:null,groups:[]})};
+    }
+    if(message.type==='live-groups-set') {
+      if(h.liveSetError)return {ok:false,error:h.liveSetError};
+      if((h.liveRegistry?.revision ?? null)!==message.expectedRevision)return {ok:false,error:'Toolbar groups changed in another manager.'};
+      h.liveRegistry={revision:webcrypto.randomUUID(),groups:structuredClone(message.groups)};
+      return {ok:true,...structuredClone(h.liveRegistry)};
+    }
     if(message.type==='list')return {ok:true,workspaces:h.workspaces||[]};
     if(message.type==='scan'){if(h.scanDeferred)return await h.scanDeferred;return {ok:true,tabs:structuredClone(h.tabs)};}
     if(message.type==='snapshot-window')return {ok:true,workspace:{tabs:h.tabs},skipped:0};
@@ -181,14 +191,14 @@ test('chip counts include all assigned tabs; cross-group drag preserves unchecke
   const targetId=groupIdOf(chipFor(h,'Workspace 1'));
   assert.equal(chipFor(h,'Ungrouped').children[1].textContent,'3');
   await h.change(h.label('groups','Include Page 1'),false);
-  const sent=h.sent.length;const drag=await startDrag(h,'Page 1');
+  const sent=h.sent.filter(message=>message.type!=='live-groups-set').length;const drag=await startDrag(h,'Page 1');
   assert.equal(drag.event.defaultPrevented,false);assert.deepEqual(drag.data.types,[dragType]);
   assert.match(drag.data.getData(dragType),/^[a-f0-9-]{36}$/);assert.equal(drag.data.getData('text/plain'),'');
   const result=await drop(h,chipFor(h,'Workspace 1'),drag.data);
   assert(result.over.defaultPrevented);assert(result.event.defaultPrevented);
   assert.equal(selectedGroup(h,'Page 1'),targetId);assert.equal(h.label('groups','Include Page 1').checked,false);
   assert.equal(chipFor(h,'Workspace 1').children[1].textContent,'1');assert.match(chipFor(h,'Workspace 1').attributes['aria-label'],/, 1 tab$/);assert.match(chipFor(h,'Ungrouped').attributes['aria-label'],/, 2 tabs$/);assert.equal(chipFor(h,'Ungrouped').children[1].textContent,'2');
-  assert.equal(h.sent.length,sent);assert.equal(h.suggestCalls,0);assert.match(h.node('status').textContent,/remains unchecked/);
+  assert.equal(h.sent.filter(message=>message.type!=='live-groups-set').length,sent);assert.equal(h.suggestCalls,0);assert.match(h.node('status').textContent,/remains unchecked/);
 });
 test('collapse is associated with its body, persists through renaming/moving and supports native-button keyboard toggles',async()=>{
   const h=await harness();await h.scan();await h.click('new-group');
@@ -337,4 +347,60 @@ test('dashboard refresh messages require extension sender and matching window; A
  assert.equal(h.runtimeListener({...message,windowId:2},sender),undefined);assert.equal(h.sent.length,before);
  h.tabs.push(sample(4));const response=await h.runtimeListener(message,sender);assert.equal(response.ok,true);assert(rowFor(h,'Page 4'));
  const aiResponse=await h.runtimeListener({...message,type:'ai-organise'},sender);assert.equal(aiResponse.ok,true);assert.equal(h.node('ai').open,true);assert.equal(h.statusCalls,0);assert.equal(h.suggestCalls,0);
+});
+
+test('manual groups publish eligible tabs and exclusions to toolbar without publishing staged proposals',async()=>{
+ const h=await harness();await h.click('new-group');const id=groupIdOf(chipFor(h,'Workspace 1'));
+ await h.change(h.label('groups','Group for Page 1'),id);await h.change(h.label('groups','Include Page 1'),false);
+ const group=h.liveRegistry.groups.find(group=>group.id===id);
+ assert.equal(group.name,'Workspace 1');assert.equal(group.tabs.length,1);assert.equal(group.tabs[0].id,1);assert.equal(group.tabs[0].excluded,true);
+ assert.equal(h.liveRegistry.groups.flatMap(group=>group.tabs).some(tab=>tab.id===3),false);
+ h.result={groups:[{name:'Research',reason:'Included task',tabIds:['2']}]};
+ await h.connect();await h.consent();const before=h.sent.filter(message=>message.type==='live-groups-set').length;
+ await h.click('suggest');await h.change(named(h,'ai-candidates','Research'),'Pending rename','input');
+ assert.equal(h.sent.filter(message=>message.type==='live-groups-set').length,before);
+ assert.equal(h.liveRegistry.groups.some(group=>group.name==='Pending rename'),false);
+ await h.click('ai-accept');assert(h.liveRegistry.groups.some(group=>group.name==='Pending rename'));
+ assert.equal(h.liveRegistry.groups.flatMap(group=>group.tabs).find(tab=>tab.id===1).excluded,true);
+});
+test('dashboard reload hydrates group names, reasons, order and exclusions while keeping new tabs ungrouped',async()=>{
+ const id=webcrypto.randomUUID();const registry={revision:webcrypto.randomUUID(),groups:[{id:'ungrouped',name:'Ungrouped',tabs:[]},{id,name:'My project',reason:'Task context',tabs:[{id:2,url:sample(2).url,excluded:false},{id:1,url:sample(1).url,excluded:true},{id:3,url:sample(3).url,excluded:true}]}]};
+ const h=await harness({liveRegistry:registry,tabs:[sample(1),sample(2),sample(3,{eligible:false,pinned:true}),sample(4)]});
+ assert(named(h,'groups','My project'));assert.equal(selectedGroup(h,'Page 1'),id);assert.equal(selectedGroup(h,'Page 2'),id);assert.equal(selectedGroup(h,'Page 4'),'ungrouped');
+ assert.equal(h.label('groups','Include Page 1').checked,false);assert.equal(h.label('groups','Include Page 2').checked,true);
+ const card=h.node(`manual-group-${id}`);assert.match(card.textContent,/Task context/);
+ assert.deepEqual(all(card).filter(node=>node.attributes['aria-label']?.startsWith('Move ')).map(node=>node.attributes['aria-label']),['Move Page 2','Move Page 1']);
+ assert.equal(h.liveRegistry.groups.flatMap(group=>group.tabs).some(tab=>tab.id===3),false);
+ assert.equal(h.statusCalls,0);assert.equal(h.suggestCalls,0);
+});
+test('toolbar publishing keeps manual edits on storage failure and refresh retries without replacing them',async()=>{
+ const h=await harness();h.liveSetError='Storage full';await h.click('new-group');
+ assert(named(h,'groups','Workspace 1'));assert.match(h.node('live-status').textContent,/Could not update toolbar groups/);
+ h.liveSetError=null;await h.scan();assert(h.liveRegistry.groups.some(group=>group.name==='Workspace 1'));
+ assert.match(h.node('live-status').textContent,/available in the toolbar/);
+});
+test('another manager revision cannot be overwritten and failed hydration does not publish defaults',async()=>{
+ const h=await harness();h.liveRegistry.revision=webcrypto.randomUUID();await h.click('new-group');
+ assert(named(h,'groups','Workspace 1'));assert.equal(h.liveRegistry.groups.some(group=>group.name==='Workspace 1'),false);assert.match(h.node('live-status').textContent,/Another manager changed/);
+ const before=h.sent.filter(message=>message.type==='live-groups-set').length;await h.scan();await h.change(named(h,'groups','Workspace 1'),'Kept local','input');
+ assert.equal(h.sent.filter(message=>message.type==='live-groups-set').length,before);assert(named(h,'groups','Kept local'));
+ const failed=await harness({liveGetError:'Unreadable storage'});await failed.click('new-group');
+ assert(named(failed,'groups','Workspace 1'));assert.equal(failed.sent.some(message=>message.type==='live-groups-set'),false);assert.match(failed.node('live-status').textContent,/could not be loaded/);
+});
+
+test('loading an unchanged live registry does not republish or invalidate another dashboard revision',async()=>{
+ const revision=webcrypto.randomUUID(),id=webcrypto.randomUUID();
+ const h=await harness({liveRegistry:{revision,groups:[{id:'ungrouped',name:'Ungrouped',reason:'',tabs:[{id:2,url:sample(2).url,excluded:false}]},{id,name:'Project',reason:'Task',tabs:[{id:1,url:sample(1).url,excluded:true}]}]}});
+ assert.equal(h.sent.some(message=>message.type==='live-groups-set'),false);assert.equal(h.liveRegistry.revision,revision);
+ assert.equal(selectedGroup(h,'Page 1'),id);assert.equal(h.label('groups','Include Page 1').checked,false);
+ await h.scan();assert.equal(h.sent.some(message=>message.type==='live-groups-set'),false);assert.equal(h.liveRegistry.revision,revision);
+});
+test('conflicted shared groups replace a local review only after explicit confirmation',async()=>{
+ const h=await harness();h.liveRegistry.revision=webcrypto.randomUUID();await h.click('new-group');
+ assert(named(h,'groups','Workspace 1'));assert.equal(h.node('live-reload').hidden,false);
+ h.autoConfirm=false;await h.click('live-reload');assert(named(h,'groups','Workspace 1'));
+ h.node('confirm').returnValue='cancel';h.node('confirm').dispatch('close');await settle();assert(named(h,'groups','Workspace 1'));
+ h.autoConfirm=true;const revision=h.liveRegistry.revision;await h.click('live-reload');
+ assert.equal(named(h,'groups','Workspace 1'),undefined);assert.equal(h.node('live-reload').hidden,true);assert.equal(h.liveRegistry.revision,revision);
+ await h.click('new-group');assert(h.liveRegistry.groups.some(group=>group.name==='Workspace 1'));
 });

@@ -13,10 +13,10 @@ function reverseKeys(value) {
   return value;
 }
 const tab = (id, overrides = {}) => ({id, windowId: 1, index: id, title: `Page ${id}`, url: `https://example.com/${id}`, incognito: false, pinned: false, ...overrides});
-function harness(initialTabs = [tab(1),tab(2)], initialStore = {}) {
-  const h = {store: clone(initialStore), tabs: new Map(initialTabs.map(t=>[t.id,clone(t)])), events: [], writes:0, gets:0, nextId:100, failWrite:0, failReadback:false, failCreate:new Set(), failRemove:new Set(), private:false, windowType:'normal'};
+function harness(initialTabs = [tab(1),tab(2)], initialStore = {}, options = {}) {
+  const h = {store: clone(initialStore), tabs: new Map(initialTabs.map(t=>[t.id,clone(t)])), events: [], writes:0, gets:0, nextId:100, failWrite:0, failReadback:false, failCreate:new Set(), failRemove:new Set(), private:false, windowType:'normal', sessionStore:clone(options.sessionStore || {})};
   const browser = {
-    runtime: {id:'test', getURL:path=>`safari-web-extension://test/${path}`, onMessage:{addListener: fn=>h.listener=fn}},
+    runtime: {id:'test', getURL:path=>`safari-web-extension://test/${path}`, onMessage:{addListener: fn=>h.listener=fn},onStartup:{addListener:fn=>h.startup=fn}},
     storage: {local: {
       get: async key => { h.gets++; return {[key]:h.reorderKeys ? reverseKeys(clone(h.store[key])) : clone(h.store[key])}; },
       set: async values => {
@@ -31,15 +31,18 @@ function harness(initialTabs = [tab(1),tab(2)], initialStore = {}) {
         }
       }
     }},
-    windows: {get:async id=>({id, incognito:h.private, type:h.windowType}),
+    windows: {onRemoved:{addListener:fn=>h.windowRemoved=fn},get:async id=>({id, incognito:h.private, type:h.windowType}),
       create:async options=>{h.events.push('window:create'); if(h.failWindow) throw new Error('Window unavailable'); return {id:2,type:'normal',incognito:false};}},
     tabs: {
+      onActivated:{addListener:fn=>h.activated=fn},
+      update:async (id,changes)=>{h.events.push(`activate:${id}`);if(h.failUpdate)throw new Error('Activation denied');const current=h.tabs.get(id);if(!current)throw new Error('Tab closed');for(const t of h.tabs.values())if(t.windowId===current.windowId)t.active=false;Object.assign(current,changes);return clone(current);},
       query:async ({windowId})=>[...h.tabs.values()].filter(t=>t.windowId===windowId).map(clone),
       get:async id=> {h.events.push(`get:${id}`); if (h.onGet) h.onGet(id); const t=h.tabs.get(id); if (!t) throw new Error('Tab closed'); return clone(t);},
       remove:async id=>{h.events.push(`remove:${id}`); if(h.failRemove.has(id)) throw new Error('Close denied'); h.tabs.delete(id);},
       create:async options=>{h.events.push(`create:${options.url}`); if(h.failCreate.has(options.url)) throw new Error('Create denied'); const t=tab(h.nextId++,options); h.tabs.set(t.id,t); return clone(t);}
     }
   };
+  if(options.session) browser.storage.session={get:async key=>({[key]:clone(h.sessionStore[key])}),set:async values=>Object.assign(h.sessionStore,clone(values))};
   h.context=vm.createContext({browser,crypto:webcrypto,URL,TextEncoder,console});
   vm.runInContext(core,h.context); vm.runInContext(background,h.context);
   h.C=h.context.WorkspaceCore;
@@ -379,4 +382,94 @@ test('malformed saved restore destination is rejected before browser operations'
   h.store[h.C.KEY][workspace.id].restore.windowId='2'; h.events=[];
   const result=await h.send('restore',{id:workspace.id,windowId:1});
   assert.equal(result.ok,false); assert.equal(h.events.length,0);
+});
+
+const LIVE_KEY='workspaces.live.v1';
+const liveGroups=(tabs=[tab(1),tab(2)],id='ungrouped')=>[{id,name:id==='ungrouped'?'Ungrouped':'Research',reason:'Related task',tabs:tabs.map(tab=>({id:tab.id,url:tab.url,excluded:tab.id===2}))}];
+const publish=(h,groups=liveGroups(),expectedRevision=null)=>h.send('live-groups-set',{windowId:1,expectedRevision,groups});
+
+test('live groups persist separately, return current metadata and do not create recovery snapshots',async()=>{
+ const h=harness();const empty=await h.send('live-groups-get',{windowId:1});assert.equal(empty.revision,null);assert.equal(empty.groups.length,0);
+ const result=await publish(h);assert.equal(result.ok,true);assert.match(result.revision,/^[a-f0-9-]{36}$/);assert.equal(result.groups[0].tabs[1].excluded,true);
+ assert.equal(h.store[h.C.KEY],undefined);assert(h.store[LIVE_KEY]);assert.equal(h.events.some(e=>e.startsWith('activate:')||e.startsWith('create:')||e.startsWith('remove:')),false);
+ h.tabs.get(1).title='Fresh title';const restarted=harness([...h.tabs.values()],h.store);
+ const view=await restarted.send('live-groups-get',{windowId:1});assert.equal(view.groups[0].tabs[0].title,'Fresh title');assert.equal(view.groups[0].reason,'Related task');
+});
+test('live group publication validates the whole inventory and preserves the previous edit on malformed or protected data',async()=>{
+ const h=harness();const first=await publish(h);const before=clone(h.store);const writes=h.writes;
+ for(const groups of [
+  [...liveGroups(),...liveGroups()],
+  liveGroups([tab(1),tab(1)]),
+  liveGroups([tab(999)]),
+  [{id:'bad',name:'Bad',tabs:[]}],
+  [{id:'ungrouped',name:'',tabs:[]}],
+  [{id:'ungrouped',name:'Too much',reason:'x'.repeat(2001),tabs:[]}],
+  liveGroups([tab(1,{url:'javascript:alert(1)'})]),
+  [{id:'ungrouped',name:'Invalid flag',tabs:[{id:1,url:tab(1).url,excluded:'yes'}]}]
+ ]) {const result=await publish(h,groups,first.revision);assert.equal(result.ok,false);}
+ assert.deepEqual(h.store,before);assert.equal(h.writes,writes);
+ for(const overrides of [{pinned:true},{incognito:true},{pendingUrl:'https://example.org/new'},{windowId:2}]) {
+  Object.assign(h.tabs.get(1),tab(1),overrides);assert.equal((await publish(h,liveGroups(),first.revision)).ok,false);
+ }
+ assert.equal(h.events.some(e=>e.startsWith('activate:')),false);
+});
+test('live groups CAS rejects older dashboards and concurrent publications without lost edits',async()=>{
+ const h=harness();const first=await publish(h);const a=liveGroups();a[0].name='First edit';const b=liveGroups();b[0].name='Stale edit';
+ const results=await Promise.all([publish(h,a,first.revision),publish(h,b,first.revision)]);
+ assert.equal(results[0].ok,true);assert.equal(results[1].ok,false);assert.match(results[1].error,/changed in another manager/);
+ assert.equal((await h.send('live-groups-get',{windowId:1})).groups[0].name,'First edit');
+});
+test('popup listing prunes stale memberships but keeps edit revision for a refreshed dashboard publication',async()=>{
+ const h=harness([tab(1),tab(2),tab(3),tab(4),tab(5)]);const first=await publish(h,liveGroups([...h.tabs.values()]));
+ h.tabs.get(1).url='https://example.org/navigation';h.tabs.get(2).pinned=true;h.tabs.get(3).windowId=2;h.tabs.delete(4);
+ const view=await h.send('live-groups-get',{windowId:1});assert.equal(view.revision,first.revision);assert.deepEqual(Array.from(view.groups[0].tabs,t=>t.id),[5]);
+ const updated=await publish(h,liveGroups([tab(5)]),first.revision);assert.equal(updated.ok,true);
+});
+test('pending navigation is hidden temporarily without discarding unchanged live group membership',async()=>{
+ const h=harness();const first=await publish(h);h.tabs.get(1).pendingUrl='https://example.org/pending';
+ const pending=await h.send('live-groups-get',{windowId:1});assert.deepEqual(Array.from(pending.groups[0].tabs,t=>t.id),[2]);assert.equal(h.store[LIVE_KEY][1].groups[0].tabs.length,2);
+ delete h.tabs.get(1).pendingUrl;const finished=await h.send('live-groups-get',{windowId:1});assert.equal(finished.revision,first.revision);assert.equal(finished.groups[0].tabs.length,2);
+});
+test('workspace click returns to most recently activated member without changing edit revision',async()=>{
+ const h=harness();const first=await publish(h);h.activated({windowId:1,tabId:2});
+ const view=await h.send('live-groups-get',{windowId:1});assert.equal(view.revision,first.revision);assert.equal(view.groups[0].lastTabId,2);
+ const focused=await h.send('live-groups-focus',{windowId:1,groupId:'ungrouped',expectedRevision:view.revision});
+ assert.equal(focused.ok,true);assert.equal(focused.tabId,2);assert.equal(h.tabs.get(2).active,true);
+ assert.equal(h.events.some(e=>e.startsWith('create:')||e.startsWith('remove:')||e==='window:create'),false);
+});
+test('specific tab focus rejects stale revisions, unknown membership, changed URL and pending navigation',async()=>{
+ const h=harness();const first=await publish(h);const target={windowId:1,groupId:'ungrouped',tabId:1,expectedRevision:first.revision};
+ assert.equal((await h.send('live-groups-focus',{...target,expectedRevision:webcrypto.randomUUID()})).ok,false);
+ assert.equal((await h.send('live-groups-focus',{...target,tabId:999})).ok,false);
+ h.onGet=id=>{if(id===1)h.tabs.get(1).url='https://example.org/changed-after-list';};
+ assert.equal((await h.send('live-groups-focus',target)).ok,false);assert.equal(h.events.some(e=>e.startsWith('activate:')),false);
+ h.onGet=id=>{if(id===1)h.tabs.get(1).pendingUrl='https://example.org/pending';};h.tabs.get(1).url=tab(1).url;
+ assert.equal((await h.send('live-groups-focus',target)).ok,false);assert.equal(h.events.some(e=>e.startsWith('activate:')),false);
+});
+test('live activation fails before browser changes on failed writes and returns useful API failures',async()=>{
+ const h=harness();const first=await publish(h);const target={windowId:1,groupId:'ungrouped',tabId:1,expectedRevision:first.revision};
+ h.failWrite=h.writes+1;assert.equal((await h.send('live-groups-focus',target)).ok,false);assert.equal(h.events.some(e=>e.startsWith('activate:')),false);
+ h.failWrite=0;h.failUpdate=true;const result=await h.send('live-groups-focus',target);assert.equal(result.ok,false);assert.match(result.error,/Activation denied/);
+ assert.equal(h.tabs.size,2);
+});
+test('private live routes and unrelated extension-page senders cannot expose or activate live groups',async()=>{
+ const h=harness();await publish(h);h.private=true;
+ for(const type of ['live-groups-get','live-groups-set','live-groups-focus'])assert.equal((await h.send(type,{windowId:1,expectedRevision:null,groups:[]})).ok,false);
+ h.private=false;const view=await h.send('live-groups-get',{windowId:1});
+ const message={channel:'workspace',type:'live-groups-focus',windowId:1,groupId:'ungrouped',expectedRevision:view.revision};
+ for(const url of ['https://example.com/dashboard.html','safari-web-extension://test/other.html','safari-web-extension://other/popup.html'])assert.equal(h.listener(message,{id:'test',url}),undefined);
+ assert.equal(h.events.some(e=>e.startsWith('activate:')),false);
+});
+test('session storage is preferred and browser startup/window removal clear only live groups',async()=>{
+ const h=harness(undefined,{}, {session:true});const first=await publish(h);assert.equal(first.ok,true);assert(h.sessionStore[LIVE_KEY]);assert.equal(h.store[LIVE_KEY],undefined);
+ const recovered=harness([...h.tabs.values()],{}, {session:true,sessionStore:h.sessionStore});assert.equal((await recovered.send('live-groups-get',{windowId:1})).revision,first.revision);
+ h.startup();assert.equal((await h.send('live-groups-get',{windowId:1})).groups.length,0);
+ const fallback=harness();const {workspace}=await fallback.save();await publish(fallback);fallback.windowRemoved(1);
+ assert.equal((await fallback.send('live-groups-get',{windowId:1})).groups.length,0);assert(fallback.store[fallback.C.KEY][workspace.id]);
+ await publish(fallback);fallback.startup();assert.equal((await fallback.send('live-groups-get',{windowId:1})).revision,null);assert(fallback.store[fallback.C.KEY][workspace.id]);
+});
+test('failed browser-session reset blocks live selection rather than reusing stale tab IDs',async()=>{
+ const h=harness();const first=await publish(h);h.failWrite=h.writes+1;h.startup();
+ const view=await h.send('live-groups-get',{windowId:1});assert.equal(view.ok,false);assert.match(view.error,/could not be reset/);
+ const focus=await h.send('live-groups-focus',{windowId:1,expectedRevision:first.revision,groupId:'ungrouped'});assert.equal(focus.ok,false);assert.equal(h.events.some(e=>e.startsWith('activate:')),false);
 });

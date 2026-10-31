@@ -8,6 +8,10 @@
   const tabOrder = new Map();
   let groups = [{id: 'ungrouped', name: 'Ungrouped', reason: ''}];
   const assignments = new Map(), excluded = new Set(), requests = new Map();
+  // The switcher registry is separate from saved snapshots and AI proposals.
+  let liveReady = false, liveRevision = null, liveDirty = false, liveConflict = false;
+  let liveScheduled = false, liveTask = Promise.resolve(true), liveFingerprint = '';
+
   const e = (tag, className, text) => {
     const node = document.createElement(tag);
     if (className) node.className = className;
@@ -29,6 +33,7 @@
     reviewRevision++; requests.clear(); clearDrag();
     if (pendingSuggestions) { pendingSuggestions = null; renderSuggestions(); aiStatus(message); }
     updateAIControls();
+    queueLivePublish();
   }
   function updateAIControls() {
     const payload = C.aiInventory(aiTabs());
@@ -168,6 +173,7 @@
     groups.push(...added.map(({id, name, reason}) => ({id, name, reason})));
     groups = groups.filter(group => group.id === 'ungrouped' || tabs.some(tab => assignments.get(tab.id) === group.id));
     pendingSuggestions = null; reviewRevision++; requests.clear(); renderSuggestions(); renderGroups();
+    queueLivePublish();
     aiStatus('Reviewed suggestions accepted. You can still rename, move or exclude tabs before saving.');
     notice('Your reviewed groups are ready. Nothing was saved or closed automatically.');
   }
@@ -175,6 +181,86 @@
     const response = await api.runtime.sendMessage({channel: 'workspace', type, ...values});
     if (!response?.ok) throw new Error(response?.error || 'Safari’s extension coordinator did not respond. Reload the extension and try again.');
     return response;
+  }
+  function liveStatus(text, error = false) {
+    const node = $('live-status');
+    if (!node) return;
+    node.textContent = text;
+    node.classList.toggle('error', error);
+    if ($('live-reload')) $('live-reload').hidden = !error;
+  }
+  function liveGroups() {
+    return groups.map(group => ({id:group.id, name:group.name.trim(), reason:group.reason || '',
+      tabs:assigned(group.id).filter(tab=>draggableTab(tab) && !tab.pendingUrl)
+        .map(tab=>({id:tab.id,url:tab.url,excluded:excluded.has(tab.id)}))}));
+  }
+  function queueLivePublish() {
+    if (!liveReady || liveConflict) return Promise.resolve(false);
+    liveDirty = true;
+    if (liveScheduled) return liveTask;
+    liveScheduled = true;
+    // Coalesce a synchronous rename/move/render without delaying a popup refresh.
+    liveTask = Promise.resolve().then(async()=> {
+      try {
+        while (liveDirty && !liveConflict) {
+          liveDirty = false;
+          const payload = liveGroups(), fingerprint = JSON.stringify(payload);
+          if (fingerprint === liveFingerprint) continue;
+          // Keep a partially typed group name in the editor, not in the switcher.
+          if (payload.some(group=>!group.name)) {
+            liveDirty = true;
+            liveStatus('Name every group to update the toolbar switcher.', true);
+            return false;
+          }
+          try {
+            const response = await send('live-groups-set',{windowId,expectedRevision:liveRevision,groups:payload});
+            liveRevision = response.revision;
+            liveFingerprint = fingerprint;
+            liveStatus('Groups are available in the toolbar switcher.');
+          } catch (error) {
+            liveDirty = true;
+            liveConflict = /changed in another manager/i.test(error.message);
+            liveStatus(liveConflict
+              ? 'Another manager changed the toolbar groups. Your edits are kept here. Load shared groups to replace this review explicitly.'
+              : 'Could not update toolbar groups. Your edits are kept here. Refresh tabs to try sharing them again.', true);
+            return false;
+          }
+        }
+        return true;
+      } finally { liveScheduled = false; }
+    });
+    return liveTask;
+  }
+  async function hydrateLiveGroups({replace = false} = {}) {
+    try {
+      const response = await send('live-groups-get',{windowId});
+      if (!Array.isArray(response.groups)) throw new Error('Invalid live group list.');
+      liveRevision = response.revision ?? null;
+      // Reading an unchanged registry must not invalidate a different manager.
+      liveFingerprint = JSON.stringify(response.groups.map(group=>({id:group.id,name:group.name.trim(),reason:group.reason || '',
+        tabs:group.tabs.map(tab=>({id:tab.id,url:tab.url,excluded:tab.excluded === true}))})));
+      if (response.groups.length || replace) {
+        const available = new Map(tabs.filter(tab=>draggableTab(tab) && !tab.pendingUrl).map(tab=>[tab.id,tab]));
+        const seen = new Set();
+        groups = response.groups.map(group=>({id:group.id,name:group.name,reason:group.reason || ''}));
+        if (!groups.some(group=>group.id==='ungrouped')) groups.unshift({id:'ungrouped',name:'Ungrouped',reason:''});
+        assignments.clear(); excluded.clear(); tabOrder.clear();
+        if (replace) { pendingSuggestions = null; reviewRevision++; requests.clear(); collapsedGroups.clear(); clearDrag(); renderSuggestions(); }
+        for (const group of response.groups) for (const [index,member] of group.tabs.entries()) {
+          const tab = available.get(member.id);
+          if (!tab || tab.url!==member.url || seen.has(tab.id)) continue;
+          seen.add(tab.id); assignments.set(tab.id,group.id); tabOrder.set(tab.id,index);
+          if (member.excluded) excluded.add(tab.id);
+        }
+        renderGroups();
+      }
+      liveReady = true; liveConflict = false; liveDirty = false;
+      // Current Safari metadata may include new tabs absent from the registry.
+      if (await queueLivePublish()) liveStatus('Groups are available in the toolbar switcher.');
+    } catch {
+      liveReady = false;
+      liveStatus('Toolbar groups could not be loaded. Your current review is kept here. Use Load shared groups to try again.', true);
+    }
   }
   async function run(work) {
     if (busy) return;
@@ -534,6 +620,7 @@
     const eligible = tabs.filter(tab=>tab.eligible).length;
     $('scan-info').textContent = `${tabs.length} tabs · ${eligible} eligible · Updated ${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})} · Refreshes every 5 minutes while manager is visible`;
     if (!automatic) notice(eligible ? 'Tabs refreshed. Existing groups and exclusions were kept; new or changed tabs are ungrouped.' : 'No eligible web tabs found. Open regular websites in this window, then refresh.');
+    if (liveReady) await queueLivePublish();
   }
   function revealAI() {
     $('ai').open = true;
@@ -655,6 +742,10 @@
       detail.append(summary,list); card.append(detail); $('workspaces').append(card);
     }
   }
+  $('live-reload')?.addEventListener('click',()=>run(async()=> {
+    if (!await confirm('Load shared groups?', 'Replace this unsaved group review with the groups currently used by the toolbar switcher? Local group edits, exclusions and unaccepted AI suggestions will be discarded. Saved snapshots and browser tabs are unchanged.', 'Load shared groups')) return;
+    await hydrateLiveGroups({replace:true});
+  }));
   $('scan').addEventListener('click',()=>run(()=>scan()));
   $('refresh').addEventListener('click',()=>run(async()=>{await loadSaved(); notice('Saved workspaces refreshed.');}));
   $('new-group').addEventListener('click',()=> {
@@ -688,7 +779,7 @@
     if (!sender.url?.startsWith(origin) || !['popup.html','dashboard.html'].includes(sender.url.slice(origin.length).split(/[?#]/)[0])) return undefined;
     if (busy || draggedTab || editingReview()) return Promise.resolve({ok:false,error:'Review is busy. Refresh again when ready.'});
     let result = {ok:false,error:'Could not refresh tabs. Check the manager for details.'};
-    return run(async()=> { await scan(); if (message.type === 'ai-organise') revealAI(); result = {ok:true}; }).then(()=>result);
+    return run(async()=> { await scan(); if (message.type === 'ai-organise') revealAI(); result = {ok:await queueLivePublish()}; if (!result.ok) result.error = 'Toolbar groups could not be updated. Your review is kept in the manager.'; }).then(()=>result);
   });
   globalThis.addEventListener?.('hashchange',()=> { if (globalThis.location.hash === '#ai') revealAI(); });
   renderGroups();
@@ -696,7 +787,7 @@
     if (!api?.runtime?.sendMessage) throw new Error('This page must be opened from the Safari Workspaces extension toolbar. Enable the extension in Safari Settings → Extensions.');
     const win = await api.windows.getCurrent(); windowId = win.id;
     if (win.incognito || (win.type && win.type !== 'normal')) throw new Error('Private browsing is excluded. Open the manager in a normal Safari window.');
-    await loadSaved(); await scan();
+    await loadSaved(); await scan(); await hydrateLiveGroups();
     if (globalThis.location.hash === '#ai') revealAI();
   });
 })();

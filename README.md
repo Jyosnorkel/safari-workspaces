@@ -11,6 +11,7 @@ Scan tabs → get meaningful Meta AI group suggestions → review and edit → s
 ## Current implementation
 
 - The toolbar popup leads with Save snapshot, AI organise and Refresh tabs. Saving keeps tabs open; AI organise opens review/settings and never sends metadata automatically.
+- Open workspaces in the popup lists current-window groups. Click a group to return to its last-used tab, or expand it and choose a live tab. Switching activates existing tabs without reopening URLs, moving or closing anything. Manual and accepted AI groups are shared locally with the dashboard; unaccepted proposals stay separate.
 - Tab inventory refreshes when the popup opens and when the dashboard opens. The visible dashboard refreshes every five minutes, pausing during editing, dragging and busy operations. Existing groups, exclusions and custom order survive refresh; new/navigated tabs are ungrouped.
 - Scan available tab titles and URLs; exclude private tabs and leave pinned and restricted tabs untouched.
 - Create and rename groups, move tabs between them, and exclude individual tabs.
@@ -59,13 +60,13 @@ Open http://localhost:8765/ in Safari. The existing test page still describes th
 
 ## Verification status and known limitations
 
-- The v0.6.0 native build and strict code-signature verification passed on October 31, 2026; the packaged AI client matches source.
+- The v0.7.0 native build and strict code-signature verification passed on October 31, 2026; the packaged AI client matches source.
 - The new group-chip mouse dragging, unchecked-tab preservation and keyboard collapse/expand were verified in the internal browser with fictional tab APIs. Actual Safari testing of this UI remains pending.
 - Live Safari popup rendering and current-window scanning were verified. A live storage-verification failure was reproduced and fixed with regression coverage; full save/close/restore retesting and restart persistence are **not yet verified**.
-- `node scripts/check.mjs` passes 140 automated checks for workspace rules, fake-DOM review flows, fake Meta providers, authenticated local HTTP contracts and usage budgets. Syntax and native resource checks are included. These do not replace Safari testing.
+- `node scripts/check.mjs` passes 161 automated checks for workspace rules, fake-DOM review flows, fake Meta providers, authenticated local HTTP contracts and usage budgets. Syntax and native resource checks are included. These do not replace Safari testing.
 - Completed snapshots support an explicit **Restore another copy** action. New restore sessions are protected against replayed requests and stale dashboards.
 - Unsaved forms, browsing history, scroll position and complete page state are not saved. Restoration reopens URLs only.
-- Groups live in the extension dashboard. Native Safari Tab Groups are not controlled.
+- Groups are edited in the dashboard and used from the toolbar switcher. Native Safari Tab Groups are not controlled. Live memberships are browser-session state; saved snapshots remain durable. Groups survive dashboard/event-page reloads but reset on browser startup to avoid reusing stale tab IDs.
 - Current scope is one normal Safari window; no accounts, cloud sync or App Store distribution.
 
 ## Privacy and AI plan
