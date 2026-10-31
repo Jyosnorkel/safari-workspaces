@@ -3,7 +3,7 @@
   const C = WorkspaceCore;
   const $ = id => document.getElementById(id);
   let tabs = [], windowId, busy = false, generation = 0, reviewRevision = 0;
-  let pairedToken = '', usage = null, pendingSuggestions = null, draggedTab = null;
+  let pairedToken = '', usage = null, pendingSuggestions = null, draggedTab = null, connectionUpdated = false;
   const collapsedGroups = new Set();
   let groups = [{id: 'ungrouped', name: 'Ungrouped', reason: ''}];
   const assignments = new Map(), excluded = new Set(), requests = new Map();
@@ -55,6 +55,7 @@
     if (!ai()?.status) throw new Error('The AI connector is unavailable in this build. Manual workspaces remain usable.');
     const response = await ai().status({token});
     if (!response?.ok || !response.usage) throw new Error('The local service returned an invalid status.');
+    connectionUpdated = response.connection?.updated === true;
     return response.usage;
   }
   async function connectAI() {
@@ -69,15 +70,15 @@
     try {
       const status = await checkService(token);
       pairedToken = token; usage = status;
-      aiStatus(status.enabled && status.configured ? 'Connected. Review the exact input and agree to the disclosure before requesting suggestions. This status check made no model call.' : 'Local service connected, but Meta suggestions are disabled or the provider is not configured. Configure the service before requesting suggestions.');
+      aiStatus(status.enabled && status.configured ? `${connectionUpdated ? 'Safari’s connection address was updated automatically. ' : ''}Connected. Review the exact input and agree to the disclosure before requesting suggestions. This status check made no model call.` : 'Local service connected, but Meta suggestions are disabled or the provider is not configured. Configure the service before requesting suggestions.');
     } catch (error) {
       pairedToken = ''; usage = null;
-      aiStatus(`Could not connect: ${error.message}. Check the running service, pairing token, and exact allowed dashboard origin.`, true);
+      aiStatus(`Could not connect: ${error.message}. Check the running service and local pairing token. The updated service refreshes Safari’s address automatically.`, true);
     }
     updateAIControls();
   }
   async function refreshAI() {
-    try { usage = await checkService(); aiStatus('Local service status refreshed. No model request was made.'); }
+    try { usage = await checkService(); aiStatus(`${connectionUpdated ? 'Safari’s connection address was updated automatically. ' : ''}Local service status refreshed. No model request was made.`); }
     catch (error) { usage = null; aiStatus(`Could not refresh service status: ${error.message}`, true); }
     updateAIControls();
   }

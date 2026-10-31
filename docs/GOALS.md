@@ -2,15 +2,15 @@
 
 The local build-guide webpage is the planning reference (`project-guide/dist/index.html`, served at http://127.0.0.1:8787). This table maps its original product goals to implementation evidence. Organiser source copies remain private; this file contains our own development plan.
 
-| Webpage goal | Evidence at v0.4.0 | Next acceptance step |
+| Webpage goal | Evidence at v0.4.1 | Next acceptance step |
 | --- | --- | --- |
 | Scan and organise | Manual dashboard, sticky chips, drag grips, collapse/expand and validated inventory | Verify packaged extension in a disposable Safari window |
 | Real Meta suggestions | Official Meta adapter, authenticated loopback service, durable usage guard and client integrated; fake-provider/client HTTP tests pass | User reports useful real Meta grouping; continue quality measurements |
 | Review corrections | Editable staged proposals, drag-to-chip corrections and explicit acceptance; fake-DOM tests plus fictional-data browser interactions pass | Verify actual Safari rendering and a consented real response |
 | Save before closing | Verified local writes, navigation checks, recovery journal tests | Full live flow still unverified; current user prohibition prevents close tests |
 | Resume reliably | Ordered URL restoration, pending recovery, deliberate new sessions | Live restore checks and restart persistence pending; no Safari quit allowed |
-| Window backup (user-added MVP goal) | Non-closing whole-window snapshots, JSON export/import; 105 total automated checks and native build/signature pass | Verify actual Safari download file and import; sample-API DOM test passed |
-| Reproducible setup | Native build script and manual instructions | Pairing/setup documented and AI resources verified in native build; actual Safari origin/status path still pending |
+| Window backup (user-added MVP goal) | Non-closing whole-window snapshots, JSON export/import; 116 total automated checks and native build/signature pass | Verify actual Safari download file and import; sample-API DOM test passed |
+| Reproducible setup | Native build script and manual instructions | Authenticated automatic origin refresh and file hotload implemented/tested; native resources verified; new Safari activation remains pending |
 
 Current priorities: verify actual Safari-to-service status without a model call, then a consented real suggestion and safe snapshot/backup behavior, then measure grouping quality. Optional excerpts, notes and other extras follow the working core.
 

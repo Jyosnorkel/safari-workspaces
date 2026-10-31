@@ -13,7 +13,7 @@
         // Privileged extension GET requests can omit Origin when CORS is bypassed.
         // POST uses Fetch's non-GET Origin path while retaining strict server checks.
         method:'POST',headers:{Authorization:`Bearer ${token.trim()}`,'Content-Type':'application/json'},
-        body:JSON.stringify(path==='/v1/status'?{}:{tabs,consent}),signal:controller.signal,mode:'cors',
+        body:JSON.stringify(path==='/v1/suggestions'?{tabs,consent}:{}),signal:controller.signal,mode:'cors',
         credentials:'omit',cache:'no-store',redirect:'error'
       });
       const data=await response.json();
@@ -28,5 +28,11 @@
       failed.code='local_service_unavailable';throw failed;
     }finally{clearTimeout(timer);}
   }
-  globalThis.WorkspaceAI=Object.freeze({baseURL,clientOrigin,status:options=>call('/v1/status',options),suggest:options=>call('/v1/suggestions',options)});
+  // Every explicit status check authenticates and refreshes Safari's changing origin.
+  // Suggestions handshake first, but inference itself is never automatically retried.
+  const connect=options=>call('/v1/connect',{token:options?.token});
+  globalThis.WorkspaceAI=Object.freeze({baseURL,clientOrigin,status:connect,suggest:async options=>{
+    await connect(options);
+    return call('/v1/suggestions',options);
+  }});
 })();

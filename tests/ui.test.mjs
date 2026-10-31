@@ -49,7 +49,7 @@ async function harness(options={}) {
   const WorkspaceAI={clientOrigin:'safari-web-extension://fake-test',status:async ({token})=>{
     h.statusCalls++;h.calls.push({type:'status',token});
     if(h.statusError)throw h.statusError;
-    return {ok:true,usage:structuredClone(h.usage)};
+    return {ok:true,usage:structuredClone(h.usage),connection:{updated:h.connectionUpdated===true}};
   },suggest:async request=>{
     h.suggestCalls++;h.calls.push({type:'suggest',...structuredClone(request)});
     if(h.deferred)return await h.deferred;
@@ -232,4 +232,11 @@ test('busy dashboard rejects stale drag events and keyboard collapse without cha
   await drop(h,chipFor(h,'Workspace 1'),drag.data);assert.equal(selectedGroup(h,'Page 1'),'ungrouped');
   chipFor(h,'Workspace 1').dispatch('keydown',{key:'Enter'});assert.equal(h.node(`group-body-${id}`).hidden,false);
   h.node('confirm').returnValue='cancel';h.node('confirm').dispatch('close');await settle();
+});
+
+
+test('successful local reconnect reports automatic address refresh without a model call',async()=>{
+ const h=await harness({connectionUpdated:true});await h.connect();
+ assert.match(h.node('ai-status').textContent,/address was updated automatically/);
+ assert.equal(h.statusCalls,1);assert.equal(h.suggestCalls,0);assert.equal(h.storageWrites,0);
 });

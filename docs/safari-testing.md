@@ -1,3 +1,9 @@
+## v0.4.1 automatic origin repair
+
+116 checks pass, including authentication/Origin restrictions, on-disk origin repair with the unchanged token and usage bytes, hotloaded external pairing changes, and the actual extension client with local HTTP and temporary configuration. Native 0.4.1/build8 is built at the normal app path and signed. The user must load this client and restart only the local AI service once to activate the new protocol. Thereafter Connect/status checks and pre-suggestion handshakes update a changed actual Safari UUID origin without manual file edits or service restart. The local token remains required. The protocol's real Safari activation has not been independently verified; no model calls were made in this iteration.
+
+---
+
 ## v0.3.1 user-reported connection issue
 
 The paired and displayed dashboard origins matched, but the user received origin_denied on status. The actual incoming browser Origin was not captured. Client status now uses POST JSON rather than GET, keeping strict origin/token validation, and the server returns clearer missing/opaque/mismatched-origin diagnostics. All 96 automated checks pass; the normal-path native app is v0.3.1/build6 with a valid signature. No Safari interaction or real model requests occurred during the patch. Live confirmation is pending after the user refreshes the service and extension; no Safari quit/session closure is needed.
