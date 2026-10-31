@@ -20,7 +20,7 @@ class Element {
   setAttribute(name,value){this.attributes[name]=String(value);}
   removeAttribute(name){delete this.attributes[name];}
   addEventListener(type,fn,options){const list=this.listeners.get(type)||[];list.push({fn,once:options?.once});this.listeners.set(type,list);}
-  dispatch(type){const list=[...(this.listeners.get(type)||[])];this.listeners.set(type,list.filter(l=>!l.once));for(const {fn} of list)fn({target:this});}
+  dispatch(type,extra={}){const event={target:this,currentTarget:this,defaultPrevented:false,preventDefault(){this.defaultPrevented=true;},...extra};const list=[...(this.listeners.get(type)||[])];this.listeners.set(type,list.filter(l=>!l.once));for(const {fn} of list)fn(event);return event;}
   click(){if(!this.disabled)this.dispatch('click');}
   focus(){}
   remove(){if(this.parent)this.parent.children=this.parent.children.filter(c=>c!==this);}
@@ -34,7 +34,8 @@ async function harness(options={}) {
   nodes.get('ai-review').hidden=true;
   const main=new Element('main'),aside=new Element('aside'),body=new Element('body');
   const h={storageWrites:0,calls:[],statusCalls:0,suggestCalls:0,permissionCalls:0,sent:[],usage:baseUsage(),permission:true,tabs:[sample(1),sample(2),sample(3,{eligible:false,pinned:true})],autoConfirm:true,...options};
-  const document={getElementById:id=>nodes.get(id),createElement:tag=>new Element(tag),querySelector:selector=>selector==='main'?main:selector==='aside'?aside:null,body};
+  const findById=id=>nodes.get(id)||[...nodes.values()].flatMap(all).find(node=>node.attributes.id===id);
+  const document={getElementById:findById,createElement:tag=>new Element(tag),querySelector:selector=>selector==='main'?main:selector==='aside'?aside:null,body};
   nodes.get('confirm').showModal=()=>{ if(h.autoConfirm)queueMicrotask(()=>{nodes.get('confirm').returnValue='accept';nodes.get('confirm').dispatch('close');}); };
   const browser={permissions:{request:async permission=>{h.permissionCalls++;h.requestedPermission=permission;return h.permission;}},windows:{getCurrent:async()=>({id:1,incognito:false})},runtime:{sendMessage:async message=>{
     h.sent.push(structuredClone(message));
@@ -60,7 +61,7 @@ async function harness(options={}) {
   Object.assign(FakeURL,url);
   h.context=vm.createContext({document,browser,WorkspaceAI,crypto:webcrypto,URL:FakeURL,localStorage:{setItem:()=>h.storageWrites++,getItem:()=>null},Blob,location:{origin:'null',protocol:'safari-web-extension:',host:'fake-test'},console,setInterval:fn=>{h.countdown=fn;},setTimeout:()=>{},queueMicrotask});
   vm.runInContext(core,h.context);vm.runInContext(source,h.context);
-  h.node=id=>nodes.get(id);
+  h.node=findById;
   h.find=(root,predicate)=>all(nodes.get(root)).find(predicate);
   h.findAll=(root,predicate)=>all(nodes.get(root)).filter(predicate);
   h.label=(root,text)=>h.find(root,node=>node.attributes['aria-label']===text);
@@ -161,4 +162,74 @@ test('cancelling acceptance leaves manual groups and the editable candidate inta
   h.node('confirm').returnValue='cancel';h.node('confirm').dispatch('close');await settle();
   assert.equal(h.node('ai-review').hidden,false);assert(named(h,'groups','Ungrouped'));assert.equal(named(h,'groups','Research'),undefined);
   assert.equal(h.sent.some(m=>['save','restore'].includes(m.type)),false);
+});
+
+
+const dragType='application/x-safari-workspaces-tab';
+function transfer(seed={}){const data=new Map(Object.entries(seed));return {get types(){return [...data.keys()];},getData:type=>data.get(type)||'',setData:(type,value)=>data.set(type,value),effectAllowed:'none',dropEffect:'none'};}
+const chipFor=(h,name)=>h.find('group-chips',node=>node.tagName==='button'&&node.children[0]?.textContent===name);
+const groupIdOf=chip=>chip.attributes['data-group-id'];
+const selectedGroup=(h,title)=>h.label('groups',`Group for ${title}`).children.find(option=>option.selected).value;
+async function startDrag(h,title){const data=transfer();const handle=h.label('groups',`Drag ${title} to a group chip`);assert(handle,`Missing drag handle for ${title}`);const event=handle.dispatch('dragstart',{dataTransfer:data});await settle();return {data,handle,event};}
+async function drop(h,chip,data){const over=chip.dispatch('dragover',{dataTransfer:data});const event=chip.dispatch('drop',{dataTransfer:data});await settle();return {over,event};}
+
+test('chip counts include all assigned tabs; cross-group drag preserves unchecked state and makes no browser calls',async()=>{
+  const h=await harness();await h.scan();await h.click('new-group');
+  const targetId=groupIdOf(chipFor(h,'Workspace 1'));
+  assert.equal(chipFor(h,'Ungrouped').children[1].textContent,'3');
+  await h.change(h.label('groups','Include Page 1'),false);
+  const sent=h.sent.length;const drag=await startDrag(h,'Page 1');
+  assert.equal(drag.event.defaultPrevented,false);assert.deepEqual(drag.data.types,[dragType]);
+  assert.match(drag.data.getData(dragType),/^[a-f0-9-]{36}$/);assert.equal(drag.data.getData('text/plain'),'');
+  const result=await drop(h,chipFor(h,'Workspace 1'),drag.data);
+  assert(result.over.defaultPrevented);assert(result.event.defaultPrevented);
+  assert.equal(selectedGroup(h,'Page 1'),targetId);assert.equal(h.label('groups','Include Page 1').checked,false);
+  assert.equal(chipFor(h,'Workspace 1').children[1].textContent,'1');assert.equal(chipFor(h,'Ungrouped').children[1].textContent,'2');
+  assert.equal(h.sent.length,sent);assert.equal(h.suggestCalls,0);assert.match(h.node('status').textContent,/remains unchecked/);
+});
+test('collapse is associated with its body, persists through renaming/moving and supports native-button keyboard toggles',async()=>{
+  const h=await harness();await h.scan();await h.click('new-group');
+  const id=groupIdOf(chipFor(h,'Workspace 1'));let chip=chipFor(h,'Workspace 1');
+  assert.equal(chip.tagName,'button');assert.equal(chip.attributes['aria-controls'],`group-body-${id}`);
+  chip.click();await settle();assert.equal(h.node(`group-body-${id}`).hidden,true);assert.equal(chipFor(h,'Workspace 1').attributes['aria-expanded'],'false');
+  assert.match(h.node(`group-toggle-${id}`).textContent,/Expand/);
+  await h.change(named(h,'groups','Workspace 1'),'Renamed','input');await h.change(named(h,'groups','Renamed'),'Renamed');
+  assert.equal(chipFor(h,'Renamed').attributes['aria-expanded'],'false');assert.equal(h.node(`group-body-${id}`).hidden,true);
+  const drag=await startDrag(h,'Page 1');await drop(h,chipFor(h,'Renamed'),drag.data);
+  assert.equal(h.node(`group-body-${id}`).hidden,true);assert.equal(chipFor(h,'Renamed').children[1].textContent,'1');
+  let key=chipFor(h,'Renamed').dispatch('keydown',{key:'Enter'});await settle();assert(key.defaultPrevented);assert.equal(h.node(`group-body-${id}`).hidden,false);
+  key=h.node(`group-toggle-${id}`).dispatch('keydown',{key:' '});await settle();assert(key.defaultPrevented);assert.equal(h.node(`group-body-${id}`).hidden,true);
+  await h.scan();assert.equal(chipFor(h,'Ungrouped').attributes['aria-expanded'],'true');assert.equal(chipFor(h,'Renamed'),undefined);
+});
+test('external, forged and invalid-target drops are ignored without navigating or changing assignments',async()=>{
+  const h=await harness();await h.scan();await h.click('new-group');
+  const target=chipFor(h,'Workspace 1');let result=await drop(h,target,transfer({'text/uri-list':'https://external.test/'}));assert(result.event.defaultPrevented);
+  await drop(h,target,transfer({[dragType]:'forged-token'}));assert.equal(selectedGroup(h,'Page 1'),'ungrouped');
+  const drag=await startDrag(h,'Page 1');await drop(h,target,transfer({[dragType]:'wrong-token'}));assert.equal(selectedGroup(h,'Page 1'),'ungrouped');
+  const removedChip=chipFor(h,'Workspace 1');await h.click('new-group');
+  const remove=h.find('groups',node=>node.tagName==='button'&&node.textContent==='Remove empty group');remove.click();await settle();
+  const liveDrag=await startDrag(h,'Page 1');await drop(h,removedChip,liveDrag.data);assert.equal(selectedGroup(h,'Page 1'),'ungrouped');
+  assert.equal(h.sent.some(m=>['save','restore'].includes(m.type)),false);
+});
+test('protected rows have no drag handle and stale scans or ended drags cannot move a tab',async()=>{
+  const h=await harness({tabs:[sample(1),sample(2,{eligible:false,pinned:true}),sample(3,{eligible:false,url:'safari://settings'})]});await h.scan();await h.click('new-group');
+  assert.equal(h.label('groups','Drag Page 2 to a group chip'),undefined);assert.equal(h.label('groups','Drag Page 3 to a group chip'),undefined);
+  const oldTarget=chipFor(h,'Workspace 1');const drag=await startDrag(h,'Page 1');await h.scan();await drop(h,oldTarget,drag.data);assert.equal(selectedGroup(h,'Page 1'),'ungrouped');
+  await h.click('new-group');const ended=await startDrag(h,'Page 1');ended.handle.dispatch('dragend');await drop(h,chipFor(h,'Workspace 1'),ended.data);assert.equal(selectedGroup(h,'Page 1'),'ungrouped');
+});
+test('collapse and same-group drop preserve AI preview; an actual drag move invalidates it',async()=>{
+  const h=await harness();await h.scan();await h.click('new-group');await h.connect();await h.consent();await h.click('suggest');
+  assert.equal(h.node('ai-review').hidden,false);chipFor(h,'Workspace 1').click();await settle();assert.equal(h.node('ai-review').hidden,false);
+  let drag=await startDrag(h,'Page 1');await drop(h,chipFor(h,'Ungrouped'),drag.data);assert.equal(h.node('ai-review').hidden,false);
+  drag=await startDrag(h,'Page 1');await drop(h,chipFor(h,'Workspace 1'),drag.data);assert.equal(h.node('ai-review').hidden,true);assert.match(h.node('ai-status').textContent,/discarded/);
+});
+test('busy dashboard rejects stale drag events and keyboard collapse without changing the review',async()=>{
+  const h=await harness();await h.scan();await h.click('new-group');const id=groupIdOf(chipFor(h,'Workspace 1'));
+  const drag=await startDrag(h,'Page 1');h.autoConfirm=false;
+  // Hold the fake scan confirmation open to simulate an in-flight UI operation.
+  h.node('scan').click();await settle();
+  const rejected=h.label('groups','Drag Page 1 to a group chip').dispatch('dragstart',{dataTransfer:transfer()});assert(rejected.defaultPrevented);
+  await drop(h,chipFor(h,'Workspace 1'),drag.data);assert.equal(selectedGroup(h,'Page 1'),'ungrouped');
+  chipFor(h,'Workspace 1').dispatch('keydown',{key:'Enter'});assert.equal(h.node(`group-body-${id}`).hidden,false);
+  h.node('confirm').returnValue='cancel';h.node('confirm').dispatch('close');await settle();
 });

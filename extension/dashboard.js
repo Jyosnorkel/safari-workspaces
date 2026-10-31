@@ -3,7 +3,8 @@
   const C = WorkspaceCore;
   const $ = id => document.getElementById(id);
   let tabs = [], windowId, busy = false, generation = 0, reviewRevision = 0;
-  let pairedToken = '', usage = null, pendingSuggestions = null;
+  let pairedToken = '', usage = null, pendingSuggestions = null, draggedTab = null;
+  const collapsedGroups = new Set();
   let groups = [{id: 'ungrouped', name: 'Ungrouped', reason: ''}];
   const assignments = new Map(), excluded = new Set(), requests = new Map();
   const e = (tag, className, text) => {
@@ -24,7 +25,7 @@
     $('ai-status').classList.toggle('error', error);
   }
   function reviewChanged(message = 'Your review changed. Previous suggestions were discarded; request fresh suggestions when ready.') {
-    reviewRevision++; requests.clear();
+    reviewRevision++; requests.clear(); clearDrag();
     if (pendingSuggestions) { pendingSuggestions = null; renderSuggestions(); aiStatus(message); }
     updateAIControls();
   }
@@ -172,7 +173,7 @@
   }
   async function run(work) {
     if (busy) return;
-    busy = true;
+    busy = true; clearDrag();
     document.querySelector('main').inert = true;
     document.querySelector('main').setAttribute('aria-busy', 'true');
     document.querySelector('aside').inert = true;
@@ -203,7 +204,101 @@
     const node = e('button', className, label); node.type = 'button';
     node.addEventListener('click', () => run(action)); return node;
   }
+  const DRAG_TYPE = 'application/x-safari-workspaces-tab';
+  const groupFor = tabId => assignments.get(tabId) || 'ungrouped';
+  const draggableTab = tab => tab?.eligible && !tab.pinned && !tab.incognito && Number.isSafeInteger(tab.id) && C.restorable(tab.url);
+  function clearDrag() {
+    draggedTab = null;
+    $('group-chips').classList.toggle('is-dragging',false);
+    for (const chip of $('group-chips').children) chip.classList.toggle('is-drop-target', false);
+  }
+  function validDrop(groupId, transfer, readToken = false) {
+    if (busy || !draggedTab || draggedTab.generation !== generation || draggedTab.revision !== reviewRevision || !groups.some(group => group.id === groupId)) return false;
+    const tab = tabs.find(tab => tab.id === draggedTab.tabId);
+    if (!draggableTab(tab) || groupFor(tab.id) !== draggedTab.fromGroup || !Array.from(transfer?.types || []).includes(DRAG_TYPE)) return false;
+    // During dragover, browsers protect the data store; read its opaque token only on drop.
+    if (readToken) { try { return transfer.getData(DRAG_TYPE) === draggedTab.token; } catch { return false; } }
+    return true;
+  }
+  function moveTab(tabId, targetId) {
+    const tab = tabs.find(tab => tab.id === tabId), target = groups.find(group => group.id === targetId);
+    if (busy || !draggableTab(tab) || !target || groupFor(tabId) === targetId) return false;
+    assignments.set(tabId, targetId);
+    reviewChanged(); renderGroups();
+    notice(`Moved “${tab.title}” to “${target.name || 'Unnamed group'}”.${excluded.has(tabId) ? ' It remains unchecked.' : ''} No browser tabs were moved or changed.`);
+    return true;
+  }
+  function toggleGroup(groupId, focusId) {
+    if (busy || !groups.some(group => group.id === groupId)) return;
+    if (collapsedGroups.has(groupId)) collapsedGroups.delete(groupId); else collapsedGroups.add(groupId);
+    renderGroups();
+    $(focusId)?.focus();
+  }
+  function bindGroupToggle(control, groupId, focusId) {
+    control.addEventListener('click', () => toggleGroup(groupId, focusId));
+    control.addEventListener('keydown', event => {
+      if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') {
+        event.preventDefault(); toggleGroup(groupId, focusId);
+      }
+    });
+  }
+  function renderGroupChips() {
+    $('group-chips').replaceChildren();
+    $('group-chips').hidden = !tabs.length;
+    for (const group of groups) {
+      if (!tabs.length) break;
+      const chip = e('button','group-chip'); chip.type = 'button';
+      const count = assigned(group.id).length, collapsed = collapsedGroups.has(group.id), name = group.name || 'Unnamed group';
+      chip.setAttribute('id', `group-chip-${group.id}`);
+      chip.setAttribute('data-group-id', group.id);
+      chip.setAttribute('aria-expanded', String(!collapsed));
+      chip.setAttribute('aria-controls', `group-body-${group.id}`);
+      chip.setAttribute('aria-label', `${collapsed ? 'Expand' : 'Collapse'} ${name}, ${count} tabs`);
+      chip.title = 'Click to collapse or expand this group. Drop a tab handle here to move it into this group.';
+      chip.classList.toggle('is-collapsed', collapsed);
+      chip.append(e('span','group-chip-name',name), e('span','group-chip-count',String(count)), e('span','group-chip-arrow',collapsed ? '▸' : '▾'));
+      bindGroupToggle(chip,group.id,`group-chip-${group.id}`);
+      const over = event => {
+        event.preventDefault(); // Never allow external URL drops to navigate the dashboard.
+        const allowed = validDrop(group.id,event.dataTransfer) && draggedTab.fromGroup !== group.id;
+        chip.classList.toggle('is-drop-target',allowed);
+        if (event.dataTransfer) event.dataTransfer.dropEffect = allowed ? 'move' : 'none';
+      };
+      chip.addEventListener('dragenter',over); chip.addEventListener('dragover',over);
+      chip.addEventListener('dragleave',()=>chip.classList.toggle('is-drop-target',false));
+      chip.addEventListener('drop',event=>{
+        event.preventDefault();
+        const source = draggedTab;
+        if (validDrop(group.id,event.dataTransfer,true)) moveTab(source.tabId,group.id);
+        clearDrag();
+      });
+      $('group-chips').append(chip);
+    }
+  }
+  function dragHandle(tab, sourceGroupId) {
+    const handleGeneration = generation, handleRevision = reviewRevision;
+    const handle = e('button','drag-handle','⠿'); handle.type = 'button'; handle.draggable = true;
+    handle.setAttribute('aria-label',`Drag ${tab.title} to a group chip`);
+    handle.setAttribute('aria-describedby','group-chip-help');
+    handle.setAttribute('data-tab-id',String(tab.id));
+    handle.title = 'Drag to a group chip. Use the group menu to move this tab without dragging.';
+    handle.addEventListener('dragstart',event=>{
+      clearDrag();
+      const current = tabs.find(item=>item.id===tab.id);
+      if (busy || handleGeneration !== generation || handleRevision !== reviewRevision || !event.dataTransfer || !draggableTab(current) || groupFor(tab.id)!==sourceGroupId) { event.preventDefault(); return; }
+      const token = crypto.randomUUID();
+      try { event.dataTransfer.setData(DRAG_TYPE,token); event.dataTransfer.effectAllowed='move'; }
+      catch { event.preventDefault(); return; }
+      draggedTab = {tabId:tab.id,fromGroup:sourceGroupId,token,generation,revision:reviewRevision};
+      $('group-chips').classList.toggle('is-dragging',true);
+    });
+    handle.addEventListener('dragend',clearDrag);
+    handle.addEventListener('click',()=>{ if (!busy) notice('Drag this handle to a group chip, or use this tab’s group menu to move it without dragging.'); });
+    return handle;
+  }
   function renderGroups() {
+    for (const id of collapsedGroups) if (!groups.some(group=>group.id===id)) collapsedGroups.delete(id);
+    renderGroupChips();
     updateAIControls();
     $('groups').replaceChildren();
     if (!tabs.length) {
@@ -212,11 +307,19 @@
     }
     for (const group of groups) {
       const card = e('section','group'), header = e('div','group-header');
+      const collapsed = collapsedGroups.has(group.id);
+      card.setAttribute('id',`manual-group-${group.id}`); card.setAttribute('aria-label',group.name || 'Unnamed group');
+      card.classList.toggle('is-collapsed',collapsed);
+      const body = e('div','group-body'); body.setAttribute('id',`group-body-${group.id}`); body.hidden = collapsed;
       const name = e('input'); name.type = 'text'; name.maxLength = 80; name.value = group.name;
       name.setAttribute('aria-label', `Name for ${group.name}`);
-      name.addEventListener('input', () => {group.name = name.value; reviewChanged();});
+      name.addEventListener('input', () => {group.name = name.value; reviewChanged(); renderGroupChips();});
       name.addEventListener('change',renderGroups);
-      header.append(name,e('span','count',`${selected(group.id).length} selected`));
+      header.append(name,e('span','count',`${assigned(group.id).length} tabs · ${selected(group.id).length} selected`));
+      const toggle = e('button','group-toggle',collapsed ? 'Expand ▸' : 'Collapse ▾'); toggle.type='button';
+      toggle.setAttribute('id',`group-toggle-${group.id}`); toggle.setAttribute('aria-label',`${collapsed ? 'Expand' : 'Collapse'} ${group.name || 'Unnamed group'}`);
+      toggle.setAttribute('aria-expanded',String(!collapsed)); toggle.setAttribute('aria-controls',`group-body-${group.id}`);
+      bindGroupToggle(toggle,group.id,`group-toggle-${group.id}`); header.append(toggle);
       card.append(header);
       const selectionActions = e('div','group-select-actions');
       for (const [label,include] of [['Select all',true],['Select none',false]]) selectionActions.append(button(label,async()=>{
@@ -224,8 +327,8 @@
         reviewChanged(); renderGroups();
       }));
       if (group.id !== 'ungrouped' && !assigned(group.id).length) selectionActions.append(button('Remove empty group',async()=>{ groups=groups.filter(item=>item.id!==group.id); reviewChanged(); renderGroups(); }));
-      card.append(selectionActions);
-      if (group.reason) card.append(e('p','group-reason', group.reason));
+      body.append(selectionActions);
+      if (group.reason) body.append(e('p','group-reason', group.reason));
       const list = e('div','tabs');
       for (const tab of assigned(group.id)) {
         const row = e('div','tab'), checkbox = e('input');
@@ -247,19 +350,21 @@
             option.selected = target.id === group.id; move.append(option);
           }
           move.addEventListener('change', () => {
-            assignments.set(tab.id,move.value); reviewChanged(); renderGroups();
+            moveTab(tab.id,move.value);
           });
           content.append(move);
         }
-        row.append(checkbox,content); list.append(row);
+        row.append(checkbox);
+        if (draggableTab(tab)) { row.classList.toggle('draggable-tab',true); row.append(dragHandle(tab,group.id)); }
+        row.append(content); list.append(row);
       }
       if (!assigned(group.id).length) list.append(e('div','empty','Move tabs here using the group menu on any tab.'));
-      card.append(list);
+      body.append(list);
       const actions = e('div','group-footer');
       const save = button('Save snapshot', () => saveGroup(group,false));
       const close = button('Save & close selected', () => saveGroup(group,true),'primary');
       save.disabled = close.disabled = !selected(group.id).length;
-      actions.append(save,close); card.append(actions); $('groups').append(card);
+      actions.append(save,close); body.append(actions); card.append(body); $('groups').append(card);
     }
   }
   async function saveGroup(group, close) {
@@ -289,7 +394,7 @@
     notice('Reading tabs in this Safari window…');
     const response = await send('scan',{windowId});
     tabs = response.tabs; groups = [{id:'ungrouped',name:'Ungrouped',reason:''}];
-    assignments.clear(); excluded.clear(); requests.clear(); generation++;
+    assignments.clear(); excluded.clear(); requests.clear(); collapsedGroups.clear(); clearDrag(); generation++;
     reviewChanged('A new scan replaced the inventory. Previous suggestions were discarded.'); $('ai-consent').checked = false;
     const eligible = tabs.filter(t=>t.eligible).length;
     $('scan-info').textContent = `${tabs.length} tabs scanned · ${eligible} eligible · ${tabs.length-eligible} left untouched`;

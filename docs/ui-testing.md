@@ -28,12 +28,36 @@ Manifest permissions, CSP loopback restrictions, native resource packaging and i
 
 ## Automated evidence
 
-`node --test tests/ui.test.mjs` passes 10 tests. These execute the real dashboard script with a deliberately fake DOM, tab coordinator and AI client. They do not launch a browser or perform network/Meta requests.
+`node --test tests/ui.test.mjs` passes 16 tests. These execute the real dashboard script with a deliberately fake DOM, tab coordinator and AI client. They do not launch a browser or perform network/Meta requests.
 
 Coverage includes disconnected startup/no background requests, preservation of window snapshot/export controls, optional permission denial, connect-only status calls, consent/send-confirmation requirements, exact sanitized selected input, staged output, proposal renaming/moving/ungrouped assignment, acceptance preserving unchecked manual tabs, discard, invalid/network errors, no hidden retries/polling, manual/in-flight revision guards, token disconnect, disabled/busy/exhausted states, and acceptance cancellation.
 
-The full `node scripts/check.mjs` passes 78 checks on this branch (including these 10). `git diff --check` passes.
+The full `node scripts/check.mjs` passes 105 checks on this branch (including these 16). `git diff --check` passes.
 
 ## Still requires verification
 
 No live Safari, CSS visual rendering, real local HTTP client or real Meta inference was tested by this UI agent. The fake DOM does not establish browser layout, permission prompts or native extension networking behavior. The service/packaging dependencies must be integrated and the coordinator must record actual end-to-end evidence separately. Current user safety instructions prohibit closing existing Safari windows/sessions or quitting Safari; this agent performed no browser actions.
+
+
+## Draggable and collapsible manual group chips — October 31
+
+The horizontal chip strip above manual groups shows each group's name and **total assigned tab count**, including unchecked/protected rows. It stays visible while scrolling within the manual-group section, then stops before saved workspaces.
+
+Click a native chip button or the card's visible **Collapse/Expand** button to toggle its body. Both controls expose `aria-expanded` and `aria-controls`, accept Enter/Space, and keep focus on the replacement control after rendering. Collapsed cards retain their editable name, total/selected counts and an Expand affordance. Collapse state is page-local, survives rename/move/render operations and resets after a successful new scan. Removed groups lose their stale collapse state. Collapsing alone never changes tab assignments or invalidates a pending AI proposal.
+
+Each eligible manual row has a dedicated draggable grip button. Drag the grip onto a group chip to move its dashboard assignment. Drop targets highlight only for an eligible internal drag to another current group. Protected/private/pinned/restricted rows do not get grips. Existing per-tab select menus remain the accessible move alternative. Moving a tab preserves its checked/unchecked state and other manual edits; a real assignment change invalidates an older AI proposal. Dropping onto the existing group is a no-op.
+
+Drag/drop uses an opaque `application/x-safari-workspaces-tab` token plus page-internal state. The payload contains no URL or tab ID. Validation checks current scan generation/review revision, current source-group membership, eligible row identity, target existence, busy state and the drop token. External/wrong-token/stale/ended/protected drops are ignored; drops onto chips prevent default navigation. Old detached row handles also cannot start a new drag after a revision/scan change. These operations never call browser/storage/AI APIs and do not control native Safari Tab Groups.
+
+### UI identifiers for the coordinator's isolated preview
+
+- `#manual-review`: sticky strip boundary.
+- `#group-chips`: labelled group-navigation strip.
+- `#group-chip-<groupId>`: native chip button with `data-group-id` and total count.
+- `#manual-group-<groupId>`: group card retaining its visible header.
+- `#group-body-<groupId>`: hidden/expanded content associated with both toggles.
+- `#group-toggle-<groupId>`: visible card Collapse/Expand button.
+- `.drag-handle[data-tab-id]`: the only draggable manual-row element.
+- `#group-chip-help`: visible explanation of local collapse/move and menu alternative.
+
+Six added fake-DOM tests cover cross-group moves with exclusion retention/no API calls, total chip counts, collapse associations/persistence/keyboard/rescan reset, external/forged/invalid targets, protected/stale/ended drags, AI invalidation only on actual moves, and busy guards. They validate script event behavior, not a browser's physical drag gesture or CSS rendering. The root coordinator owns fictional-data visual preview verification; this UI agent performed no browser automation, Safari actions, session/window closing or Meta requests.
