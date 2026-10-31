@@ -218,9 +218,9 @@ test('pairing persists private token, rejects accidental re-pair and loose file 
 });
 test('extension client uses authenticated fixed loopback, exposes limit errors and never retries',async()=>{
   const source=await readFile(new URL('../extension/ai.js',import.meta.url),'utf8'),requests=[];
-  const context=vm.createContext({location:{origin:'null',protocol:'safari-web-extension:',host:'test'},AbortController,setTimeout,clearTimeout,fetch:async(url,options)=>{requests.push({url,options});return {ok:false,json:async()=>({ok:false,error:{code:'minute_limit',message:'Wait',retryAt:123},usage:{remainingThisMinute:0}})};}});
+  const context=vm.createContext({location:{origin:'null',protocol:'safari-web-extension:',host:'test'},AbortController,setTimeout,clearTimeout,fetch:async(url,options)=>{requests.push({url,options});if(url.endsWith('/v1/connect'))return {ok:true,json:async()=>({ok:true,usage:{configured:true},connection:{updated:false}})};return {ok:false,json:async()=>({ok:false,error:{code:'minute_limit',message:'Wait',retryAt:123},usage:{remainingThisMinute:0}})};}});
   vm.runInContext(source,context);const client=context.WorkspaceAI;assert.equal(client.clientOrigin,'safari-web-extension://test');await assert.rejects(client.status({token:'not-valid'}),hasCode('local_token_required'));assert.equal(requests.length,0);
-  await assert.rejects(client.suggest({token:'b'.repeat(64),tabs:[{id:'1'}],consent:true}),error=>error.code==='minute_limit'&&error.retryAt===123&&error.usage.remainingThisMinute===0);assert.equal(requests.length,1);assert.equal(requests[0].url,'http://127.0.0.1:8788/v1/suggestions');assert.equal(requests[0].options.redirect,'error');
+  await assert.rejects(client.suggest({token:'b'.repeat(64),tabs:[{id:'1'}],consent:true}),error=>error.code==='minute_limit'&&error.retryAt===123&&error.usage.remainingThisMinute===0);assert.equal(requests.length,2);assert.equal(requests[0].url,'http://127.0.0.1:8788/v1/connect');assert.equal(requests[1].url,'http://127.0.0.1:8788/v1/suggestions');assert.equal(requests[1].options.redirect,'error');
 });
 
 
@@ -250,14 +250,14 @@ test('POST status uses exact Origin and authentication without a provider call; 
  const bad=await fetch(f.base+'/v1/status',{method:'POST',headers:{...f.headers,'Content-Type':'application/json'},body:'{"consent":true}'});
  assert.equal(bad.status,400);assert.equal(f.calls(),0);
 });
-test('client status explicitly uses POST JSON to trigger non-GET Origin handling without inference',async()=>{
+test('client status uses authenticated POST connect JSON without inference',async()=>{
  const requests=[];
  const context=vm.createContext({location:{origin:'safari-web-extension://test'},AbortController,setTimeout,clearTimeout,fetch:async(url,options)=>{
   requests.push({url,options});return {ok:true,json:async()=>({ok:true,usage:{configured:true}})};
  }});
  vm.runInContext(await readFile(new URL('../extension/ai.js',import.meta.url),'utf8'),context);
  await context.WorkspaceAI.status({token:'a'.repeat(64)});
- assert.equal(requests.length,1);assert.equal(requests[0].url,'http://127.0.0.1:8788/v1/status');
+ assert.equal(requests.length,1);assert.equal(requests[0].url,'http://127.0.0.1:8788/v1/connect');
  assert.equal(requests[0].options.method,'POST');assert.equal(requests[0].options.mode,'cors');
  assert.equal(requests[0].options.body,'{}');assert.equal(requests[0].options.headers['Content-Type'],'application/json');
 });
@@ -313,4 +313,62 @@ test('service preserves safe Meta diagnostics and original budgets without retri
   assert.equal(calls,mode==='count-failure'?1:2);
   const usage=await service.status();assert.equal(usage.attemptsToday,calls);assert.equal(usage.perMinute,2);assert.equal(usage.perDay,20);assert.equal(usage.maxOutputTokens,512);
  }
+});
+
+const oldUUIDOrigin='safari-web-extension://11111111-1111-4111-8111-111111111111';
+const newUUIDOrigin='safari-web-extension://22222222-2222-4222-8222-222222222222';
+async function refreshFixture(t,{rotateBeforeRepair=false}={}) {
+ const f=await fixture(t),path=join(f.dir,'connection.json'),ledger='{"daily":7,"note":"keep these usage bytes"}';
+ const initial=await createConnection(path,oldUUIDOrigin);await writeFile(f.statePath,ledger,{mode:0o600});
+ const {rePairConnection}=await import('../server/connection.mjs');let updates=0,statuses=0,suggestions=0,rotate=rotateBeforeRepair;
+ const {server,listen}=createLoopbackServer({
+  service:{status:async()=>{statuses++;return {configured:true,attemptsToday:7};},suggest:async()=>{suggestions++;return {groups:[]};}},...initial,port:0,
+  getConnection:async()=>{const value=await readConnection(path);if(rotate){rotate=false;await writeFile(path,JSON.stringify({...value,token:'c'.repeat(64)}),{mode:0o600});}return value;},
+  updateOrigin:async(origin,options)=>{updates++;return rePairConnection(path,origin,options);}
+ });
+ const address=await listen();t.after(()=>new Promise(resolve=>server.close(resolve)));
+ const base=`http://127.0.0.1:${address.port}`;
+ return {...f,path,ledger,initial,base,counts:()=>({updates,statuses,suggestions}),connect:(origin=newUUIDOrigin,{token=initial.token,body='{}'}={})=>fetch(base+'/v1/connect',{method:'POST',headers:{...(origin===undefined?{}:{Origin:origin}),Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body})};
+}
+test('authenticated UUID connect refreshes once, preserving token and usage bytes without inference',async t=>{
+ const f=await refreshFixture(t);const response=await f.connect();assert.equal(response.status,200);
+ const data=await response.json();assert.equal(data.connection.updated,true);assert.equal(data.usage.attemptsToday,7);
+ const connection=await readConnection(f.path);assert.equal(connection.allowedOrigin,newUUIDOrigin);assert.equal(connection.token,f.initial.token);assert.equal(await readFile(f.statePath,'utf8'),f.ledger);
+ const bytes=await readFile(f.path,'utf8');const repeated=await f.connect();assert.equal((await repeated.json()).connection.updated,false);assert.equal(await readFile(f.path,'utf8'),bytes);
+ assert.deepEqual(f.counts(),{updates:1,statuses:2,suggestions:0});
+ const old=await fetch(f.base+'/v1/status',{headers:{Origin:oldUUIDOrigin,Authorization:`Bearer ${f.initial.token}`}});assert.equal(old.status,403);assert.equal((await old.json()).usage,undefined);
+});
+test('wrong tokens, non-extension origins and origin body spoofing cannot refresh or expose usage',async t=>{
+ const f=await refreshFixture(t),before=await readFile(f.path,'utf8');
+ const wrong=await f.connect(newUUIDOrigin,{token:'b'.repeat(64)});assert.equal(wrong.status,401);assert.equal((await wrong.json()).usage,undefined);
+ for(const origin of ['https://example.com','http://127.0.0.1:9999','null','safari-web-extension://not-a-uuid',newUUIDOrigin+'/',newUUIDOrigin+'/dashboard.html']) {
+  const response=await f.connect(origin);assert.equal(response.status,403);assert.equal((await response.json()).usage,undefined);
+ }
+ const missing=await fetch(f.base+'/v1/connect',{method:'POST',headers:{Authorization:`Bearer ${f.initial.token}`,'Content-Type':'application/json'},body:'{}'});assert.equal(missing.status,403);
+ const spoofed=await f.connect(newUUIDOrigin,{body:JSON.stringify({origin:oldUUIDOrigin})});assert.equal(spoofed.status,400);assert.equal((await spoofed.json()).usage,undefined);
+ assert.equal(await readFile(f.path,'utf8'),before);assert.equal(await readFile(f.statePath,'utf8'),f.ledger);assert.deepEqual(f.counts(),{updates:0,statuses:0,suggestions:0});
+});
+test('unknown UUID preflight permits only authenticated JSON connect shape, without status or mutation',async t=>{
+ const f=await refreshFixture(t),before=await readFile(f.path,'utf8');
+ const headers={Origin:newUUIDOrigin,'Access-Control-Request-Method':'POST','Access-Control-Request-Headers':'authorization, content-type'};
+ const good=await fetch(f.base+'/v1/connect',{method:'OPTIONS',headers});assert.equal(good.status,204);assert.equal(good.headers.get('Access-Control-Allow-Origin'),newUUIDOrigin);
+ for(const path of ['/v1/status','/v1/suggestions'])assert.equal((await fetch(f.base+path,{method:'OPTIONS',headers})).status,403);
+ for(const changes of [{'Access-Control-Request-Method':'GET'},{'Access-Control-Request-Method':'DELETE'},{'Access-Control-Request-Headers':'authorization, content-type, x-extra'},{'Access-Control-Request-Headers':'content-type'}])assert.equal((await fetch(f.base+'/v1/connect',{method:'OPTIONS',headers:{...headers,...changes}})).status,403);
+ assert.equal(await readFile(f.path,'utf8'),before);assert.deepEqual(f.counts(),{updates:0,statuses:0,suggestions:0});
+});
+test('running loopback service hotloads external re-pair without restart',async t=>{
+ const f=await refreshFixture(t),{rePairConnection}=await import('../server/connection.mjs');
+ await rePairConnection(f.path,newUUIDOrigin);
+ const status=await fetch(f.base+'/v1/status',{method:'POST',headers:{Origin:newUUIDOrigin,Authorization:`Bearer ${f.initial.token}`,'Content-Type':'application/json'},body:'{}'});assert.equal(status.status,200);
+ const old=await fetch(f.base+'/v1/status',{headers:{Origin:oldUUIDOrigin,Authorization:`Bearer ${f.initial.token}`}});assert.equal(old.status,403);
+ assert.equal((await (await f.connect()).json()).connection.updated,false);assert.deepEqual(f.counts(),{updates:0,statuses:2,suggestions:0});assert.equal(await readFile(f.statePath,'utf8'),f.ledger);
+});
+test('token rotation between request authentication and repair fails closed without restoring the old token',async t=>{
+ const f=await refreshFixture(t,{rotateBeforeRepair:true});const response=await f.connect();assert.equal(response.status,409);assert.equal((await response.json()).usage,undefined);
+ const current=await readConnection(f.path);assert.equal(current.allowedOrigin,oldUUIDOrigin);assert.equal(current.token,'c'.repeat(64));assert.equal(await readFile(f.statePath,'utf8'),f.ledger);assert.equal(f.counts().statuses,0);
+ const {rePairConnection}=await import('../server/connection.mjs');await assert.rejects(rePairConnection(f.path,newUUIDOrigin,{expectedToken:f.initial.token}),hasCode('connection_changed'));assert.deepEqual(await readConnection(f.path),current);
+});
+test('static loopback service permits same-origin connect but never automatic rebinding',async t=>{
+ const f=await localFixture(t);const same=await fetch(f.base+'/v1/connect',{method:'POST',headers:{...f.headers,'Content-Type':'application/json'},body:'{}'});assert.equal(same.status,200);assert.equal((await same.json()).connection.updated,false);
+ const unknown=await fetch(f.base+'/v1/connect',{method:'POST',headers:{...f.headers,Origin:newUUIDOrigin,'Content-Type':'application/json'},body:'{}'});assert.equal(unknown.status,403);assert.equal((await unknown.json()).usage,undefined);
 });

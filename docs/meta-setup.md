@@ -32,14 +32,11 @@ Use Node.js 20.12 or newer on the Mac running Safari. No npm dependencies are ne
 
 The default state directory is `~/Library/Application Support/Safari Workspaces/AI`. It is shared across repository copies, so changing worktrees does not silently start a fresh budget. `AI_STATE_DIR` may override it with one private persistent absolute directory (relative paths are rejected to prevent per-checkout budget resets); **every service using this key must share the same directory**. `connection.json` holds the local pairing token; `usage.json` holds counts/timestamps only. Do not serve or publish this directory. Port 8788 is fixed for the packaged client; the server binds only to IPv4 loopback.
 
-If the dashboard origin changes, stop **only the local AI service** with Ctrl+C in its terminal, then run:
+After upgrading Safari or this development extension, use **Connect & check status** with the same local pairing token. The client sends an authenticated empty JSON `POST /v1/connect`. For a valid UUID-form Safari extension Origin, the service can automatically refresh only the paired origin. It preserves the token and usage ledger. No repeated terminal re-pair or service restart is needed merely because the extension origin changed.
 
-```sh
-node server/pair.mjs --re-pair 'PASTE_THE_NEW_DASHBOARD_ORIGIN_HERE'
-node server/start.mjs
-```
+The service reads its private connection file on every request, so explicit external re-pair changes are also picked up while running. `node server/pair.mjs --re-pair 'NEW_DASHBOARD_ORIGIN'` remains an optional manual repair command; it updates only the origin and preserves the existing token and usage data. Ordinary initial pairing still refuses to overwrite a different origin. Never delete the usage ledger to repair a connection.
 
-Replace the placeholder with the exact origin shown in the dashboard. `--re-pair` updates only the allowed origin, preserves your existing token and `usage.json`, writes privately/atomically and verifies the result. Ordinary pairing still refuses to overwrite a different origin. No Safari restart or rebuild is required for this service-side change. Click **Connect & check status** again with your existing local pairing token. Never delete the usage ledger to re-pair.
+When first installing this automatic-refresh service code, restart **only the local AI service** once to load it. Safari and all current sessions/windows stay open. Later origin-only refreshes require no service restart. A changed/lost local token or unreadable private connection file still requires explicit recovery; the service never creates a new token or resets a budget automatically.
 
 ## Approved limits and accounting
 
@@ -61,7 +58,7 @@ These are local request/token limits, **not an account-wide or guaranteed dollar
 
 ## Security and recovery
 
-The HTTP service requires all of: loopback peer, exact `Host`, one exact paired `Origin`, and a 256-bit bearer token compared in constant time. It limits request bodies, denies extra credential/config fields, sets no-store responses, and never logs keys, inventories or raw provider errors. CORS preflight permits only GET/POST with Authorization/Content-Type. It deliberately does not accept `Origin: null` or wildcard origins. Safari's actual extension Origin behavior still needs verification; do not weaken these checks to make a fixture work.
+Ordinary status/suggestion routes require a loopback peer, exact `Host`, one exact currently paired `Origin`, and a 256-bit bearer token compared in constant time. Only `/v1/connect` can accept an unpaired UUID-form Safari extension Origin, and only with the existing correct token. It obtains the Origin from the HTTP header, never from a body field, validates an empty JSON body, and writes under the private repair lock. An expected-token check under that lock and before atomic rename prevents an intervening token rotation from restoring stale credentials. The response rechecks current pairing before returning usage. UUID format alone is not authentication; the secret token remains required. It limits request bodies, denies extra credential/config fields, sets no-store responses, and never logs keys, inventories or raw provider errors. An unknown UUID may preflight only `/v1/connect`, with POST and Authorization/Content-Type headers; this reads no usage and changes no pairing. Other origins and routes stay blocked. CORS preflight for an already paired origin retains existing GET/POST support. It deliberately does not accept `Origin: null` or wildcard origins. Safari's actual extension Origin behavior still needs verification; do not weaken these checks to make a fixture work.
 
 The request ledger uses private files, exclusive locks, atomic rename and file/directory sync. Preserve it during upgrades. Clock rollback, corrupt state, failed writes and orphan locks block calls. No quota reset control exists. If the local service crashes with a `.lock`, first stop all service copies and confirm the previous provider operation has settled; preserve `usage.json` before manually removing only the orphan lock. A timed-out provider can still be billed, and the lock remains held if it ignores cancellation. Late token-count completion cannot start generation after timeout.
 
@@ -69,7 +66,7 @@ Supported scope: one user, one local Mac/filesystem and one shared ledger. This 
 
 ## Client contract
 
-`WorkspaceAI.status({token})` returns `{ok:true, usage}`. `WorkspaceAI.suggest({token,tabs,consent:true})` returns `{ok:true, result:{groups,ungrouped},usage}`. Errors expose `code`, `retryAt`, and optional `usage`, with safe text. The client has a fixed loopback base, does not retain tokens, follow redirects, or retry. UI usage should disclose `requestsPerSuggestion:2` and preserve manual edits on any failure. No provider key travels through the extension or loopback request.
+`WorkspaceAI.status({token})` uses `/v1/connect` and returns `{ok:true, usage, connection:{updated:boolean}}`. Suggestions also perform this local handshake before their one explicitly consented inference request; a failed handshake never sends an inference request and neither operation retries inference. Existing GET/POST `/v1/status` remains compatible for an exact paired origin. `WorkspaceAI.suggest({token,tabs,consent:true})` returns `{ok:true, result:{groups,ungrouped},usage}`. Errors expose `code`, `retryAt`, and optional `usage`, with safe text. The client has a fixed loopback base, does not retain tokens, follow redirects, or retry. UI usage should disclose `requestsPerSuggestion:2` and preserve manual edits on any failure. No provider key travels through the extension or loopback request.
 
 ## Evidence and checks
 
@@ -77,7 +74,7 @@ Supported scope: one user, one local Mac/filesystem and one shared ledger. This 
 node --test tests/ai.test.mjs
 ```
 
-37 fake-provider/local-only tests cover original durable-budget behavior plus endpoint/schema construction, output bounds, strict response parsing, separate count/generation admissions, slow-count timing, whole-operation concurrency, timeout continuation, daily preflight, key alias precedence, Host/Origin/token checks, CORS, request-body bounds, private pairing and client error propagation. No test runs Safari or a live Meta call.
+43 fake-provider/local-only tests cover original durable-budget behavior plus endpoint/schema construction, output bounds, strict response parsing, separate count/generation admissions, slow-count timing, whole-operation concurrency, timeout continuation, daily preflight, key alias precedence, Host/Origin/token checks, CORS, request-body bounds, private pairing and client error propagation. Automatic-refresh tests additionally verify authenticated rebind once, unchanged token/usage bytes, no writes/status on preflight or denied requests, rejection of body-supplied origins, hotloaded external repair and fail-closed token rotation. No test runs Safari or a live Meta call.
 
 Primary Meta documentation checked October 30, 2026:
 
@@ -87,9 +84,9 @@ Primary Meta documentation checked October 30, 2026:
 - [Structured output](https://dev.meta.ai/docs/structured-output): Responses uses `text.format.strict` and requires the strict object schema rules followed by this adapter.
 - [Reasoning](https://dev.meta.ai/docs/reasoning): Responses nests `reasoning.effort`; `minimal` is supported and `none` is unsupported by Muse Spark. Output cap includes reasoning and visible tokens.
 
-## v0.3.1 status connection patch
+## Historical v0.3.1 status connection patch (superseded by automatic connect)
 
-The user reported origin rejection despite an exact match between the displayed dashboard origin and saved pairing. The wire Origin was not captured, so the precise browser behavior remains unconfirmed. The packaged client now uses an authenticated JSON `POST /v1/status` with `{}` instead of GET. Fetch's [Origin-header algorithm](https://fetch.spec.whatwg.org/#append-a-request-origin-header) includes a non-GET/HEAD path; privileged extension GET requests can bypass normal CORS processing. This patch avoids depending on GET's Origin behavior without accepting missing/null/wildcard origins. Status still never calls Meta or consumes attempts.
+The user reported origin rejection despite an exact match between the displayed dashboard origin and saved pairing. The wire Origin was not captured, so the precise browser behavior remains unconfirmed. That patch used an authenticated JSON `POST /v1/status` with `{}` instead of GET. Fetch's [Origin-header algorithm](https://fetch.spec.whatwg.org/#append-a-request-origin-header) includes a non-GET/HEAD path; privileged extension GET requests can bypass normal CORS processing. This patch avoids depending on GET's Origin behavior without accepting missing/null/wildcard origins. Status still never calls Meta or consumes attempts.
 
 The local server retains GET compatibility when a correct Origin is supplied, accepts POST status with an empty JSON object only, and distinguishes missing, opaque and mismatched Origin errors without logging credentials or inventories. Restart only the local AI service after updating the code; keep the existing pairing and usage ledger. Refresh the extension and reload its dashboard to load the new client. Safari does not need to quit. Live success still requires user confirmation.
 

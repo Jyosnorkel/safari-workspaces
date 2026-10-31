@@ -1,7 +1,7 @@
 import {mkdir,open,readFile,stat,rename,unlink} from 'node:fs/promises';
 import {dirname, isAbsolute, resolve} from 'node:path';
 import {homedir} from 'node:os';
-import {randomBytes,randomUUID} from 'node:crypto';
+import {randomBytes,randomUUID,timingSafeEqual} from 'node:crypto';
 import {validClientOrigin} from './loopback.mjs';
 import {UsageError} from './usage-guard.mjs';
 export function resolveStateDirectory(override, home = homedir()) {
@@ -31,7 +31,7 @@ export async function createConnection(path,allowedOrigin) {
 }
 
 // Explicit user action: replace one allowed origin, preserving the existing token/ledger.
-export async function rePairConnection(path,allowedOrigin) {
+export async function rePairConnection(path,allowedOrigin,{expectedToken} = {}) {
   if(!validClientOrigin(allowedOrigin)) throw new UsageError('invalid_config','Use the exact Safari extension origin shown in the dashboard.');
   const lockPath=`${path}.repair.lock`,temporary=`${path}.${randomUUID()}.tmp`;
   let lock,file;
@@ -39,10 +39,15 @@ export async function rePairConnection(path,allowedOrigin) {
     try {lock=await open(lockPath,'wx',0o600);}
     catch(error) {if(error.code==='EEXIST')throw new UsageError('invalid_config','Another pairing update is in progress.');throw error;}
     const current=await readConnection(path);
+    const tokenMatches=value=>typeof expectedToken==='string'&&Buffer.byteLength(value)===Buffer.byteLength(expectedToken)&&timingSafeEqual(Buffer.from(value),Buffer.from(expectedToken));
+    if(expectedToken!==undefined&&!tokenMatches(current.token)) throw new UsageError('connection_changed','The local connection changed. Re-enter the local token and connect again.');
     if(current.allowedOrigin===allowedOrigin)return current;
     const next={...current,allowedOrigin};
     file=await open(temporary,'wx',0o600);
     await file.writeFile(JSON.stringify(next,null,2));await file.sync();await file.close();file=null;
+    // Every cooperating repair holds this lock. Re-read before commit as well,
+    // so an intervening token replacement is not silently overwritten.
+    if(expectedToken!==undefined&&!tokenMatches((await readConnection(path)).token)) throw new UsageError('connection_changed','The local connection changed. Re-enter the local token and connect again.');
     await rename(temporary,path);
     const directory=await open(dirname(path),'r');try{await directory.sync();}finally{await directory.close();}
     const stored=await readConnection(path);
