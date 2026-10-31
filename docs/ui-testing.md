@@ -43,7 +43,7 @@ No live Safari, CSS visual rendering, real local HTTP client or real Meta infere
 
 The horizontal chip strip above manual groups shows each group's name and **total assigned tab count**, including unchecked/protected rows. It stays visible while scrolling within the manual-group section, then stops before saved workspaces.
 
-Click a native chip button or the card's visible **Collapse/Expand** button to toggle its body. Both controls expose `aria-expanded` and `aria-controls`, accept Enter/Space, and keep focus on the replacement control after rendering. Collapsed cards retain their editable name, total/selected counts and an Expand affordance. Collapse state is page-local, survives rename/move/render operations and resets after a successful new scan. Removed groups lose their stale collapse state. Collapsing alone never changes tab assignments or invalidates a pending AI proposal.
+Click a native chip button or the card's visible **Collapse** button to hide the entire card down to its chip. Both controls expose `aria-expanded` and `aria-controls` and accept Enter/Space. Collapsing moves focus to the replacement chip; clicking that chip expands the card with its editable name, counts and selections intact. Collapse state is page-local, survives rename/move/render operations and resets after a successful new scan. Removed groups lose their stale collapse state. Collapsing alone never changes tab assignments or invalidates a pending AI proposal.
 
 Each eligible manual row has a dedicated draggable grip button. Drag the grip onto a group chip to move its dashboard assignment. Drop targets highlight only for an eligible internal drag to another current group. Protected/private/pinned/restricted rows do not get grips. Existing per-tab select menus remain the accessible move alternative. Moving a tab preserves its checked/unchecked state and other manual edits; a real assignment change invalidates an older AI proposal. Dropping onto the existing group is a no-op.
 
@@ -54,10 +54,14 @@ Drag/drop uses an opaque `application/x-safari-workspaces-tab` token plus page-i
 - `#manual-review`: sticky strip boundary.
 - `#group-chips`: labelled group-navigation strip.
 - `#group-chip-<groupId>`: native chip button with `data-group-id` and total count.
-- `#manual-group-<groupId>`: group card retaining its visible header.
+- `#manual-group-<groupId>`: group card, hidden while collapsed.
 - `#group-body-<groupId>`: hidden/expanded content associated with both toggles.
 - `#group-toggle-<groupId>`: visible card Collapse/Expand button.
 - `.drag-handle[data-tab-id]`: the only draggable manual-row element.
 - `#group-chip-help`: visible explanation of local collapse/move and menu alternative.
 
 Six added fake-DOM tests cover cross-group moves with exclusion retention/no API calls, total chip counts, collapse associations/persistence/keyboard/rescan reset, external/forged/invalid targets, protected/stale/ended drags, AI invalidation only on actual moves, and busy guards. They validate script event behavior, not a browser's physical drag gesture or CSS rendering. The root coordinator owns fictional-data visual preview verification; this UI agent performed no browser automation, Safari actions, session/window closing or Meta requests.
+
+Coordinator polish: collapsing hides the entire group card so only its chip remains; the chip retains its count and is the keyboard-focus destination after collapsing from a card header. Expanding the chip restores the card with its original tab selections. Collapse is view-only and does not save/close/remove browser tabs. The real preview mouse drag and unchecked-tab preservation were verified in the internal browser with fictional data; Safari sessions and Meta were not used.
+
+The final narrow-layout preview found an existing minimum-width overflow in saved-workspace cards; the <=600px layout now uses a zero-minimum single column for both groups and saved workspaces. Desktop group drag/collapse checks used a temporary 1200px viewport, restored afterward. The final preview remains sample data; no Safari session or API request was used.

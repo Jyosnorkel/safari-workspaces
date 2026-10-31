@@ -13,13 +13,14 @@ Scan tabs → get meaningful Meta AI group suggestions → review and edit → s
 - A toolbar popup opens the workspace dashboard in the current normal Safari window.
 - Scan available tab titles and URLs; exclude private tabs and leave pinned and restricted tabs untouched.
 - Create and rename groups, move tabs between them, and exclude individual tabs.
+- Drag tab grips onto a sticky group chip; click a chip to collapse the entire group to that chip. Keyboard toggles and move menus remain available. Collapse changes only the dashboard view and leaves browser tabs open.
 - Save an entire window without closing tabs, including pinned web URLs.
 - Export versioned JSON backups and preview/import them without replacing existing snapshots or opening tabs; see [backup format](docs/backup-format.md).
 - Save ordered URL/title snapshots to local extension storage, with persistent IDs and timestamps.
 - Write and read back snapshots before closing selected tabs; recheck live tab URLs before closing.
 - Track partial restoration and provide controls for uncertain results after an interruption.
 
-The Meta integration includes a local authenticated service, the official Responses/token-count transport, durable request limits and an editable suggestion preview. **Real account/model access and packaged Safari-to-service connectivity remain unverified.** Tests use fake providers. Manual grouping and backups work without an AI connection.
+The Meta integration includes a local authenticated service, the official Responses/token-count transport, durable request limits and an editable suggestion preview. The user reports reasonable live Meta suggestions after the output cap was raised to 2,048 tokens. Automated tests use fake providers; this report is separate from independent browser verification. Manual grouping and backups work without an AI connection.
 
 To use your existing terminal key, follow [local Meta setup](docs/meta-setup.md). The key remains in the local service environment; the extension receives only a separate pairing token. Suggestions require disclosure/consent and explicit acceptance. Default limits are one in flight, two outbound attempts per minute and twenty per UTC day, with no retries. Token counting and generation consume separate attempts.
 
@@ -54,9 +55,10 @@ Open http://localhost:8765/ in Safari. The existing test page still describes th
 
 ## Verification status and known limitations
 
-- The v0.3.1 native build and strict code-signature verification passed on October 30, 2026; the packaged AI client matches source.
+- The v0.4.0 native build and strict code-signature verification passed on October 30, 2026; the packaged AI client matches source.
+- The new group-chip mouse dragging, unchecked-tab preservation and keyboard collapse/expand were verified in the internal browser with fictional tab APIs. Actual Safari testing of this UI remains pending.
 - Live Safari popup rendering and current-window scanning were verified. A live storage-verification failure was reproduced and fixed with regression coverage; full save/close/restore retesting and restart persistence are **not yet verified**.
-- `node scripts/check.mjs` passes 99 automated checks for workspace rules, fake-DOM review flows, fake Meta providers, authenticated local HTTP contracts and usage budgets. Syntax and native resource checks are included. These do not replace Safari testing.
+- `node scripts/check.mjs` passes 105 automated checks for workspace rules, fake-DOM review flows, fake Meta providers, authenticated local HTTP contracts and usage budgets. Syntax and native resource checks are included. These do not replace Safari testing.
 - Completed snapshots support an explicit **Restore another copy** action. New restore sessions are protected against replayed requests and stale dashboards.
 - Unsaved forms, browsing history, scroll position and complete page state are not saved. Restoration reopens URLs only.
 - Groups live in the extension dashboard. Native Safari Tab Groups are not controlled.
@@ -91,3 +93,7 @@ Project source is released under the [MIT License](LICENSE). Apple's SDKs and de
 2. Verify backup downloads/import in Safari and improve recovery guidance.
 3. Verify the integrated Meta connection and editable review against an actual configured account, with consent and the approved limits.
 4. Measure grouping quality and restoration on realistic sessions, then document a reproducible judge setup.
+
+## Safe dashboard preview
+
+`node scripts/preview-dashboard.mjs` serves a development-only dashboard at http://127.0.0.1:8790 using fictional tabs, in-memory snapshots and a fake AI service. It cannot read or close actual browser tabs and makes no model requests. Use the normal Scan/New group controls to try group chips and dragging. Never enter real credentials into a preview. The preview is not proof of Safari extension integration.

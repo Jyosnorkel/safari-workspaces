@@ -191,13 +191,13 @@ test('collapse is associated with its body, persists through renaming/moving and
   const h=await harness();await h.scan();await h.click('new-group');
   const id=groupIdOf(chipFor(h,'Workspace 1'));let chip=chipFor(h,'Workspace 1');
   assert.equal(chip.tagName,'button');assert.equal(chip.attributes['aria-controls'],`group-body-${id}`);
-  chip.click();await settle();assert.equal(h.node(`group-body-${id}`).hidden,true);assert.equal(chipFor(h,'Workspace 1').attributes['aria-expanded'],'false');
+  chip.click();await settle();assert.equal(h.node(`group-body-${id}`).hidden,true);assert.equal(h.node(`manual-group-${id}`).hidden,true);assert.equal(chipFor(h,'Workspace 1').attributes['aria-expanded'],'false');
   assert.match(h.node(`group-toggle-${id}`).textContent,/Expand/);
   await h.change(named(h,'groups','Workspace 1'),'Renamed','input');await h.change(named(h,'groups','Renamed'),'Renamed');
   assert.equal(chipFor(h,'Renamed').attributes['aria-expanded'],'false');assert.equal(h.node(`group-body-${id}`).hidden,true);
   const drag=await startDrag(h,'Page 1');await drop(h,chipFor(h,'Renamed'),drag.data);
   assert.equal(h.node(`group-body-${id}`).hidden,true);assert.equal(chipFor(h,'Renamed').children[1].textContent,'1');
-  let key=chipFor(h,'Renamed').dispatch('keydown',{key:'Enter'});await settle();assert(key.defaultPrevented);assert.equal(h.node(`group-body-${id}`).hidden,false);
+  let key=chipFor(h,'Renamed').dispatch('keydown',{key:'Enter'});await settle();assert(key.defaultPrevented);assert.equal(h.node(`group-body-${id}`).hidden,false);assert.equal(h.node(`manual-group-${id}`).hidden,false);
   key=h.node(`group-toggle-${id}`).dispatch('keydown',{key:' '});await settle();assert(key.defaultPrevented);assert.equal(h.node(`group-body-${id}`).hidden,true);
   await h.scan();assert.equal(chipFor(h,'Ungrouped').attributes['aria-expanded'],'true');assert.equal(chipFor(h,'Renamed'),undefined);
 });

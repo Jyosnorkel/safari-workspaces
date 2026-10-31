@@ -233,7 +233,7 @@
     if (busy || !groups.some(group => group.id === groupId)) return;
     if (collapsedGroups.has(groupId)) collapsedGroups.delete(groupId); else collapsedGroups.add(groupId);
     renderGroups();
-    $(focusId)?.focus();
+    $(collapsedGroups.has(groupId) ? `group-chip-${groupId}` : focusId)?.focus();
   }
   function bindGroupToggle(control, groupId, focusId) {
     control.addEventListener('click', () => toggleGroup(groupId, focusId));
@@ -310,7 +310,7 @@
       const card = e('section','group'), header = e('div','group-header');
       const collapsed = collapsedGroups.has(group.id);
       card.setAttribute('id',`manual-group-${group.id}`); card.setAttribute('aria-label',group.name || 'Unnamed group');
-      card.classList.toggle('is-collapsed',collapsed);
+      card.classList.toggle('is-collapsed',collapsed); card.hidden = collapsed;
       const body = e('div','group-body'); body.setAttribute('id',`group-body-${group.id}`); body.hidden = collapsed;
       const name = e('input'); name.type = 'text'; name.maxLength = 80; name.value = group.name;
       name.setAttribute('aria-label', `Name for ${group.name}`);
