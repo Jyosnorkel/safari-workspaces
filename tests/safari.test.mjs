@@ -21,7 +21,7 @@ function harness({tabs=[],window={id:7,incognito:false,type:'normal'},queryError
       create:async options=>{if(createError)throw new Error(createError);h.created.push(options);}
     }
   };
-  vm.runInNewContext(popup,{URL,browser:apiUnavailable?undefined:browser,document:{getElementById:id=>id==='open'?button:status},window:{close:()=>h.closed++}});
+  vm.runInNewContext(popup,{URL,browser:apiUnavailable?undefined:browser,document:{body:{addEventListener(){}},getElementById:id=>id==='open'?button:status},window:{close:()=>h.closed++}});
   Object.assign(h,{click,button,status});return h;
 }
 

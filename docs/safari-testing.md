@@ -1,3 +1,7 @@
+## v0.5.1 toolbar popup backup drop
+
+134 automated checks pass, including popup file-drag feedback, single background handoff, concurrency, invalid selections, private windows and error recovery. The backup coordinator is unchanged. Native build/signature and packaged popup comparison pass. Actual Safari popup drag/focus lifecycle remains unverified; this iteration made no Safari interactions or model calls. Open the toolbar popup manually, then drag a fictional backup onto it to verify. No proximity detection is claimed.
+
 ## v0.5.0 drag-and-drop verification
 
 131 automated checks pass with fake browser/model APIs. Whole-row manual and staged AI dragging, grip ordering, file validation and simultaneous-drop suppression are covered. Background tests verify durable imports before new-window creation, file-order restore, partial failures and replay/interruption safeguards. Native build and strict signature checks pass. These tests do not establish actual Safari drag events, backup-file downloads or packaged new-window restoration. No Safari was controlled or closed. New restore windows retain their initial blank tab. Existing safety restrictions remain in force.
