@@ -33,7 +33,7 @@ async function harness(options={}) {
  return h;
 }
 test('switcher shows live group counts and titles safely, with a separate accessible disclosure',async()=>{
- const h=await harness();const container=h.node('live-groups');assert.equal(container.children.length,1);
+ const h=await harness();const container=h.node('live-groups');assert.equal(container.children.length,2); // Empty groups remain valid drop destinations.
  assert.match(container.textContent,/Research <script>/);assert.match(container.textContent,/Notes <b>one<\/b>/);
  const toggle=h.find('Show tabs in Research <script>');assert.equal(toggle.attributes['aria-expanded'],'false');
  const list=container.children[0].children[1];assert.equal(list.hidden,true);await toggle.click();assert.equal(list.hidden,false);assert.equal(toggle.attributes['aria-expanded'],'true');

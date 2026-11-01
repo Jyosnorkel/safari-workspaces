@@ -19,3 +19,5 @@ button:focus-visible{outline-color:#267db5}.intro,button small,.scan-row,.worksp
 #status,#backup-drop span{color:#3f637f}.live-workspace{border-color:#d4e4ef;box-shadow:0 2px 8px #275c8407}.workspace-count{background:#e7f3fc;color:#456782}
 #backup-drop{background:#edf7fd;border-color:#b4d5ec}#backup-drop.is-over{background:#dceffc;border-color:#4d9ad0;box-shadow:0 0 0 3px #71b7e733}
 .workspace-tab[aria-current=page]{background:#e7f3fc}.workspace-tab[aria-current=page] .workspace-tab-title::before{color:#267db5}
+
+.workspace-tab[draggable="true"]{cursor:grab}.workspace-tab[draggable="true"]:active{cursor:grabbing}.live-workspace.is-drop-target{outline:2px solid #328fcb;outline-offset:2px}.workspace-tab[draggable="true"]:hover{border-top-color:#328fcb}

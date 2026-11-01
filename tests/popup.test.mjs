@@ -62,3 +62,28 @@ test('popup refreshes local inventory on opening and snapshot saves without clos
 test('popup AI organise opens inline controls without opening the dashboard or submitting model input',async()=>{
  const h=await actionHarness();await h.click('ai-organise');assert.equal(h.created.length,0);assert.equal(h.aiOpens,1);assert.equal(h.sent.some(m=>m.type==='suggest'),false);
 });
+
+test('confirmed popup rows move between groups and reorder with revision and exclusions preserved',async()=>{
+ class Node {
+  constructor(){this.children=[];this.listeners={};this.classList={add(){},remove(){},toggle(){}};}
+  append(...nodes){this.children.push(...nodes);} replaceChildren(){this.children=[];}
+  setAttribute(){} addEventListener(type,fn){this.listeners[type]=fn;} querySelectorAll(){return [];}
+ }
+ const nodes=new Map(['open','status','live-groups','backup-drop'].map(id=>[id,new Node()]));
+ let groups=[{id:'a',name:'A',tabs:[{id:1,url:'https://a.test',excluded:true},{id:2,url:'https://b.test'}]},{id:'b',name:'B',tabs:[{id:3,url:'https://c.test'}]}],writes=[];
+ const context={URL,document:{body:new Node(),getElementById:id=>nodes.get(id),createElement:()=>new Node()},browser:{runtime:{sendMessage:async m=>{
+  if(m.type==='live-groups-get')return {ok:true,revision:'rev',groups};
+  if(m.type==='live-groups-set'){writes.push(m);groups=m.groups;return {ok:true};}return {ok:true};
+ }}}};
+ vm.createContext(context);vm.runInContext(source,context);await vm.runInContext('loadLiveGroups(7)',context);
+ const event=()=>({preventDefault(){},stopPropagation(){},dataTransfer:{types:['application/x-tabby-row'],setData(){}}});
+ let cards=nodes.get('live-groups').children;
+ cards[0].children[1].children[0].listeners.dragstart(event());cards[1].listeners.drop(event());
+ for(let i=0;i<10;i++)await new Promise(r=>setImmediate(r));
+ assert.deepEqual(Array.from(groups[1].tabs,t=>t.id),[3,1]);assert.equal(groups[1].tabs[1].excluded,true);assert.equal(writes[0].expectedRevision,'rev');
+ cards=nodes.get('live-groups').children;
+ cards[1].children[1].children[1].listeners.dragstart(event());cards[1].children[1].children[0].listeners.drop(event());
+ for(let i=0;i<10;i++)await new Promise(r=>setImmediate(r));
+ assert.deepEqual(Array.from(groups[1].tabs,t=>t.id),[1,3]);
+ cards=nodes.get('live-groups').children;cards[0].listeners.drop(event());assert.equal(writes.length,2);
+});

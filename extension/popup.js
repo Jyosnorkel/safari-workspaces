@@ -3,6 +3,8 @@ const status = document.getElementById('status');
 let opening = false, aiBusy = false;
 let liveRevision = 0;
 let workspaceButtons = [];
+let popupDrag = null;
+const expandedGroups = new Set();
 
 function isDashboard(candidate, dashboardURL) {
   if (typeof candidate !== 'string') return false;
@@ -72,16 +74,48 @@ async function loadLiveGroups(windowId) {
   const container = document.getElementById('live-groups');
   if (!container) return;
   const response = await send('live-groups-get',{windowId});
+  popupDrag = null;
   liveRevision = response.revision;
   workspaceButtons = [];
   container.replaceChildren();
-  const groups = response.groups.filter(group => group.tabs.length);
+  const groups = response.groups;
   if (!groups.length) {
     container.append(popupNode('p','workspace-empty','Organise tabs in the manager to see your workspaces here.'));
     return;
   }
   for (const group of groups) {
     const card = popupNode('section','live-workspace');
+    const validDrag = event => popupDrag && !opening && !aiBusy && popupDrag.revision === liveRevision && Array.from(event.dataTransfer?.types || []).includes('application/x-tabby-row');
+    const dropTab = (event, beforeId = null) => {
+      if (!validDrag(event)) return;
+      event.preventDefault(); event.stopPropagation();
+      const drag = popupDrag; popupDrag = null;
+      card.classList.remove('is-drop-target');
+      if (beforeId === drag.tabId) return;
+      action(async () => {
+        const next = response.groups.map(item => ({id:item.id,name:item.name,reason:item.reason || '',tabs:item.tabs.map(({id,url,excluded})=>({id,url,excluded:Boolean(excluded)}))}));
+        const source = next.find(item => item.id === drag.groupId);
+        const target = next.find(item => item.id === group.id);
+        const index = source?.tabs.findIndex(tab => tab.id === drag.tabId);
+        if (!target || index === undefined || index < 0) throw new Error('Refresh tabs before moving this row.');
+        const [tab] = source.tabs.splice(index,1);
+        const before = beforeId === null ? target.tabs.length : target.tabs.findIndex(item => item.id === beforeId);
+        if (before < 0) throw new Error('Refresh tabs before moving this row.');
+        target.tabs.splice(before,0,tab);
+        await send('live-groups-set',{windowId,expectedRevision:drag.revision,groups:next});
+        expandedGroups.add(group.id);
+        await loadLiveGroups(windowId);
+        await browser.runtime.sendMessage({channel:'workspace-dashboard',type:'live-groups-changed',windowId}).catch(()=>{});
+        status.textContent = `Tab moved in ${group.name}.`;
+      });
+    };
+    card.addEventListener('dragover',event => {
+      if (!validDrag(event)) return;
+      event.preventDefault(); event.stopPropagation(); event.dataTransfer.dropEffect = 'move';
+      card.classList.add('is-drop-target');
+    });
+    card.addEventListener('dragleave',()=>card.classList.remove('is-drop-target'));
+    card.addEventListener('drop',event=>dropTab(event));
     const header = popupNode('div','workspace-header');
     const focus = popupNode('button','workspace-focus'); focus.type = 'button';
     focus.setAttribute('aria-label',`Switch to ${group.name}, ${group.tabs.length} tabs`);
@@ -94,12 +128,15 @@ async function loadLiveGroups(windowId) {
     const toggle = popupNode('button','workspace-disclosure','▸'); toggle.type = 'button';
     toggle.setAttribute('aria-label',`Show tabs in ${group.name}`);
     toggle.setAttribute('aria-expanded','false');
-    const list = popupNode('div','workspace-tabs'); list.hidden = true;
+    const list = popupNode('div','workspace-tabs'); list.hidden = !expandedGroups.has(group.id);
+    toggle.textContent = list.hidden ? '▸' : '▾';
+    toggle.setAttribute('aria-expanded',String(!list.hidden));
     list.id = `workspace-tabs-${group.id}`;
     toggle.setAttribute('aria-controls',list.id);
     toggle.addEventListener('click',()=> {
       if (opening || aiBusy) return;
       list.hidden = !list.hidden;
+      if (list.hidden) expandedGroups.delete(group.id); else expandedGroups.add(group.id);
       toggle.textContent = list.hidden ? '▸' : '▾';
       toggle.setAttribute('aria-expanded',String(!list.hidden));
       toggle.setAttribute('aria-label',`${list.hidden ? 'Show' : 'Hide'} tabs in ${group.name}`);
@@ -108,6 +145,16 @@ async function loadLiveGroups(windowId) {
     workspaceButtons.push(focus,toggle);
     for (const tab of group.tabs) {
       const jump = popupNode('button','workspace-tab'); jump.type = 'button';
+      jump.draggable = true;
+      jump.title = 'Drag to a group, or above another tab to reorder';
+      jump.addEventListener('dragstart',event => {
+        if (opening || aiBusy) { event.preventDefault(); return; }
+        popupDrag = {tabId:tab.id,groupId:group.id,revision:liveRevision};
+        event.dataTransfer.setData('application/x-tabby-row','internal');
+        event.dataTransfer.effectAllowed = 'move';
+      });
+      jump.addEventListener('dragend',()=> { popupDrag = null; for (const node of container.querySelectorAll('.is-drop-target')) node.classList.remove('is-drop-target'); });
+      jump.addEventListener('drop',event=>dropTab(event,tab.id));
       const title = tab.title || 'Untitled tab';
       jump.setAttribute('aria-label',`Switch to tab: ${title}`);
       if (tab.active) jump.setAttribute('aria-current','page');
