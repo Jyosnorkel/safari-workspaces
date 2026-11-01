@@ -29,7 +29,7 @@
     const attempts = usage?.requestsPerSuggestion || 2;
     const cooling = Number(usage?.retryAt || 0) > Date.now();
     $('popup-ai-generate').disabled = locked || uncertainRequest || Boolean(draft) || !state?.connected || !(pageToken || state?.remembered) || !usage?.enabled || !usage?.configured || usage?.busy || cooling || (usage?.remainingToday ?? 0) < attempts || (usage?.remainingThisMinute ?? 0) < attempts || !selected.size || !$('popup-ai-consent').checked;
-    $('popup-ai-generate').textContent = state?.state === 'requesting' ? 'Requesting suggestions…' : 'Send tabs & suggest groups';
+    $('popup-ai-generate').textContent = state?.state === 'requesting' ? 'Requesting suggestions…' : 'Send to Meta & organise';
     $('popup-ai-preview').textContent = JSON.stringify(input(),null,2);
     hooks.setBusy?.(locked);
   }
@@ -112,7 +112,7 @@
     }
     if (state.proposal && state.requestId!==draftRequestId) { draft=proposalDraft(state.proposal);draftRequestId=state.requestId; }
     if (!state.proposal) {draft=null;draftRequestId=null;}
-    if (next==='requesting') message('Requesting suggestions. You can dismiss this popup and reopen it to review the result. No automatic retry.');
+    if (next==='requesting') message('Organising tabs. You can close this popup; groups will appear when ready. No automatic retry.');
     else if (next==='review' && state.stale) message('Tabs or groups changed. Discard these suggestions and refresh the input before requesting again.',true);
     else if (next==='review' && previousState!=='review') message('Review the suggested groups, then accept them. Existing groups remain unchanged until acceptance.');
     else if (next==='error') message(state.error || 'Suggestions failed. Existing groups are unchanged.',true);

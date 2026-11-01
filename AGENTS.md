@@ -315,3 +315,8 @@ User reports Organise scroll snapping and Logitech gesture interference. Preserv
 ## v0.14.0 popup quality-of-life — November 1
 
 Three concurrent field agents verified Meta preferences, backup validation and themes. Preferences travel beside tabs through guarded transport into both token-count and generation payloads (fake transport test, no real inference). Provider instructions explicitly acknowledge bounded preferences; updated service must restart to use latest prompt. Snapshot cards/rows/export match Organise surfaces. Home actions now share neutral fill/text/subtitle colors. Permanent drop box removed; a noninteractive full-popup file-drag overlay appears on all views. Whole-file validation precedes backend import/restore; invalid formats show clear feedback, internal row drops unaffected. Valid drops retain existing restore-to-new-window semantics. Fictional-data in-app-browser snapshot/save/expand visuals inspected; no actual Safari session touched. Actual packaged Safari drag/native export/live Meta remain separate verification gates.
+
+
+## v0.14.1 parallel UI polish — November 1
+
+Themes/frontend, snapshot presentation and Meta UI review ran concurrently. Larger supporting text/control targets, clearer spacing/focus, readable snapshot dates and separate count lines, hostname detail rows with full URL tooltips. Group creation explains blank-name errors; deletion tooltip explains Ungrouped destination. AI wording matches direct application and consent explicitly includes saved preferences. 214 checks and native build/signature pass; fictional-data in-app-browser Organise visuals inspected. No real Safari/Meta or personal tab interactions.

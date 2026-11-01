@@ -89,3 +89,54 @@ html body #backup-drop{display:none;pointer-events:none;margin:0;transition:none
 html body #backup-drop.is-over{display:flex;position:fixed;inset:12px;z-index:1000;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:28px;border:2px dashed #328fcb;border-radius:14px;background:var(--surface);color:var(--ink);box-shadow:0 0 0 12px var(--canvas);text-align:center;pointer-events:none}
 #backup-drop.is-over b{font-size:18px;line-height:1.3}#backup-drop.is-over span{font-size:12px;line-height:1.5}#backup-drop.is-over small{font-size:11px;line-height:1.6}
 html body #backup-drop.is-over :is(span,small){color:var(--muted)}
+
+/* Small-popup polish: readable supporting text and consistent control rhythm. */
+:root{--focus:#267db5}
+html[data-theme=dark]{--focus:#89d0ff}
+@media(prefers-color-scheme:dark){html[data-theme=system]{--focus:#89d0ff}}
+main{padding-top:16px;padding-bottom:20px}
+.view-nav{margin-bottom:18px}
+.view-nav button{min-height:36px;line-height:1.25}
+.primary-actions button{padding:13px 14px;line-height:1.35;min-height:80px}
+.primary-actions button small{font-size:11px;line-height:1.5;margin-top:5px}
+.scan-row{margin-top:10px;margin-bottom:14px;font-size:11px;line-height:1.4}
+.scan-row button{min-height:32px}
+.workspace-switcher{margin-top:16px;padding-top:16px}
+.workspace-switcher h2{font-size:14px;line-height:1.4;margin-bottom:6px}
+.workspace-help,.workspace-empty,.popup-ai-note,.popup-ai-reason{font-size:11px;line-height:1.55}
+.workspace-help{margin-bottom:12px}
+.workspace-header{align-items:stretch}
+.workspace-focus{line-height:1.4;min-height:40px}
+.workspace-count{font-variant-numeric:tabular-nums;line-height:1.3}
+.workspace-tab{line-height:1.45}.workspace-tab-host{font-size:10px;line-height:1.4}
+.workspace-add{gap:8px;margin:12px 0}.workspace-add input{font:inherit;font-size:12px;min-height:36px}
+.workspace-add button{font-size:12px;padding:9px 12px;min-height:36px;white-space:nowrap}
+.popup-ai-panel{margin:0 0 18px;padding:16px}
+.popup-ai-heading{margin-bottom:10px;min-height:32px}
+.popup-ai-panel h2,#settings-view>h2,#snapshots-view>h2{font-size:17px;font-weight:650;letter-spacing:-.3px;line-height:1.35;margin:0 0 14px}
+.popup-ai-heading h2{margin:0}
+.popup-ai-heading button{min-height:32px;padding:7px 10px;font-size:12px}
+.popup-ai-panel summary{line-height:1.5;padding:3px 0}
+.popup-ai-panel details{margin:14px 0;padding-top:12px}
+.popup-ai-panel label:not(.popup-check){font-size:12px;line-height:1.4;margin-top:14px;margin-bottom:6px}
+.popup-ai-panel input[type=password],.popup-ai-panel input[type=text],.popup-ai-panel select{min-height:36px;font-size:12px;padding:9px 10px}
+.popup-check{font-size:12px;line-height:1.5;gap:9px;margin:15px 0}
+.popup-check input{margin-top:3px;width:14px;height:14px}
+.popup-ai-actions{gap:8px}.popup-ai-actions button{font-size:12px;min-height:36px;padding:9px 11px}
+#popup-ai-generate{justify-content:center;min-height:40px;line-height:1.4;font-size:12px}
+#popup-ai-status{margin:10px 0;font-size:12px;line-height:1.5}
+#settings-form>label{margin:18px 0 8px;font-size:12px;line-height:1.45;font-weight:600}
+#settings-form select,#settings-form textarea{font-size:12px;line-height:1.5;padding:10px;min-height:38px;margin-top:7px}
+#settings-form textarea{resize:vertical;min-height:112px;max-height:240px}
+#settings-form .workspace-help{margin:7px 0 17px}
+#settings-form input[type=checkbox]{width:14px;height:14px;margin:0 7px 0 0;vertical-align:-2px}
+#settings-form>button{margin-top:18px;justify-content:center;min-height:40px}
+#status{font-size:11px;line-height:1.55;margin:15px 0 12px;overflow-wrap:anywhere}
+footer{font-size:10px;padding-top:12px}
+html body :is(button,input,select,textarea,a):focus-visible{outline-color:var(--focus)}
+.snapshot-card>summary:focus-visible{outline-color:var(--focus)}
+html body :is(.workspace-focus,.workspace-disclosure,.workspace-tab):hover{background:var(--hover)}
+html body .workspace-remove:hover,html body .workspace-remove:focus-visible{color:var(--error);background:var(--hover)}
+@media(max-width:440px){header{padding-left:18px;padding-right:18px}main{padding-left:16px;padding-right:16px}.primary-actions{gap:8px}.primary-actions button{padding:12px}.popup-ai-panel{padding:13px}}
+@media(prefers-reduced-motion:reduce){button,input,select,textarea{transition:none}}
+.snapshot-date{font-weight:600}.snapshot-stats{display:block;margin:4px 0 0 13px;font-size:11px;font-weight:400;color:var(--muted)}

@@ -88,7 +88,7 @@ async function loadLiveGroups(windowId) {
   const nameInput = popupNode('input'); nameInput.type='text';nameInput.maxLength=80;nameInput.placeholder='New group name';nameInput.setAttribute('aria-label','New group name');
   const addButton = popupNode('button','','Add group');addButton.type='submit';
   addForm.append(nameInput,addButton);
-  addForm.addEventListener('submit',event=> {event.preventDefault();if(!nameInput.value.trim())return;action(async()=> {await publish([...response.groups,{id:crypto.randomUUID(),name:nameInput.value.trim(),tabs:[]}]);status.textContent='Group added.';});});
+  addForm.addEventListener('submit',event=> {event.preventDefault();if(!nameInput.value.trim()){status.textContent='Enter a name for your new group.';nameInput.focus?.();return;}action(async()=> {await publish([...response.groups,{id:crypto.randomUUID(),name:nameInput.value.trim(),tabs:[]}]);status.textContent='Group added.';});});
   workspaceButtons.push(addButton,nameInput);
   const groups = response.groups;
   if (!groups.length) {
@@ -143,6 +143,7 @@ async function loadLiveGroups(windowId) {
     const list = popupNode('div','workspace-tabs'); list.hidden = !expandedGroups.has(group.id);
     toggle.textContent = list.hidden ? '▸' : '▾';
     toggle.setAttribute('aria-expanded',String(!list.hidden));
+    toggle.setAttribute('aria-label',`${list.hidden ? 'Show' : 'Hide'} tabs in ${group.name}`);
     list.id = `workspace-tabs-${group.id}`;
     toggle.setAttribute('aria-controls',list.id);
     toggle.addEventListener('click',()=> {
@@ -155,7 +156,7 @@ async function loadLiveGroups(windowId) {
     });
     header.append(focus,toggle);
     if (group.id !== 'ungrouped') {
-      const remove = popupNode('button','workspace-remove','×');remove.type='button';remove.setAttribute('aria-label',`Remove ${group.name}; move tabs to Ungrouped`);
+      const remove = popupNode('button','workspace-remove','×');remove.type='button';remove.title='Remove group; keep its tabs in Ungrouped';remove.setAttribute('aria-label',`Remove ${group.name}; move tabs to Ungrouped`);
       remove.addEventListener('click',()=>action(async()=> {
         const next=response.groups.filter(item=>item.id!==group.id).map(item=>({...item,tabs:[...item.tabs]}));
         let ungrouped=next.find(item=>item.id==='ungrouped');
@@ -168,7 +169,7 @@ async function loadLiveGroups(windowId) {
     for (const tab of group.tabs) {
       const jump = popupNode('button','workspace-tab'); jump.type = 'button';
       jump.draggable = true;
-      jump.title = 'Drag to a group, or above another tab to reorder';
+      jump.title = `${tab.title || 'Untitled tab'}\nDrag to a group, or above another tab to reorder${tab.excluded ? '\nExcluded from group actions' : ''}`;
       jump.addEventListener('dragstart',event => {
         if (opening || aiBusy) { event.preventDefault(); return; }
         popupDrag = {tabId:tab.id,groupId:group.id,revision:liveRevision};
@@ -302,7 +303,11 @@ if (document.querySelectorAll && document.getElementById('settings-open')) (() =
       for(const snapshot of result.workspaces){
         const card=popupNode('details','snapshot-card'),summary=popupNode('summary');
         const domains=new Set(snapshot.tabs.map(tab=>{try{return new URL(tab.url).hostname;}catch{return '';}}));
-        summary.textContent=`${new Date(snapshot.createdAt).toLocaleString()} · ${snapshot.tabs.length} tabs · ${domains.size} sites`;
+        const date=new Date(snapshot.createdAt);
+        const dateLabel=date.toLocaleString(undefined,{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+        summary.setAttribute('aria-label',`${date.toLocaleString()} · ${snapshot.tabs.length} tabs · ${domains.size} sites`);
+        summary.title=date.toLocaleString();
+        summary.append(popupNode('span','snapshot-date',dateLabel),popupNode('span','snapshot-stats',`${snapshot.tabs.length} tabs · ${domains.size} sites`));
         card.append(summary);
         const exportButton=popupNode('button','snapshot-export','Export JSON');exportButton.type='button';
         exportButton.addEventListener('click',()=>action(async()=>{
@@ -313,7 +318,12 @@ if (document.querySelectorAll && document.getElementById('settings-open')) (() =
           } finally {exportButton.disabled=false;}
         }));
         card.append(exportButton);
-        for(const tab of snapshot.tabs){const row=popupNode('div','snapshot-tab');row.append(popupNode('strong','',tab.title || 'Untitled tab'),popupNode('small','',tab.url));card.append(row);}
+        for(const tab of snapshot.tabs){
+          const row=popupNode('div','snapshot-tab');row.title=tab.url;
+          let host=tab.url;try{host=new URL(tab.url).hostname;}catch{}
+          row.append(popupNode('strong','snapshot-tab-title',tab.title || 'Untitled tab'),popupNode('small','snapshot-tab-host',host));
+          card.append(row);
+        }
         list.append(card);
       }
     }catch(error){list.textContent=error.message;}
