@@ -350,3 +350,7 @@ Home shows the latest scanned normal-window inventory (including pinned/restrict
 ## v0.16.1 Home search appearance correction — November 1
 
 User screenshot exposed default search-input appearance and overflowing Home card grid. Search now explicitly uses semantic theme tokens, matching font/padding and 8px rounded border. Grid minmax(0,1fr) and row min-width constraints preserve right margins; titles/hosts ellipsize. Fictional-data browser inspected at480×600: list client/scroll width both417px, every row417px wide with no internal overflow, search38px high. Native build/signature pass. CSS-only fix; previous222 behavioral checks not repeated. Actual packaged Safari visual confirmation remains open.
+
+## v0.16.2 left-hand popup shortcut — November 1
+
+User requested a left-hand alternative. Default Open Tabby shortcut is now Command+Shift+X, replacing K. Product design/themes reviewed ergonomics; no layout changes. Apple Safari shortcut reference does not list this combination, but custom macOS/other-extension conflicts and real packaged dispatch remain unverified. Existing user shortcut overrides may persist across upgrades. Native build/signature verified; manifest-only behavior change, no inference or Safari window actions.

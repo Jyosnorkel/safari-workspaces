@@ -177,3 +177,7 @@ Home lists the latest scanned tabs with local title/website search. Click or use
 ### November 1 — v0.16.1 Home layout correction
 
 Shared-theme search field and constrained Home tab grid fix reported native-looking input and clipped right edges. Fictional-data480×600 visual/DOM inspection confirms matching colors, full card edges and no horizontal row/list overflow. Native build/signature pass; actual packaged Safari appearance remains user verification. Behavioral suite unchanged from222 passing checks.
+
+### November 1 — v0.16.2 left-hand shortcut
+
+Open Tabby default is now Cmd+Shift+X. Design review confirms left-hand reach. No matching standard action listed in Apple's Safari shortcuts; custom assignments can still conflict and real command dispatch remains unverified. Native build/signature pass; existing Safari shortcut customizations may need manual adjustment.

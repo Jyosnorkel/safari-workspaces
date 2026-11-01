@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Tabby",
-  "version": "0.16.1",
+  "version": "0.16.2",
   "description": "Review, save and restore Safari workspaces. Keep related tabs together and resume later.",
   "permissions": [
     "tabs",
@@ -30,7 +30,7 @@
   "commands": {
     "_execute_action": {
       "suggested_key": {
-        "mac": "Command+Shift+K"
+        "mac": "Command+Shift+X"
       },
       "description": "Open Tabby"
     }
