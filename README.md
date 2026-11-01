@@ -18,7 +18,8 @@ Scan tabs → get meaningful Meta AI group suggestions → review and edit → s
 - Drag tab rows onto group cards or sticky group chips; use grips to reorder tabs in saved snapshots. Drag proposed tabs between AI review cards before accepting. Click a chip to collapse its group.
 - Open the Safari toolbar popup and drop one JSON backup into its drop area to restore in a new window. This uses the same existing backup operation; actual Safari file dragging into the popup remains unverified.
 - Drop one JSON backup anywhere on the dashboard to save it and open its URLs in a new normal window, preserving existing windows. The file-picker Import button remains save-only.
-- Keyboard move menus and collapse controls remain available. Grouping and ordering affect the dashboard and saved snapshots; they do not rearrange Safari’s native tabs.
+- Keyboard move menus and collapse controls remain available. Dragging edits the review; **Cluster tabs in Safari** explicitly applies reviewed groups to the real tab order after confirmation. It clusters checked tabs within stretches bounded by pinned, unchecked, restricted, navigating or unassigned tabs. Groups may remain split by these boundaries.
+- **Undo last reorder** restores the previous order only when the completed order, URLs and group revision are unchanged. Partial failures stop without automatic replay; no clustering action opens, closes or reloads tabs. Actual Safari reordering remains unverified.
 - Save an entire window without closing tabs, including pinned web URLs.
 - Export versioned JSON backups and preview/import them without replacing existing snapshots or opening tabs; see [backup format](docs/backup-format.md).
 - Save ordered URL/title snapshots to local extension storage, with persistent IDs and timestamps.
@@ -60,10 +61,10 @@ Open http://localhost:8765/ in Safari. The existing test page still describes th
 
 ## Verification status and known limitations
 
-- The v0.7.0 native build and strict code-signature verification passed on October 31, 2026; the packaged AI client matches source.
+- The v0.8.0 native build and strict code-signature verification passed on November 1, 2026; the packaged AI client matches source.
 - The new group-chip mouse dragging, unchecked-tab preservation and keyboard collapse/expand were verified in the internal browser with fictional tab APIs. Actual Safari testing of this UI remains pending.
 - Live Safari popup rendering and current-window scanning were verified. A live storage-verification failure was reproduced and fixed with regression coverage; full save/close/restore retesting and restart persistence are **not yet verified**.
-- `node scripts/check.mjs` passes 161 automated checks for workspace rules, fake-DOM review flows, fake Meta providers, authenticated local HTTP contracts and usage budgets. Syntax and native resource checks are included. These do not replace Safari testing.
+- `node scripts/check.mjs` passes 176 automated checks for workspace rules, fake-DOM review flows, fake Meta providers, authenticated local HTTP contracts and usage budgets. Syntax and native resource checks are included. These do not replace Safari testing.
 - Completed snapshots support an explicit **Restore another copy** action. New restore sessions are protected against replayed requests and stale dashboards.
 - Unsaved forms, browsing history, scroll position and complete page state are not saved. Restoration reopens URLs only.
 - Groups are edited in the dashboard and used from the toolbar switcher. Native Safari Tab Groups are not controlled. Live memberships are browser-session state; saved snapshots remain durable. Groups survive dashboard/event-page reloads but reset on browser startup to avoid reusing stale tab IDs.

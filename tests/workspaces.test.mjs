@@ -36,7 +36,8 @@ function harness(initialTabs = [tab(1),tab(2)], initialStore = {}, options = {})
     tabs: {
       onActivated:{addListener:fn=>h.activated=fn},
       update:async (id,changes)=>{h.events.push(`activate:${id}`);if(h.failUpdate)throw new Error('Activation denied');const current=h.tabs.get(id);if(!current)throw new Error('Tab closed');for(const t of h.tabs.values())if(t.windowId===current.windowId)t.active=false;Object.assign(current,changes);return clone(current);},
-      query:async ({windowId})=>[...h.tabs.values()].filter(t=>t.windowId===windowId).map(clone),
+      query:async ({windowId})=>{if(h.onQuery)h.onQuery();return [...h.tabs.values()].filter(t=>t.windowId===windowId).map(clone);},
+      move:async (id,{windowId,index})=>{h.events.push(`move:${id}:${index}`);h.moveCalls=(h.moveCalls||0)+1;if(h.onMove)h.onMove(id,index);if(h.failMove===h.moveCalls)throw new Error('Move denied');const list=[...h.tabs.values()].filter(t=>t.windowId===windowId).sort((a,b)=>a.index-b.index);const from=list.findIndex(t=>t.id===id);if(from<0)throw new Error('Wrong window');list.splice(index,0,list.splice(from,1)[0]);list.forEach((t,index)=>t.index=index);return clone(h.tabs.get(id));},
       get:async id=> {h.events.push(`get:${id}`); if (h.onGet) h.onGet(id); const t=h.tabs.get(id); if (!t) throw new Error('Tab closed'); return clone(t);},
       remove:async id=>{h.events.push(`remove:${id}`); if(h.failRemove.has(id)) throw new Error('Close denied'); h.tabs.delete(id);},
       create:async options=>{h.events.push(`create:${options.url}`); if(h.failCreate.has(options.url)) throw new Error('Create denied'); const t=tab(h.nextId++,options); h.tabs.set(t.id,t); return clone(t);}
@@ -472,4 +473,88 @@ test('failed browser-session reset blocks live selection rather than reusing sta
  const h=harness();const first=await publish(h);h.failWrite=h.writes+1;h.startup();
  const view=await h.send('live-groups-get',{windowId:1});assert.equal(view.ok,false);assert.match(view.error,/could not be reset/);
  const focus=await h.send('live-groups-focus',{windowId:1,expectedRevision:first.revision,groupId:'ungrouped'});assert.equal(focus.ok,false);assert.equal(h.events.some(e=>e.startsWith('activate:')),false);
+});
+
+
+const CLUSTER_KEY='workspaces.cluster.v1';
+const groupA='12d73287-59b3-4a2a-af83-9efac412ba18',groupB='d52f7d0d-0717-41a1-a532-48f7c86f1f44';
+async function clusterFixture(extra=[]) {
+ const initial=[tab(1,{index:0}),tab(2,{index:1}),tab(3,{index:2}),tab(4,{index:3}),...extra];
+ const h=harness(initial);
+ const groups=[{id:groupA,name:'A',tabs:[{id:4,url:tab(4).url},{id:2,url:tab(2).url}]},{id:groupB,name:'B',tabs:[{id:1,url:tab(1).url},{id:3,url:tab(3).url}]}];
+ const published=await h.send('live-groups-set',{windowId:1,expectedRevision:null,groups});assert.equal(published.ok,true);
+ h.preview=values=>h.send('cluster-preview',{windowId:1,expectedRevision:published.revision,requestId:webcrypto.randomUUID(),...values});
+ h.order=()=>[...h.tabs.values()].filter(tab=>tab.windowId===1).sort((a,b)=>a.index-b.index).map(tab=>tab.id);
+ return h;
+}
+test('cluster preview is durable/read-only; apply clusters named groups in review order and preserves IDs',async()=>{
+ const h=await clusterFixture();const preview=await h.preview();assert.equal(preview.ok,true);assert.equal(preview.state,'ready');assert.equal(preview.moveCount,2);assert.deepEqual(h.order(),[1,2,3,4]);assert(h.store[CLUSTER_KEY]);
+ const applied=await h.send('cluster-apply',{windowId:1,planId:preview.planId});assert.equal(applied.ok,true);assert.equal(applied.state,'complete');assert.equal(applied.canUndo,true);assert.deepEqual(h.order(),[4,2,1,3]);
+ assert.equal(h.tabs.size,4);assert.equal(h.events.some(event=>/^(remove|create|window:create|activate):/.test(event)),false);
+});
+test('clustering leaves pinned/excluded/restricted/dashboard anchors fixed throughout and uses same-window moves',async()=>{
+ const initial=[tab(9,{index:0,pinned:true}),tab(1,{index:1}),tab(2,{index:2}),tab(8,{index:3,url:'safari-web-extension://test/dashboard.html'}),tab(3,{index:4}),tab(4,{index:5}),tab(7,{index:6})];
+ const h=harness(initial);const published=await h.send('live-groups-set',{windowId:1,expectedRevision:null,groups:[{id:groupA,name:'A',tabs:[{id:2,url:tab(2).url},{id:4,url:tab(4).url}]},{id:'ungrouped',name:'Ungrouped',tabs:[{id:1,url:tab(1).url},{id:3,url:tab(3).url},{id:7,url:tab(7).url,excluded:true}]}]});assert.equal(published.ok,true);
+ const anchors=()=>{assert.equal(h.tabs.get(9).index,0);assert.equal(h.tabs.get(8).index,3);assert.equal(h.tabs.get(7).index,6);};
+ h.onQuery=anchors;h.onMove=id=>assert(![9,8,7].includes(id));
+ const preview=await h.send('cluster-preview',{windowId:1,expectedRevision:published.revision,requestId:webcrypto.randomUUID()});assert.equal(preview.protectedCount,3);assert.equal(preview.segments,2);
+ const applied=await h.send('cluster-apply',{windowId:1,planId:preview.planId});assert.equal(applied.state,'complete');anchors();assert.deepEqual([...h.tabs.values()].sort((a,b)=>a.index-b.index).map(tab=>tab.id),[9,2,1,8,4,3,7]);
+});
+test('stale preview topology, group revisions and invalid IDs prevent all clustering moves',async()=>{
+ for(const change of ['url','pending','pinned','new-tab','order','revision']) {
+  const h=await clusterFixture();const preview=await h.preview();
+  if(change==='url')h.tabs.get(1).url='https://example.org/navigated';if(change==='pending')h.tabs.get(1).pendingUrl='https://example.org/pending';if(change==='pinned')h.tabs.get(1).pinned=true;
+  if(change==='new-tab')h.tabs.set(5,tab(5,{index:4}));if(change==='order'){h.tabs.get(1).index=1;h.tabs.get(2).index=0;}if(change==='revision')h.store[LIVE_KEY][1].revision=webcrypto.randomUUID();
+  const applied=await h.send('cluster-apply',{windowId:1,planId:preview.planId});assert.equal(applied.ok,false,change);assert.equal(h.moveCalls||0,0,change);
+ }
+ const h=await clusterFixture();assert.equal((await h.preview({requestId:'bad'})).ok,false);
+});
+test('failed clustering journal write/readback prevents every movement',async()=>{
+ for(const mode of ['failWrite','failReadback']) {
+  const h=await clusterFixture();h[mode]=mode==='failWrite'?h.writes+1:true;const preview=await h.preview();assert.equal(preview.ok,false);assert.equal(h.moveCalls||0,0);
+ }
+ const h=await clusterFixture();const preview=await h.preview();h.failWrite=h.writes+1;const applied=await h.send('cluster-apply',{windowId:1,planId:preview.planId});assert.equal(applied.ok,false);assert.equal(h.moveCalls||0,0);
+});
+test('cluster replay and concurrent apply never repeat a tab permutation',async()=>{
+ const h=await clusterFixture();const preview=await h.preview();const args={windowId:1,planId:preview.planId};const [first,second]=await Promise.all([h.send('cluster-apply',args),h.send('cluster-apply',args)]);
+ assert.equal(first.state,'complete');assert.equal(second.repeated,true);assert.equal(h.moveCalls,preview.moveCount);assert.deepEqual(h.order(),[4,2,1,3]);
+});
+test('partial move failure keeps the journal and never resumes automatically, including after coordinator recreation',async()=>{
+ const h=await clusterFixture();const preview=await h.preview();h.failMove=2;const first=await h.send('cluster-apply',{windowId:1,planId:preview.planId});assert.equal(first.state,'partial');assert.equal(first.moved,1);assert.equal(first.canUndo,false);
+ const recovered=harness([...h.tabs.values()],h.store);const again=await recovered.send('cluster-apply',{windowId:1,planId:preview.planId});assert.equal(again.repeated,true);assert.equal(again.state,'partial');assert.equal(recovered.moveCalls||0,0);assert.equal(recovered.tabs.size,4);
+ const status=await recovered.send('cluster-status',{windowId:1});assert.equal(status.operation.state,'partial');
+});
+test('clustering stops between moves when topology changes and leaves remaining tabs open',async()=>{
+ const h=await clusterFixture();const preview=await h.preview();h.onWrite=()=>{if(h.moveCalls===1)h.tabs.get(3).pendingUrl='https://example.org/pending';};
+ const applied=await h.send('cluster-apply',{windowId:1,planId:preview.planId});assert.equal(applied.state,'partial');assert.equal(h.moveCalls,1);assert.equal(h.tabs.size,4);
+});
+test('undo restores exact prior order once, and becomes unavailable after any order/identity/group change',async()=>{
+ const h=await clusterFixture();const preview=await h.preview();await h.send('cluster-apply',{windowId:1,planId:preview.planId});
+ const undo=await h.send('cluster-undo-preview',{windowId:1,planId:preview.planId,requestId:webcrypto.randomUUID()});assert.equal(undo.kind,'undo');assert.equal(undo.state,'ready');assert.equal(undo.canUndo,false);
+ const result=await h.send('cluster-apply',{windowId:1,planId:undo.planId});assert.equal(result.state,'complete');assert.equal(result.canUndo,false);assert.deepEqual(h.order(),[1,2,3,4]);
+ const changed=await clusterFixture();const second=await changed.preview();await changed.send('cluster-apply',{windowId:1,planId:second.planId});changed.tabs.get(1).url='https://example.org/changed';
+ assert.equal((await changed.send('cluster-status',{windowId:1})).operation.canUndo,false);assert.equal((await changed.send('cluster-undo-preview',{windowId:1,planId:second.planId,requestId:webcrypto.randomUUID()})).ok,false);
+});
+test('private windows, untrusted page senders, newer previews and corrupt journals cannot cluster',async()=>{
+ const h=await clusterFixture();const preview=await h.preview();h.private=true;assert.equal((await h.send('cluster-apply',{windowId:1,planId:preview.planId})).ok,false);h.private=false;
+ assert.equal(h.listener({channel:'workspace',type:'cluster-apply',windowId:1,planId:preview.planId},{id:'test',url:'safari-web-extension://test/other.html'}),undefined);
+ await h.preview();assert.equal((await h.send('cluster-apply',{windowId:1,planId:preview.planId})).ok,false);assert.equal(h.moveCalls||0,0);
+ const corrupt=await clusterFixture();const plan=await corrupt.preview();corrupt.store[CLUSTER_KEY][1].plans[0].target.reverse();assert.equal((await corrupt.send('cluster-apply',{windowId:1,planId:plan.planId})).ok,false);assert.equal(corrupt.moveCalls||0,0);
+});
+
+test('private/non-normal cluster previews and replayed journals expose no operation data',async()=>{
+ const h=await clusterFixture();const requestId=webcrypto.randomUUID(),preview=await h.preview({requestId});await h.send('cluster-apply',{windowId:1,planId:preview.planId});
+ for(const mode of ['private','non-normal']) {
+  h.private=mode==='private';h.windowType=mode==='non-normal'?'popup':'normal';
+  for(const [type,values] of [['cluster-preview',{expectedRevision:h.store[LIVE_KEY][1].revision,requestId}],['cluster-apply',{planId:preview.planId}],['cluster-undo-preview',{planId:preview.planId,requestId}],['cluster-status',{}]]) {
+   const result=await h.send(type,{windowId:1,...values});assert.equal(result.ok,false);assert.equal(result.groups,undefined);assert.equal(result.operation,undefined);
+  }
+ }
+});
+test('tab index or URL changes during the immediate pre-move read stop clustering before movement',async()=>{
+ for(const change of ['index','url']) {
+  const h=await clusterFixture();const preview=await h.preview();
+  h.onGet=id=>{if(id===4){if(change==='index')h.tabs.get(id).index=1;else h.tabs.get(id).url='https://example.org/new';}};
+  const result=await h.send('cluster-apply',{windowId:1,planId:preview.planId});assert.equal(result.state,'partial');assert.equal(h.moveCalls||0,0);
+ }
 });

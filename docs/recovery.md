@@ -31,3 +31,10 @@ No live Safari end-to-end or actual browser-restart verification was performed b
 - Retrying an earlier failed URL after later URLs opened appends it to the window; the existing journal does not retain reliable live tab anchors across browser restarts. The snapshot itself retains original order. A later ordering milestone should address live insertion without treating session tab IDs as durable saved identity.
 - Malformed entries remain in local storage. This change blocks unsafe restore/recovery; it does not provide an export/repair UI or change saved-list rendering.
 - URL restoration cannot preserve unsaved forms, history, scroll position, authentication or full page state.
+
+
+## Tab clustering recovery
+
+Cluster tabs in Safari is an explicit in-window reorder, separate from snapshot restoration. Protected tabs are boundaries. The operation saves a verified before/target/step journal before moving anything and checks live identity/order before every move. A partial or interrupted result never resumes automatically; refresh and inspect the real tab order before previewing another reorder. Reported move counts are confirmed moves only: an API failure may leave an unconfirmed change.
+
+Undo last reorder is offered only for a completed cluster with unchanged tabs, URLs, order and group revision. Undo also previews and requires confirmation. It does not recreate closed tabs or reverse subsequent navigation/manual ordering. Reorder journals are browser-session state and reset at browser startup; durable saved snapshots are independent.

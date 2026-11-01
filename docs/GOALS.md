@@ -2,14 +2,14 @@
 
 The local build-guide webpage is the planning reference (`project-guide/dist/index.html`, served at http://127.0.0.1:8787). This table maps its original product goals to implementation evidence. Organiser source copies remain private; this file contains our own development plan.
 
-| Webpage goal | Evidence at v0.4.1 | Next acceptance step |
+| Webpage goal | Evidence at v0.8.0 | Next acceptance step |
 | --- | --- | --- |
 | Scan and organise | Manual dashboard, sticky chips, drag grips, collapse/expand and validated inventory | Verify packaged extension in a disposable Safari window |
 | Real Meta suggestions | Official Meta adapter, authenticated loopback service, durable usage guard and client integrated; fake-provider/client HTTP tests pass | User reports useful real Meta grouping; continue quality measurements |
 | Review corrections | Editable staged proposals, drag-to-chip corrections and explicit acceptance; fake-DOM tests plus fictional-data browser interactions pass | Verify actual Safari rendering and a consented real response |
 | Save before closing | Verified local writes, navigation checks, recovery journal tests | Full live flow still unverified; current user prohibition prevents close tests |
 | Resume reliably | Ordered URL restoration, pending recovery, deliberate new sessions | Live restore checks and restart persistence pending; no Safari quit allowed |
-| Window backup (user-added MVP goal) | Non-closing whole-window snapshots, JSON export/import; 116 total automated checks and native build/signature pass | Verify actual Safari download file and import; sample-API DOM test passed |
+| Window backup (user-added MVP goal) | Non-closing whole-window snapshots, JSON export/import; 176 total automated checks and native build/signature pass | Verify actual Safari download file and import; sample-API DOM test passed |
 | Reproducible setup | Native build script and manual instructions | Authenticated automatic origin refresh and file hotload implemented/tested; native resources verified; new Safari activation remains pending |
 
 Current priorities: verify actual Safari-to-service status without a model call, then a consented real suggestion and safe snapshot/backup behavior, then measure grouping quality. Optional excerpts, notes and other extras follow the working core.
@@ -39,3 +39,11 @@ Toolbar popup lists live current-window groups with counts and expandable tab li
 Full input validation, compare-and-swap edit revisions, live identity/window/URL/protection checks and last-used tracking protect switching. Ordinary metadata pruning does not create false competing-editor conflicts. Failed writes and competing edits preserve the dashboard review; an explicit confirmed Load shared groups action handles recovery.
 
 161 automated checks pass, including actual popup/coordinator integration with fictional tabs, stale activation, storage failure, startup reset, publishing, hydration and conflict recovery. Fictional-data internal-browser test verified dashboard-to-popup groups, expansion, tab selection and group switching. Native 0.7.0/build12, strict signature checks and packaged script comparisons pass. Actual Safari activation/events/session lifetime remain unverified. No Safari was controlled and no model calls occurred.
+
+## v0.8.0 cluster real Safari tab order — November 1
+
+Explicit Cluster tabs in Safari previews reviewed manual/accepted AI groups then asks confirmation before same-window tabs.move calls. Named groups come before Ungrouped within each contiguous checked, eligible span, following review order. Pinned, unchecked, restricted, navigating, dashboard and unassigned tabs are fixed boundaries, so some groups may remain split. Dragging/AI acceptance alone never rearranges browser tabs.
+
+A read-back-verified session journal saves before/target orders and move steps before movement. Every move rechecks the full window topology, group revision and target tab identity/URL/index/protection. Failures stop, uncertain progress is labelled, and repeated/interrupted requests never resume automatically. Undo previews an inverse plan only for an unchanged completed result. No opening/closing/reloading or cross-window movement. Existing backup behavior unchanged.
+
+176 fake-browser/model checks pass, covering confirmation/cancellation, staged AI, anchors, stale topology, failed writes, partial moves, replay/concurrency, corrupt journals and undo. Internal-browser fictional-data preview checked confirmation, apply and undo; no real Safari tabs were moved. Native 0.8.0/build13, signature and packaged script checks pass. Actual Safari tab movement, session interruption and undo remain unverified.

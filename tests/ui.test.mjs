@@ -49,6 +49,14 @@ async function harness(options={}) {
       h.liveRegistry={revision:webcrypto.randomUUID(),groups:structuredClone(message.groups)};
       return {ok:true,...structuredClone(h.liveRegistry)};
     }
+    if(message.type==='cluster-status')return {ok:true,operation:h.clusterOperation || null};
+    if(message.type==='cluster-preview')return {ok:true,planId:message.requestId,tabCount:2,moveCount:h.clusterNoop ? 0 : 1,groups:[{name:'Workspace 1',count:2}],state:'ready'};
+    if(message.type==='cluster-undo-preview')return {ok:true,planId:message.requestId,tabCount:2,moveCount:1,groups:[],state:'ready'};
+    if(message.type==='cluster-apply'){
+      if(h.clusterError)return {ok:false,error:h.clusterError};
+      h.clusterOperation={planId:message.planId,state:h.clusterPartial ? 'partial' : 'complete',moved:1,moveCount:1,canUndo:!h.clusterPartial};
+      return {ok:true,...h.clusterOperation};
+    }
     if(message.type==='list')return {ok:true,workspaces:h.workspaces||[]};
     if(message.type==='scan'){if(h.scanDeferred)return await h.scanDeferred;return {ok:true,tabs:structuredClone(h.tabs)};}
     if(message.type==='snapshot-window')return {ok:true,workspace:{tabs:h.tabs},skipped:0};
@@ -403,4 +411,33 @@ test('conflicted shared groups replace a local review only after explicit confir
  h.autoConfirm=true;const revision=h.liveRegistry.revision;await h.click('live-reload');
  assert.equal(named(h,'groups','Workspace 1'),undefined);assert.equal(h.node('live-reload').hidden,true);assert.equal(h.liveRegistry.revision,revision);
  await h.click('new-group');assert(h.liveRegistry.groups.some(group=>group.name==='Workspace 1'));
+});
+
+async function clusteredReview(options={}) {
+ const h=await harness(options);await h.click('new-group');
+ const select=h.label('groups','Group for Page 1');await h.change(select,select.children.find(option=>option.textContent==='Workspace 1').value);
+ return h;
+}
+test('clustering requires a reviewed named group and explicit confirmation; cancellation moves nothing',async()=>{
+ const empty=await harness();assert.equal(empty.node('cluster-tabs').disabled,true);
+ const h=await clusteredReview();assert.equal(h.node('cluster-tabs').disabled,false);h.autoConfirm=false;
+ await h.click('cluster-tabs');assert(h.sent.some(message=>message.type==='cluster-preview'));assert.equal(h.sent.some(message=>message.type==='cluster-apply'),false);
+ assert.match(h.node('confirm-text').textContent,/real order in this window/);assert.match(h.node('confirm-text').textContent,/may separate a group/);
+ h.node('confirm').returnValue='cancel';h.node('confirm').dispatch('close');await settle();assert.equal(h.sent.some(message=>message.type==='cluster-apply'),false);
+});
+test('confirmed cluster uses the published revision and exposes deliberate undo without opening or closing tabs',async()=>{
+ const h=await clusteredReview();await h.click('cluster-tabs');
+ const preview=h.sent.find(message=>message.type==='cluster-preview'),apply=h.sent.find(message=>message.type==='cluster-apply');
+ assert(preview.expectedRevision);assert.equal(apply.planId,preview.requestId);assert.equal(h.node('undo-cluster').hidden,false);assert.match(h.node('status').textContent,/Tabs arranged by workspace/);
+ await h.click('undo-cluster');assert.equal(h.sent.filter(message=>message.type==='cluster-undo-preview').length,1);assert.equal(h.sent.filter(message=>message.type==='cluster-apply').length,2);
+ assert.equal(h.sent.some(message=>['save','restore','drop-backup'].includes(message.type)),false);assert.equal(h.suggestCalls,0);
+});
+test('unaccepted AI proposals prevent Safari reorder; acceptance never automatically reorders',async()=>{
+ const h=await clusteredReview();await h.connect();await h.consent();await h.click('suggest');assert.equal(h.node('cluster-tabs').disabled,true);
+ assert.equal(h.sent.some(message=>message.type==='cluster-preview'),false);await h.click('ai-accept');assert.equal(h.node('cluster-tabs').disabled,false);assert.equal(h.sent.some(message=>message.type==='cluster-apply'),false);
+});
+test('no-op and interrupted clustering do not retry moves; partial status stays visible',async()=>{
+ const noop=await clusteredReview({clusterNoop:true});await noop.click('cluster-tabs');assert.equal(noop.sent.some(message=>message.type==='cluster-apply'),false);assert.match(noop.node('status').textContent,/already in workspace order/);
+ const h=await clusteredReview({clusterPartial:true});await h.click('cluster-tabs');assert.equal(h.sent.filter(message=>message.type==='cluster-apply').length,1);assert.equal(h.node('undo-cluster').hidden,true);assert.match(h.node('cluster-status').textContent,/stopped after 1 confirmed move/);
+ const failed=await clusteredReview({clusterError:'Tabs changed. No further moves.'});await failed.click('cluster-tabs');assert.equal(failed.sent.filter(message=>message.type==='cluster-apply').length,1);assert.match(failed.node('status').textContent,/Tabs changed/);
 });

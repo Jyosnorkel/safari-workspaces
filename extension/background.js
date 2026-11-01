@@ -327,6 +327,175 @@
     await api.tabs.update(chosen.id,{active:true});
     return {tabId:chosen.id};
   }
+  // Reordering has its own browser-session journal; no snapshot or restore URLs change.
+  const CLUSTER_KEY = 'workspaces.cluster.v1';
+  const same = (a,b) => JSON.stringify(canonical(a)) === JSON.stringify(canonical(b));
+  function checkedTopology(raw, windowId) {
+    if (!Array.isArray(raw) || raw.length > 500) throw new Error('Clustering supports at most 500 tabs in one normal window.');
+    const sorted = [...raw].sort((a,b)=>a.index-b.index), ids = new Set();
+    return sorted.map((tab,index)=> {
+      if (!object(tab) || !safeId(tab.id) || ids.has(tab.id) || tab.windowId !== windowId || tab.index !== index || tab.incognito) throw new Error('Tab identity or order is unavailable. Refresh before clustering.');
+      ids.add(tab.id);
+      return {id:tab.id,index,windowId,url:typeof tab.url==='string'?tab.url:null,pinned:Boolean(tab.pinned),incognito:false,pendingUrl:typeof tab.pendingUrl==='string'?tab.pendingUrl:null};
+    });
+  }
+  async function topology(windowId) {
+    await normalWindow(windowId);
+    return checkedTopology(await api.tabs.query({windowId}),windowId);
+  }
+  function simulateMove(tabs, id, index) {
+    const result = tabs.map(tab=>({...tab})), from = result.findIndex(tab=>tab.id===id);
+    if (from < 0 || !safeId(index) || index >= result.length) throw new Error('Invalid cluster journal. No further tabs were moved.');
+    result.splice(index,0,result.splice(from,1)[0]);
+    return result.map((tab,index)=>({...tab,index}));
+  }
+  function clusterSteps(before,target,movable) {
+    let current = before;
+    const steps = [];
+    for (let index=0;index<target.length;index++) {
+      if (current[index].id === target[index].id) continue;
+      const id = target[index].id;
+      if (!movable.includes(id)) throw new Error('A protected tab would move. Refresh before clustering.');
+      steps.push({id,index}); current = simulateMove(current,id,index);
+    }
+    if (steps.length > 500 || !same(current,target)) throw new Error('Invalid cluster plan.');
+    return steps;
+  }
+  function validateClusterPlan(plan,windowId) {
+    if (!object(plan) || !uuid(plan.id) || !uuid(plan.revision) || !['cluster','undo'].includes(plan.kind) ||
+        !['ready','applying','complete','partial','interrupted'].includes(plan.state) || !safeId(plan.moved) ||
+        !Array.isArray(plan.movable) || plan.movable.length > 500 || new Set(plan.movable).size !== plan.movable.length ||
+        !plan.movable.every(safeId) || !safeId(plan.protectedCount) || !safeId(plan.segments) ||
+        !Array.isArray(plan.groups) || plan.groups.length > 100 || plan.groups.some(group=>!object(group)||typeof group.name!=='string'||group.name.length>80||!safeId(group.count))) throw new Error('Cluster recovery data is invalid. No tabs were moved.');
+    const before = checkedTopology(plan.before,windowId), target = checkedTopology(plan.target,windowId);
+    if (!same(before,plan.before) || !same(target,plan.target) || before.length !== target.length || plan.movable.some(id=>!before.some(tab=>tab.id===id && !tab.pinned && !tab.pendingUrl && C.restorable(tab.url))) ||
+        before.some(tab=>!target.some(item=>same({...tab,index:0},{...item,index:0}))) ||
+        before.some(tab=>!plan.movable.includes(tab.id) && target[tab.index]?.id!==tab.id) ||
+        !same(clusterSteps(before,target,plan.movable),plan.steps) || plan.moved > plan.steps.length ||
+        (plan.state==='complete' && plan.moved!==plan.steps.length)) throw new Error('Cluster recovery data is invalid. No tabs were moved.');
+    // A protected anchor is a boundary, including during intermediate moves.
+    const segments = new Map(); let segment = 0;
+    for (const tab of before) { if (!plan.movable.includes(tab.id)) segment++; else segments.set(tab.id,segment); }
+    segment = 0;
+    for (const tab of target) { if (!plan.movable.includes(tab.id)) segment++; else if (segments.get(tab.id)!==segment) throw new Error('Cluster recovery crosses a protected tab boundary.'); }
+    return plan;
+  }
+  async function readClusters() {
+    if (liveResetFailed) throw new Error('Live operations could not be reset for this browser session.');
+    const all = (await liveStorage.get(CLUSTER_KEY))[CLUSTER_KEY];
+    if (all === undefined) return {};
+    if (!object(all)) throw new Error('Cluster recovery data is unreadable. No tabs were moved.');
+    for (const [id,record] of Object.entries(all)) {
+      const windowId = Number(id);
+      if (!safeId(windowId) || String(windowId)!==id || !object(record) || !Array.isArray(record.plans) || record.plans.length>20 || new Set(record.plans.map(plan=>plan.id)).size!==record.plans.length ||
+          !record.plans.some(plan=>plan.id===record.lastPlanId) || (record.lastAppliedId!==undefined && !record.plans.some(plan=>plan.id===record.lastAppliedId))) throw new Error('Cluster recovery data is unreadable. No tabs were moved.');
+      record.plans.forEach(plan=>validateClusterPlan(plan,windowId));
+    }
+    return all;
+  }
+  async function writeClusters(all) {
+    await liveStorage.set({[CLUSTER_KEY]:all});
+    if (!same(await readClusters(),all)) throw new Error('Could not verify the reorder journal. Stopped before further tab changes.');
+  }
+  async function clusterSummary(plan, record, windowId) {
+    let canUndo = false;
+    if (plan.kind==='cluster' && plan.state==='complete' && record.lastAppliedId===plan.id && plan.steps.length) {
+      try { canUndo = (await readLive())[windowId]?.revision===plan.revision && same(await topology(windowId),plan.target); } catch {}
+    }
+    return {planId:plan.id,kind:plan.kind,state:plan.state,moved:plan.moved,tabCount:plan.movable.length,moveCount:plan.steps.length,
+      protectedCount:plan.protectedCount,segments:plan.segments,groups:plan.groups,canUndo,...(plan.error?{error:plan.error}:{})};
+  }
+  function addClusterPlan(all,windowId,plan) {
+    const previous = all[windowId] || {plans:[]};
+    const plans = [...previous.plans,plan].slice(-20);
+    all[windowId] = {plans,lastPlanId:plan.id,...(plans.some(item=>item.id===previous.lastAppliedId)?{lastAppliedId:previous.lastAppliedId}:{})};
+    return all[windowId];
+  }
+  async function previewCluster({windowId,expectedRevision,requestId}) {
+    await normalWindow(windowId);
+    if (!uuid(requestId) || !uuid(expectedRevision)) throw new Error('Refresh groups before clustering tabs.');
+    const all = await readClusters(), previous = all[windowId]?.plans.find(plan=>plan.id===requestId);
+    if (previous) return {...await clusterSummary(previous,all[windowId],windowId),repeated:true};
+    const live = (await readLive())[windowId];
+    if (!live || live.revision!==expectedRevision) throw new Error('Groups changed. Refresh before clustering.');
+    const before = await topology(windowId), current = new Map(before.map(tab=>[tab.id,tab]));
+    const orderedGroups = [...live.groups.filter(group=>group.id!=='ungrouped'),...live.groups.filter(group=>group.id==='ungrouped')];
+    const rank = new Map(), descriptions = [];
+    for (const [groupIndex,group] of orderedGroups.entries()) {
+      let count = 0;
+      for (const [tabIndex,saved] of group.tabs.entries()) {
+        const tab = current.get(saved.id);
+        if (!tab || tab.url!==saved.url || tab.pinned || tab.incognito) throw new Error('Tabs changed. Refresh before clustering.');
+        if (!saved.excluded && !tab.pendingUrl && C.restorable(tab.url)) { rank.set(tab.id,[groupIndex,tabIndex]); count++; }
+      }
+      if (count) descriptions.push({name:group.name,count});
+    }
+    const movable = before.filter(tab=>rank.has(tab.id)).map(tab=>tab.id), target = before.map(tab=>({...tab}));
+    let segments = 0;
+    for (let start=0;start<before.length;) {
+      if (!rank.has(before[start].id)) { start++; continue; }
+      let end=start; while(end<before.length && rank.has(before[end].id)) end++;
+      const sorted = before.slice(start,end).sort((a,b)=>rank.get(a.id)[0]-rank.get(b.id)[0] || rank.get(a.id)[1]-rank.get(b.id)[1]);
+      sorted.forEach((tab,offset)=>target[start+offset]={...tab,index:start+offset}); segments++;start=end;
+    }
+    const plan = {id:requestId,revision:expectedRevision,kind:'cluster',state:'ready',moved:0,before,target,movable,
+      protectedCount:before.length-movable.length,segments,groups:descriptions,steps:clusterSteps(before,target,movable)};
+    const record=addClusterPlan(all,windowId,plan);await writeClusters(all);
+    return clusterSummary(plan,record,windowId);
+  }
+  async function previewClusterUndo({windowId,planId,requestId}) {
+    await normalWindow(windowId);
+    if (!uuid(planId) || !uuid(requestId)) throw new Error('Invalid reorder recovery request.');
+    const all = await readClusters(), record = all[windowId], previous=record?.plans.find(plan=>plan.id===requestId);
+    if (previous) return {...await clusterSummary(previous,record,windowId),repeated:true};
+    const original=record?.plans.find(plan=>plan.id===planId);
+    if (!original || !(await clusterSummary(original,record,windowId)).canUndo) throw new Error('Tab order or groups changed. Undo is unavailable; refresh before clustering again.');
+    const plan={...original,id:requestId,kind:'undo',state:'ready',moved:0,before:original.target,target:original.before,
+      steps:clusterSteps(original.target,original.before,original.movable)};
+    delete plan.error;
+    const updated=addClusterPlan(all,windowId,plan);await writeClusters(all);return clusterSummary(plan,updated,windowId);
+  }
+  async function applyCluster({windowId,planId}) {
+    await normalWindow(windowId);
+    if (!uuid(planId)) throw new Error('Invalid reorder plan.');
+    const all=await readClusters(), record=all[windowId], plan=record?.plans.find(plan=>plan.id===planId);
+    if (!plan) throw new Error('Reorder plan not found. Preview the current order again.');
+    if (plan.state!=='ready') {
+      if (plan.state==='applying') { plan.state='interrupted';plan.error='A previous reorder was interrupted. Refresh and preview a new plan to continue deliberately.';await writeClusters(all); }
+      return {...await clusterSummary(plan,record,windowId),repeated:true};
+    }
+    if (record.lastPlanId!==planId) throw new Error('A newer reorder preview exists. Preview again before applying.');
+    if (typeof api.tabs.move!=='function') throw new Error('This Safari version does not expose tab movement. No tabs were changed.');
+    if ((await readLive())[windowId]?.revision!==plan.revision || !same(await topology(windowId),plan.before)) throw new Error('Tabs or groups changed after preview. Refresh before clustering.');
+    plan.state='applying';record.lastAppliedId=plan.id;await writeClusters(all);
+    let expected=plan.before;
+    try {
+      for (const step of plan.steps) {
+        if ((await readLive())[windowId]?.revision!==plan.revision || !same(await topology(windowId),expected)) throw new Error('Tabs or groups changed during reordering. Stopped before the next move.');
+        const tab=await api.tabs.get(step.id), saved=expected.find(tab=>tab.id===step.id);
+        if (tab.index!==saved?.index || !same(checkedTopology([ {...tab,index:0} ],windowId)[0],{...saved,index:0}) || tab.pinned || tab.incognito || tab.pendingUrl || !C.restorable(tab.url)) throw new Error('A tab changed before its move. Stopped reordering.');
+        await api.tabs.move(step.id,{windowId,index:step.index});
+        expected=simulateMove(expected,step.id,step.index);
+        if (!same(await topology(windowId),expected)) throw new Error('Safari did not confirm the expected order. Stopped reordering.');
+        plan.moved++;await writeClusters(all);
+      }
+      plan.state='complete';await writeClusters(all);
+    } catch {
+      plan.state='partial';plan.error='Reordering stopped before completion. Tabs remain open. Refresh and preview again; automatic replay is disabled.';
+      try { await writeClusters(all); } catch { throw new Error('Reordering stopped and progress could not be verified. Tabs remain open. Refresh and inspect their order before a new preview.'); }
+    }
+    return clusterSummary(plan,record,windowId);
+  }
+  async function clusterStatus({windowId}) {
+    await normalWindow(windowId);
+    const record=(await readClusters())[windowId];
+    if (!record) return {operation:null};
+    const plan=record.plans.find(plan=>plan.id===(record.lastAppliedId || record.lastPlanId));
+    const operation=await clusterSummary(plan,record,windowId);
+    if (operation.state==='applying') { operation.state='interrupted';operation.error='Reordering was interrupted. Refresh and preview a new plan; nothing will replay automatically.'; }
+    return {operation};
+  }
+
   api.tabs.onActivated?.addListener(info => {
     const task = queue.then(async () => {
       if (!safeId(info?.windowId) || !safeId(info?.tabId)) return;
@@ -345,7 +514,7 @@
   api.runtime.onStartup?.addListener(() => {
     // Also clear session storage: browser restoration must not inherit prior tab IDs.
     const task = queue.then(async () => {
-      try { await writeLive({}); }
+      try { await writeLive({}); await writeClusters({}); }
       catch { liveResetFailed = true; }
     });
     queue = task.catch(() => { liveResetFailed = true; });
@@ -354,11 +523,17 @@
     const task = queue.then(async () => {
       const all = await readLive();
       if (all[windowId]) { delete all[windowId]; await writeLive(all); }
+      const clusters = await readClusters();
+      if (clusters[windowId]) { delete clusters[windowId]; await writeClusters(clusters); }
     });
     queue = task.catch(() => {});
   });
   async function handle(message) {
     switch (message.type) {
+      case 'cluster-preview': return previewCluster(message);
+      case 'cluster-undo-preview': return previewClusterUndo(message);
+      case 'cluster-apply': return applyCluster(message);
+      case 'cluster-status': return clusterStatus(message);
       case 'live-groups-get': return getLiveGroups(message);
       case 'live-groups-set': return setLiveGroups(message);
       case 'live-groups-focus': return focusLiveGroup(message);
@@ -403,7 +578,7 @@
   api.runtime.onMessage.addListener((message, sender) => {
     if (sender.id !== api.runtime.id || !sender.url?.startsWith(api.runtime.getURL(''))) return undefined;
     if (message?.channel !== 'workspace') return undefined;
-    if (['live-groups-get','live-groups-set','live-groups-focus'].includes(message.type) &&
+    if (['live-groups-get','live-groups-set','live-groups-focus','cluster-preview','cluster-undo-preview','cluster-apply','cluster-status'].includes(message.type) &&
         !['popup.html','dashboard.html'].includes(sender.url.slice(api.runtime.getURL('').length).split(/[?#]/)[0])) return undefined;
     const result = queue.then(async () => {
       try { return {ok: true, ...await handle(message)}; }

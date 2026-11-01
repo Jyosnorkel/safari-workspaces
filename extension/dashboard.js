@@ -11,6 +11,7 @@
   // The switcher registry is separate from saved snapshots and AI proposals.
   let liveReady = false, liveRevision = null, liveDirty = false, liveConflict = false;
   let liveScheduled = false, liveTask = Promise.resolve(true), liveFingerprint = '';
+  let clusterOperation = null;
 
   const e = (tag, className, text) => {
     const node = document.createElement(tag);
@@ -46,6 +47,12 @@
     const cost = attemptsPerSuggestion();
     const ready = pairedToken && usage?.enabled && usage?.configured && !usage?.busy && !cooling && daily >= cost && minute >= cost;
     $('suggest').disabled = busy || !ready || !payload.length || !$('ai-consent').checked;
+    const hasNamedTabs = groups.some(group => group.id !== 'ungrouped' && tabs.some(tab => assignments.get(tab.id) === group.id && draggableTab(tab) && !excluded.has(tab.id)));
+    $('cluster-tabs').disabled = busy || !liveReady || liveConflict || Boolean(pendingSuggestions) || !hasNamedTabs;
+    $('cluster-tabs').title = pendingSuggestions ? 'Accept or discard AI suggestions before arranging Safari tabs.' : 'Arrange checked tabs by your reviewed groups. Protected tabs stay in place.';
+    $('undo-cluster').hidden = !clusterOperation?.canUndo;
+    $('undo-cluster').disabled = busy;
+
     $('suggest').textContent = cooling ? `Cooldown · ${Math.ceil((retryAt - Date.now()) / 1000)}s` : 'AI organise';
     $('suggest').title = !pairedToken ? 'Connect the local service first.' : !usage?.configured ? 'Configure Meta in the local service first.' : usage?.busy ? 'The service is busy. Refresh its status when ready.' : daily < cost ? 'Not enough remote attempts remain today.' : cooling || minute < cost ? 'Wait for the minute cooldown, then refresh status.' : !payload.length ? 'Scan and include an eligible tab first.' : !$('ai-consent').checked ? 'Review and agree to the data disclosure first.' : 'Request suggestions without changing your current groups.';
     $('ai-refresh').disabled = busy || !pairedToken;
@@ -742,6 +749,41 @@
       detail.append(summary,list); card.append(detail); $('workspaces').append(card);
     }
   }
+  async function loadClusterStatus() {
+    const response = await send('cluster-status',{windowId});
+    clusterOperation = response.operation || null;
+    const stopped = clusterOperation && ['partial','interrupted'].includes(clusterOperation.state);
+    $('cluster-status').textContent = stopped ? `The last reorder stopped after ${clusterOperation.moved || 0} confirmed move${clusterOperation.moved === 1 ? '' : 's'}. Refresh tabs and review their order before trying again.` : '';
+    updateAIControls();
+  }
+  async function applyClusterPlan(plan, undo = false) {
+    notice(undo ? 'Restoring the previous tab order…' : 'Arranging tabs in Safari…');
+    try {
+      clusterOperation = await send('cluster-apply',{windowId,planId:plan.planId});
+      if (clusterOperation.state === 'complete') {
+        notice(undo ? 'Previous tab order restored. All tabs remain open.' : `Tabs arranged by workspace. Protected tabs stayed in place. All tabs remain open.`);
+      } else notice(`Reordering stopped after ${clusterOperation.moved || 0} confirmed move${clusterOperation.moved === 1 ? '' : 's'}. ${clusterOperation.error || 'Tabs changed while arranging.'} Review the tab bar before trying again.`,true);
+    } finally {
+      // Never repeat a move after an uncertain response. Read its journal instead.
+      await loadClusterStatus();
+      await scan({automatic:true});
+    }
+  }
+  $('cluster-tabs').addEventListener('click',()=>run(async()=> {
+    if (pendingSuggestions) throw new Error('Accept or discard AI suggestions before arranging Safari tabs.');
+    if (!await queueLivePublish()) throw new Error('Refresh or load shared groups before arranging Safari tabs.');
+    const plan = await send('cluster-preview',{windowId,expectedRevision:liveRevision,requestId:crypto.randomUUID()});
+    if (!plan.moveCount) { notice('These tabs are already in workspace order. Protected tabs may separate a group.'); return; }
+    const names = plan.groups.map(group=>`${group.name} (${group.count})`).join(', ');
+    if (!await confirm('Cluster tabs in Safari?',`Arrange ${plan.tabCount} checked tabs by workspace: ${names}? This changes their real order in this window. Named groups come first, then Ungrouped; order within each group follows your review. Pinned, unchecked and restricted tabs stay fixed and may separate a group. No tabs are opened, closed or reloaded.`, 'Arrange tabs')) return;
+    await applyClusterPlan(plan);
+  }));
+  $('undo-cluster').addEventListener('click',()=>run(async()=> {
+    if (!clusterOperation?.canUndo) return;
+    const plan = await send('cluster-undo-preview',{windowId,planId:clusterOperation.planId,requestId:crypto.randomUUID()});
+    if (!await confirm('Undo the last tab reorder?','Restore the previous tab order in this window? Undo is available only while the tabs, their URLs and their current order still match the completed reorder. No tabs are opened or closed.','Restore order')) return;
+    await applyClusterPlan(plan,true);
+  }));
   $('live-reload')?.addEventListener('click',()=>run(async()=> {
     if (!await confirm('Load shared groups?', 'Replace this unsaved group review with the groups currently used by the toolbar switcher? Local group edits, exclusions and unaccepted AI suggestions will be discarded. Saved snapshots and browser tabs are unchanged.', 'Load shared groups')) return;
     await hydrateLiveGroups({replace:true});
@@ -787,7 +829,7 @@
     if (!api?.runtime?.sendMessage) throw new Error('This page must be opened from the Safari Workspaces extension toolbar. Enable the extension in Safari Settings → Extensions.');
     const win = await api.windows.getCurrent(); windowId = win.id;
     if (win.incognito || (win.type && win.type !== 'normal')) throw new Error('Private browsing is excluded. Open the manager in a normal Safari window.');
-    await loadSaved(); await scan(); await hydrateLiveGroups();
+    await loadSaved(); await scan(); await hydrateLiveGroups(); await loadClusterStatus();
     if (globalThis.location.hash === '#ai') revealAI();
   });
 })();
