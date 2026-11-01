@@ -129,3 +129,8 @@ Popup page switches reset the scroll pane to top; sticky navigation remains visi
 ## v0.13.6 navigation clarification — November 1
 
 User clarified navigation need not stay visible. Removed sticky positioning; navigation scrolls normally. Page-switch scroll reset and preventScroll focus remain. Native build/signature pass; CSS-only behavior change, automated suite not repeated.
+
+
+## v0.13.7 popup focus palette correction — November 1
+
+User screenshot identified leftover green token-field focus outline. Replaced old popup AI green focus/accent/border/fill literals with the blue palette and added a shared accessible focus-visible rule. Native build/signature pass; actual Safari focus appearance requires confirmation. CSS-only change, behavioral tests not repeated.
