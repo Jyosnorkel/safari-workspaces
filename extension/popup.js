@@ -131,7 +131,7 @@ async function loadLiveGroups(windowId) {
     const focus = popupNode('button','workspace-focus'); focus.type = 'button';
     focus.setAttribute('aria-label',`Switch to ${group.name}, ${group.tabs.length} tabs`);
     focus.append(popupNode('span','workspace-name',group.name),popupNode('span','workspace-count',String(group.tabs.length)));
-    focus.title = 'Return to the last-used tab in this workspace';
+    focus.title = `${group.name} — return to the last-used tab`;
     focus.addEventListener('click',()=>action(async()=> {
       await send('live-groups-focus',{windowId,groupId:group.id,expectedRevision:liveRevision});
       status.textContent = `Switched to ${group.name}.`;

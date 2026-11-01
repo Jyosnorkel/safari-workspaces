@@ -114,3 +114,8 @@ User screenshot confirms popup blob export failed with WebKitBlobResource:1. Pop
 ## v0.13.3 direct Downloads export — November 1
 
 Export now delegates validated backup JSON to the native extension via nativeMessaging. Handler bounds/parses data, generates a unique filename, writes without overwriting to Downloads, and reads back bytes before success. No browser navigation/download links or full-content logs. Extension has verified Downloads read/write entitlement. 209 fake-browser/provider checks, native build and signature pass. Packaged Safari/native messaging and real Downloads destination still require live verification; no claim of an actual file export yet.
+
+
+## v0.13.4 flat popup controls — November 1
+
+Checked Apple Liquid Glass documentation: native SwiftUI glassEffect is not a supported CSS material for this HTML extension popup. Removed imitation inset glints, native button bevels and decorative shadows; retained functional insertion lines/focus indicators. Improved dark/system-dark contrast, small control targets and full group-name tooltips. Fictional-data internal-browser Home/Settings navigation and system-dark appearance inspected; 209 automated checks/native build pass. No retained isolated SafariDriver session located; no real Safari UI actions, tabs or windows touched. Actual packaged Safari visual verification remains open.

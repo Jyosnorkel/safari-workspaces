@@ -100,7 +100,29 @@ Remaining priorities: integrate reviewed agent fixes and isolated Safari tests; 
 
 ## Development workflow and agent boundaries
 
-- Use subagents for tasks with separable implementation, investigation, review or verification work. The root coordinator should delegate suitable bounded subtasks proactively, retain responsibility for integration and final verification, and avoid delegation overhead for trivial edits. Use separate worktrees/branches for concurrent code changes, communicate file ownership, and keep at most three active subagents. This is an explicit user instruction authorizing subagent use for project tasks.
+- Organize subagents by meaningful, reusable workstream roles below. Do not spawn a new subagent for every task or routine change. Reuse an existing role agent for follow-up work when available; start agents only when the scope benefits from independent ownership or parallel work. Small fixes may be handled directly by root. These roles define responsibilities, not a requirement to keep every role running. Keep at most three active subagents.
+
+### Subagent team — consolidated fields
+
+Use this single team structure for future work. Earlier agent names are historical aliases within these fields, not additional roles to spawn. Check available sessions and workstream instructions before resuming earlier work; names/screenshots alone do not prove availability or completion.
+
+| Team role | Ownership | Earlier workstreams absorbed |
+| --- | --- | --- |
+| **Product design and themes** | Popup navigation, interaction design, information hierarchy, accessibility, visual consistency, icons, light/dark themes and compact layouts. Defines concrete designs and acceptance criteria; coordinates CSS/assets with Frontend. | UI designer; Aesthetics and themes manager |
+| **Frontend** | Popup/dashboard implementation, drag/drop, settings, snapshot presentation, AI controls, state rendering and UI tests. Implements designs and coordinates backend contracts. | Popup ai ui; Scan refresh; Finder drag |
+| **Snapshots and recovery** | Snapshot persistence, save/readback, backup import/export, restore journals, ordering and partial-failure recovery. Owns data integrity; coordinates native export with Native and Safari platform. | Workspace persistence; Backup drop; Snapshot backend |
+| **Organisation engine** | Live group membership, manual group creation/removal, tab ordering, publication, revision/concurrency checks, identity validation and explicitly confirmed Safari clustering. | Workspace engine; Cluster engine; Publish groups; Live groups; Organise backend |
+| **Meta integration and controls** | Authenticated local service, provider contracts, grouping preferences, consent, sanitization, bounded prompts/results, token accounting, usage limits and safe diagnostics. Automated tests use fake providers; live calls require existing explicit opt-in/consent. | Meta service finish; Meta api controls; Popup ai service; Meta API integration |
+| **Native and Safari platform** | Safari API compatibility, native setup/Keychain, helper lifecycle, native messaging, file entitlements, extension registration, signing, packaging and isolated Safari verification. Coordinates native backup export with Snapshots and recovery. | Safari integration; Desktop helper; Desktop setup; Release research |
+
+**Root coordinator** owns task selection, cross-field contracts, integration review, final verification, roadmap evidence and GitHub uploads. Root verifies actual built/registered versions and distinguishes automated fixtures from real Safari/Meta evidence. Release research remains evidence, not certification of notarization or clean-install success.
+
+### Role coordination
+
+- Use the six consolidated team role names when assigning agents. Hand related follow-up work to the same agent rather than creating one-off reviewer agents for each change. Agent sessions may need recreation across chats; these saved responsibilities persist even when a session does not.
+- Assign bounded deliverables and explicit file ownership before concurrent edits. Use separate worktrees/branches for concurrent code changes, linked issues/PRs where appropriate, and communicate API changes before crossing ownership.
+- Combine roles when the work is small; split them only when the scope justifies it. The team roster is not a mandate to run every role or duplicate reviews. Root can consult a relevant role without delegating the entire task.
+
 
 - Root coordinator reviews integrations and versions; agents use separate worktrees/branches, linked GitHub issues and PRs. User explicitly authorized subagent collaboration and regular GitHub uploads. Maximum three active subagents.
 - Workstream ownership/instructions: workstreams/*/AGENTS.md and docs/WORKSTREAMS.md. Current direct assignments override stale queued/boundary text. Communicate API changes before crossing file ownership.
@@ -258,3 +280,8 @@ User screenshot confirms popup blob export failed with WebKitBlobResource:1. Pop
 ## v0.13.3 direct Downloads export — November 1
 
 Export now delegates validated backup JSON to the native extension via nativeMessaging. Handler bounds/parses data, generates a unique filename, writes without overwriting to Downloads, and reads back bytes before success. No browser navigation/download links or full-content logs. Extension has verified Downloads read/write entitlement. 209 fake-browser/provider checks, native build and signature pass. Packaged Safari/native messaging and real Downloads destination still require live verification; no claim of an actual file export yet.
+
+
+## v0.13.4 flat popup controls — November 1
+
+Checked Apple Liquid Glass documentation: native SwiftUI glassEffect is not a supported CSS material for this HTML extension popup. Removed imitation inset glints, native button bevels and decorative shadows; retained functional insertion lines/focus indicators. Improved dark/system-dark contrast, small control targets and full group-name tooltips. Fictional-data internal-browser Home/Settings navigation and system-dark appearance inspected; 209 automated checks/native build pass. No retained isolated SafariDriver session located; no real Safari UI actions, tabs or windows touched. Actual packaged Safari visual verification remains open.
