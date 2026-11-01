@@ -37,7 +37,7 @@ async function harness(options={}) {
   const findById=id=>nodes.get(id)||[...nodes.values()].flatMap(all).find(node=>node.attributes.id===id);
   const document={getElementById:findById,createElement:tag=>new Element(tag),querySelector:selector=>selector==='main'?main:selector==='aside'?aside:null,body};
   nodes.get('confirm').showModal=()=>{ if(h.autoConfirm)queueMicrotask(()=>{nodes.get('confirm').returnValue='accept';nodes.get('confirm').dispatch('close');}); };
-  const browser={permissions:{request:async permission=>{h.permissionCalls++;h.requestedPermission=permission;return h.permission;}},windows:{getCurrent:async()=>({id:1,incognito:false})},runtime:{id:'test',getURL:path=>`safari-web-extension://test/${path}`,onMessage:{addListener:fn=>h.runtimeListener=fn},sendMessage:async message=>{
+  const browser={storage:{local:{get:async()=>({'tabby.settings.v1':{preferences:h.preferences || ''}})}},permissions:{request:async permission=>{h.permissionCalls++;h.requestedPermission=permission;return h.permission;}},windows:{getCurrent:async()=>({id:1,incognito:false})},runtime:{id:'test',getURL:path=>`safari-web-extension://test/${path}`,onMessage:{addListener:fn=>h.runtimeListener=fn},sendMessage:async message=>{
     h.sent.push(structuredClone(message));
     if(message.type==='live-groups-get') {
       if(h.liveGetError)return {ok:false,error:h.liveGetError};
@@ -212,8 +212,8 @@ test('collapse is associated with its body, persists through renaming/moving and
   const h=await harness();await h.scan();await h.click('new-group');
   const id=groupIdOf(chipFor(h,'Workspace 1'));let chip=chipFor(h,'Workspace 1');
   assert.equal(chip.tagName,'button');assert.equal(chip.attributes['aria-controls'],`group-body-${id}`);
-  chip.click();await settle();assert.equal(h.node(`group-body-${id}`).hidden,true);assert.equal(h.node(`manual-group-${id}`).hidden,true);assert.equal(chipFor(h,'Workspace 1').attributes['aria-expanded'],'false');
-  assert.match(h.node(`group-toggle-${id}`).textContent,/Expand/);
+  chip.click();await settle();assert.equal(h.node(`group-body-${id}`).hidden,true);assert.equal(h.node(`manual-group-${id}`).hidden,false);assert.equal(chipFor(h,'Workspace 1').attributes['aria-expanded'],'false');
+  assert.equal(h.node(`group-toggle-${id}`).attributes['aria-expanded'],'false');
   await h.change(named(h,'groups','Workspace 1'),'Renamed','input');await h.change(named(h,'groups','Renamed'),'Renamed');
   assert.equal(chipFor(h,'Renamed').attributes['aria-expanded'],'false');assert.equal(h.node(`group-body-${id}`).hidden,true);
   const drag=await startDrag(h,'Page 1');await drop(h,chipFor(h,'Renamed'),drag.data);
@@ -228,7 +228,7 @@ test('external, forged and invalid-target drops are ignored without navigating o
   await drop(h,target,transfer({[dragType]:'forged-token'}));assert.equal(selectedGroup(h,'Page 1'),'ungrouped');
   const drag=await startDrag(h,'Page 1');await drop(h,target,transfer({[dragType]:'wrong-token'}));assert.equal(selectedGroup(h,'Page 1'),'ungrouped');
   const removedChip=chipFor(h,'Workspace 1');await h.click('new-group');
-  const remove=h.find('groups',node=>node.tagName==='button'&&node.textContent==='Remove empty group');remove.click();await settle();
+  const remove=h.label('groups','Remove Workspace 1; move tabs to Ungrouped');remove.click();await settle();
   const liveDrag=await startDrag(h,'Page 1');await drop(h,removedChip,liveDrag.data);assert.equal(selectedGroup(h,'Page 1'),'ungrouped');
   assert.equal(h.sent.some(m=>['save','restore'].includes(m.type)),false);
 });
@@ -446,4 +446,38 @@ test('accepted popup groups notify an open dashboard without silently replacing 
  const h=await harness();await h.click('new-group');await h.change(named(h,'groups','Workspace 1'),'Unfinished local edit','input');
  const response=await h.runtimeListener({channel:'workspace-dashboard',type:'live-groups-changed',windowId:1},{id:'test',url:'safari-web-extension://test/popup.html'});
  assert.equal(response.ok,true);assert(named(h,'groups','Unfinished local edit'));assert.match(h.node('live-status').textContent,/Groups changed in the toolbar popup/);assert.equal(h.node('live-reload').hidden,false);
+});
+
+
+test('whole-row drops show an insertion line and insert before a row across or within groups',async()=>{
+ const h=await harness({tabs:[sample(1),sample(2),sample(3)]});await h.scan();await h.click('new-group');
+ const id=groupIdOf(chipFor(h,'Workspace 1'));
+ let data=transfer();rowFor(h,'Page 1').dispatch('dragstart',{dataTransfer:data});await drop(h,h.node(`manual-group-${id}`),data);
+ data=transfer();rowFor(h,'Page 3').dispatch('dragstart',{dataTransfer:data});
+ let before=rowFor(h,'Page 1');before.dispatch('dragover',{dataTransfer:data});assert.match(before.className,/drop-before/);
+ await drop(h,before,data);
+ let ordered=h.findAll('groups',node=>node.attributes['aria-label']?.startsWith('Move ')).map(node=>node.attributes['aria-label']);
+ assert.deepEqual(ordered,['Move Page 2','Move Page 3','Move Page 1']);
+ data=transfer();rowFor(h,'Page 1').dispatch('dragstart',{dataTransfer:data});await drop(h,rowFor(h,'Page 3'),data);
+ ordered=h.findAll('groups',node=>node.attributes['aria-label']?.startsWith('Move ')).map(node=>node.attributes['aria-label']);
+ assert.deepEqual(ordered,['Move Page 2','Move Page 1','Move Page 3']);
+ h.label('groups','Include Page 1').checked=false;h.label('groups','Include Page 1').dispatch('change');await settle();
+ const remove=h.label('groups','Remove Workspace 1; move tabs to Ungrouped');assert(remove);remove.click();await settle();
+ assert.equal(selectedGroup(h,'Page 1'),'ungrouped');assert.equal(selectedGroup(h,'Page 3'),'ungrouped');
+ assert.equal(h.label('groups','Include Page 1').checked,false);
+ assert.equal(h.sent.some(m=>['save','restore'].includes(m.type)),false);
+});
+
+
+test('direct AI application forwards saved preferences and needs no second acceptance',async()=>{
+ const h=await harness({preferences:'Prefer project-specific groups; always keep Research',result:{groups:[{name:'Research',reason:'Shared project',tabIds:['1','2']}]}});
+ await h.scan();await h.connect();h.node('ai-apply-direct').checked=true;await h.consent();
+ const confirmations=[];h.node('confirm').showModal=()=>{confirmations.push(h.node('confirm-title').textContent);queueMicrotask(()=>{h.node('confirm').returnValue='accept';h.node('confirm').dispatch('close');});};
+ await h.click('suggest');
+ assert.deepEqual(confirmations,['Send these tabs for Meta suggestions?']);
+ assert.equal(h.calls.find(call=>call.type==='suggest').preferences,'Prefer project-specific groups; always keep Research');
+ assert.equal(h.suggestCalls,1);assert.equal(h.node('ai-review').hidden,true);
+ const group=named(h,'groups','Research');assert(group);
+ assert.equal(selectedGroup(h,'Page 1'),selectedGroup(h,'Page 2'));assert.notEqual(selectedGroup(h,'Page 1'),'ungrouped');
+ assert.equal(h.sent.some(message=>['save','restore','cluster-apply'].includes(message.type)),false);
 });

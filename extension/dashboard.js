@@ -96,6 +96,10 @@
     try {
       const status = await checkService(token);
       pairedToken = token; usage = status;
+      if($('ai-remember')?.checked){
+        if(!api.storage.session)throw new Error('Session pairing is unavailable. Uncheck session pairing and connect again.');
+        await api.storage.session.set({['tabby.dashboard.pairing.'+windowId]:token});
+      }else if(api.storage.session)await api.storage.session.remove('tabby.dashboard.pairing.'+windowId);
       aiStatus(status.enabled && status.configured ? `${connectionUpdated ? 'Safari’s connection address was updated automatically. ' : ''}Connected. Review the exact input and agree to the disclosure before requesting suggestions. This status check made no model call.` : 'Local service connected, but Meta suggestions are disabled or the provider is not configured. Configure the service before requesting suggestions.');
     } catch (error) {
       pairedToken = ''; usage = null;
@@ -113,13 +117,15 @@
     if (!pairedToken || !usage?.enabled || !usage?.configured || !$('ai-consent').checked || !requestTabs.length) throw new Error('Connect the service, include tabs and agree to the disclosure first.');
     const baseline = reviewRevision;
     const payload = C.aiInventory(requestTabs);
-    if (!await confirm('Send these tabs for Meta suggestions?', `Send ${payload.length} tab titles and sanitized URL paths through http://127.0.0.1:8788 to its configured Meta model provider? Titles and paths may be sensitive. This uses up to ${attemptsPerSuggestion()} remote attempts. Page text is not sent. Your manual groups stay unchanged. A valid response replaces any older unaccepted suggestion preview.`, 'Send & suggest')) return;
+    if (!await confirm('Send these tabs for Meta suggestions?', `Send ${payload.length} tab titles and sanitized URL paths through http://127.0.0.1:8788 to its configured Meta model provider? Titles and paths may be sensitive. This uses up to ${attemptsPerSuggestion()} remote attempts. Page text is not sent. Your manual groups stay unchanged. Your saved grouping preferences are included. A valid response replaces any older unaccepted suggestion preview and applies directly if selected.`, 'Send & suggest')) return;
     if (baseline !== reviewRevision) throw new Error('Your review changed. Review the updated input before requesting suggestions.');
     $('ai-consent').checked = false;
     aiStatus('Requesting Meta suggestions: token count and generation. Your manual groups are unchanged…');
     notice('Waiting for suggestions. No tabs will be opened or closed.');
     try {
-      const response = await ai().suggest({token: pairedToken, tabs: payload, consent: true});
+      const savedSettings = await api.storage.local.get('tabby.settings.v1');
+      const preferences = String(savedSettings?.['tabby.settings.v1']?.preferences || '').slice(0,1200);
+      const response = await ai().suggest({token: pairedToken, tabs: payload, preferences, consent: true});
       if (response?.usage) usage = response.usage;
       const validated = C.suggestions(response?.result, requestTabs);
       if (baseline !== reviewRevision) throw new Error('Your review changed during the request. Suggestions were not applied.');
@@ -130,6 +136,7 @@
       renderSuggestions();
       aiStatus(`Received ${proposedGroups.length} proposed groups. Review, rename or move tabs below, then accept explicitly. Your manual groups are unchanged.`);
       notice('Suggestions are ready to review. They have not changed your groups or snapshots.');
+      if($('ai-apply-direct')?.checked)await acceptSuggestions({direct:true});
     } catch (error) {
       if (error.usage) usage = error.usage;
       else usage = null; // Require an explicit status refresh; do not make hidden follow-up calls.
@@ -176,13 +183,13 @@
       card.append(list); $('ai-candidates').append(card);
     }
   }
-  async function acceptSuggestions() {
+  async function acceptSuggestions({direct=false} = {}) {
     const candidate = pendingSuggestions;
     if (!candidate) return;
     if (candidate.revision !== reviewRevision) { reviewChanged(); throw new Error('Your review changed. Request fresh suggestions.'); }
     const raw = {groups: candidate.groups.map(group => ({name: group.name.trim(), reason: group.reason, tabIds: candidate.tabs.filter(tab => candidate.assignments.get(String(tab.id)) === group.id).map(tab => String(tab.id))})).filter(group => group.tabIds.length)};
     const validated = C.suggestions(raw, candidate.tabs);
-    if (!await confirm('Accept reviewed suggestions?', `Apply these group assignments to ${candidate.tabs.length} included tabs? Existing unchecked tabs keep their groups. This updates only the review; no tabs are saved, closed or restored.`, 'Accept groups')) return;
+    if (!direct && !await confirm('Accept reviewed suggestions?', `Apply these group assignments to ${candidate.tabs.length} included tabs? Existing unchecked tabs keep their groups. This updates only the review; no tabs are saved, closed or restored.`, 'Accept groups')) return;
     if (candidate.revision !== reviewRevision) throw new Error('Your review changed. Suggestions were not applied.');
     const added = validated.groups.map(group => ({...group, id: crypto.randomUUID()}));
     candidate.tabs.forEach((tab,index)=>tabOrder.set(tab.id,index));
@@ -323,7 +330,8 @@
     draggedTab = null;
     $('group-chips').classList.toggle('is-dragging',false);
     for (const chip of $('group-chips').children) chip.classList.toggle('is-drop-target', false);
-    for (const card of [...$('groups').children,...$('ai-candidates').children]) { card.classList.toggle('is-drop-target',false); for (const list of card.children) for (const row of list.children) row.classList.toggle('is-drop-target',false); }
+    const clearMarkers = node => { node.classList.toggle('is-drop-target',false); node.classList.toggle('drop-before',false); for (const child of node.children) clearMarkers(child); };
+    for (const card of [...$('groups').children,...$('ai-candidates').children]) clearMarkers(card);
   }
   function validDrop(groupId, transfer, readToken = false) {
     if (busy || !draggedTab || draggedTab.scope !== 'manual' || draggedTab.generation !== generation || draggedTab.revision !== reviewRevision || !groups.some(group => group.id === groupId)) return false;
@@ -347,11 +355,15 @@
     if (busy || !groups.some(group => group.id === groupId)) return;
     if (collapsedGroups.has(groupId)) collapsedGroups.delete(groupId); else collapsedGroups.add(groupId);
     renderGroups();
-    $(collapsedGroups.has(groupId) ? `group-chip-${groupId}` : focusId)?.focus();
+    $(focusId || `group-toggle-${groupId}`)?.focus();
   }
   function bindGroupToggle(control, groupId, focusId) {
-    control.addEventListener('click', () => toggleGroup(groupId, focusId));
+    control.addEventListener('click', event => {
+      if (event.target !== control && ['INPUT','BUTTON','SELECT','TEXTAREA'].includes(String(event.target?.tagName).toUpperCase())) return;
+      toggleGroup(groupId, focusId);
+    });
     control.addEventListener('keydown', event => {
+      if (event.target !== control && ['INPUT','BUTTON','SELECT','TEXTAREA'].includes(String(event.target?.tagName).toUpperCase())) return;
       if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') {
         event.preventDefault(); toggleGroup(groupId, focusId);
       }
@@ -371,7 +383,7 @@
       chip.setAttribute('aria-label', `${collapsed ? 'Expand' : 'Collapse'} ${name}, ${tabLabel(count)}`);
       chip.title = 'Click to collapse or expand this group. Drop a tab handle here to move it into this group.';
       chip.classList.toggle('is-collapsed', collapsed);
-      chip.append(e('span','group-chip-name',name), e('span','group-chip-count',String(count)), e('span','group-chip-arrow',collapsed ? '▸' : '▾'));
+      chip.append(e('span','group-chip-name',name), e('span','group-chip-count',String(count)));
       bindGroupToggle(chip,group.id,`group-chip-${group.id}`);
       const over = event => {
         event.preventDefault(); // Never allow external URL drops to navigate the dashboard.
@@ -496,24 +508,30 @@
       if (Array.from(event.dataTransfer?.types || []).includes('Files')) return;
       event.preventDefault();
       const valid = validDrop(groupId,event.dataTransfer);
-      const reorder = valid && draggedTab.mode === 'order' && draggedTab.fromGroup === groupId && beforeId !== undefined && beforeId !== draggedTab.tabId;
-      node.classList.toggle('is-drop-target', Boolean(valid && (draggedTab.fromGroup !== groupId || reorder)));
+      const reorder = valid && beforeId !== undefined && beforeId !== draggedTab.tabId;
+      node.classList.toggle('is-drop-target', Boolean(valid && beforeId === undefined && draggedTab.fromGroup !== groupId));
+      node.classList.toggle('drop-before',Boolean(reorder));
       if (event.dataTransfer) event.dataTransfer.dropEffect = valid ? 'move' : 'none';
     });
-    node.addEventListener('dragleave', () => node.classList.toggle('is-drop-target', false));
+    node.addEventListener('dragleave', () => {node.classList.toggle('is-drop-target', false);node.classList.toggle('drop-before',false);});
     node.addEventListener('drop', event => {
       if (Array.from(event.dataTransfer?.types || []).includes('Files')) return;
       event.preventDefault(); event.stopPropagation?.();
       if (validDrop(groupId,event.dataTransfer,true)) {
         const source = draggedTab;
-        if (source.mode === 'order' && source.fromGroup === groupId && beforeId !== undefined && beforeId !== source.tabId) {
+        if (beforeId !== undefined && beforeId !== source.tabId) {
+          const target = groups.find(group=>group.id===groupId);
+          const moving = tabs.find(tab=>tab.id===source.tabId);
           const ordered = assigned(groupId).filter(tab=>tab.id!==source.tabId);
-          ordered.splice(ordered.findIndex(tab=>tab.id===beforeId),0,tabs.find(tab=>tab.id===source.tabId));
-          ordered.forEach((tab,index)=>tabOrder.set(tab.id,index));
-          reviewChanged(); renderGroups(); notice('Tab order updated in this workspace review. Safari’s tab bar is unchanged.');
-        } else moveTab(source.tabId,groupId);
+          const index = ordered.findIndex(tab=>tab.id===beforeId);
+          if (index >= 0) {
+            ordered.splice(index,0,moving); assignments.set(source.tabId,groupId);
+            ordered.forEach((tab,position)=>tabOrder.set(tab.id,position));
+            reviewChanged(); renderGroups(); notice(`Tab placed in “${target.name}”. Safari’s tab bar is unchanged.`);
+          }
+        } else if (beforeId === undefined) moveTab(source.tabId,groupId);
       }
-      node.classList.toggle('is-drop-target',false); clearDrag();
+      node.classList.toggle('is-drop-target',false); node.classList.toggle('drop-before',false); clearDrag();
     });
   }
   function renderGroups() {
@@ -529,7 +547,7 @@
       const card = e('section','group'), header = e('div','group-header');
       const collapsed = collapsedGroups.has(group.id);
       card.setAttribute('id',`manual-group-${group.id}`); card.setAttribute('aria-label',group.name || 'Unnamed group');
-      card.classList.toggle('is-collapsed',collapsed); card.hidden = collapsed;
+      card.classList.toggle('is-collapsed',collapsed);
       bindManualTarget(card,group.id);
       const body = e('div','group-body'); body.setAttribute('id',`group-body-${group.id}`); body.hidden = collapsed;
       const name = e('input'); name.type = 'text'; name.maxLength = 80; name.value = group.name;
@@ -537,17 +555,27 @@
       name.addEventListener('input', () => {group.name = name.value; reviewChanged(); renderGroupChips();});
       name.addEventListener('change',renderGroups);
       header.append(name,e('span','count',`${tabLabel(assigned(group.id).length)} · ${selected(group.id).length} selected`));
-      const toggle = e('button','group-toggle',collapsed ? 'Expand ▸' : 'Collapse ▾'); toggle.type='button';
-      toggle.setAttribute('id',`group-toggle-${group.id}`); toggle.setAttribute('aria-label',`${collapsed ? 'Expand' : 'Collapse'} ${group.name || 'Unnamed group'}`);
-      toggle.setAttribute('aria-expanded',String(!collapsed)); toggle.setAttribute('aria-controls',`group-body-${group.id}`);
-      bindGroupToggle(toggle,group.id,`group-toggle-${group.id}`); header.append(toggle);
+      header.setAttribute('id',`group-toggle-${group.id}`); header.setAttribute('role','button'); header.setAttribute('tabindex','0');
+      header.setAttribute('aria-label',`${collapsed ? 'Expand' : 'Collapse'} ${group.name || 'Unnamed group'}`);
+      header.setAttribute('aria-expanded',String(!collapsed)); header.setAttribute('aria-controls',`group-body-${group.id}`);
+      header.title = 'Click to show or hide tabs. Edit the name to rename this group.';
+      bindGroupToggle(header,group.id,`group-toggle-${group.id}`);
+      if (group.id !== 'ungrouped') {
+        const remove = button('×',async()=>{
+          const members=assigned(group.id), ungrouped=assigned('ungrouped');
+          if(!groups.some(item=>item.id==='ungrouped'))groups.unshift({id:'ungrouped',name:'Ungrouped',reason:''});
+          members.forEach((tab,index)=>{assignments.set(tab.id,'ungrouped');tabOrder.set(tab.id,ungrouped.length+index);});
+          groups=groups.filter(item=>item.id!==group.id);collapsedGroups.delete('ungrouped');
+          reviewChanged();renderGroups();notice('Group removed. Its tabs moved to Ungrouped; no browser tabs changed.');
+        },'group-remove');
+        remove.setAttribute('aria-label',`Remove ${group.name}; move tabs to Ungrouped`);remove.title='Remove group; keep its tabs in Ungrouped';card.append(remove);
+      }
       card.append(header);
       const selectionActions = e('div','group-select-actions');
       for (const [label,include] of [['Select all',true],['Select none',false]]) selectionActions.append(button(label,async()=>{
         for (const tab of assigned(group.id).filter(tab=>tab.eligible)) if (include) excluded.delete(tab.id); else excluded.add(tab.id);
         reviewChanged(); renderGroups();
       }));
-      if (group.id !== 'ungrouped' && !assigned(group.id).length) selectionActions.append(button('Remove empty group',async()=>{ groups=groups.filter(item=>item.id!==group.id); reviewChanged(); renderGroups(); }));
       body.append(selectionActions);
       if (group.reason) body.append(e('p','group-reason', group.reason));
       const list = e('div','tabs');
@@ -637,6 +665,7 @@
       $('ai-consent').checked = false;
       renderGroups();
     }
+    globalThis.DashboardControls?.updateInventory(tabs,windowId);
     const eligible = tabs.filter(tab=>tab.eligible).length;
     $('scan-info').textContent = `${tabs.length} tabs · ${eligible} eligible · Updated ${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})} · Refreshes every 5 minutes while manager is visible`;
     if (!automatic) notice(eligible ? 'Tabs refreshed. Existing groups and exclusions were kept; new or changed tabs are ungrouped.' : 'No eligible web tabs found. Open regular websites in this window, then refresh.');
@@ -646,7 +675,7 @@
     $('ai').open = true;
     if (!pairedToken) $('connection-settings').open = true;
     $('ai').scrollIntoView?.({block:'start',behavior:'smooth'});
-    (pairedToken ? $('ai-consent') : $('ai-token')).focus();
+    if(pairedToken)$('ai-consent').focus({preventScroll:true});
   }
   async function snapshotWindow() {
     const name = `Window ${new Date().toLocaleString()}`.slice(0,80);
@@ -675,7 +704,12 @@
   document.body.addEventListener('drop', event => {
     event.preventDefault();
     document.body.classList.toggle('backup-drop-active', false);
-    if (!fileDrag(event.dataTransfer) || busy) return;
+    if(busy)return;
+    if(!fileDrag(event.dataTransfer)){
+      const types=Array.from(event.dataTransfer?.types || []);
+      if(!types.includes(DRAG_TYPE) && !draggedTab)notice('Invalid format. Drop one Tabby JSON backup file.',true);
+      return;
+    }
     const files = Array.from(event.dataTransfer.files || []);
     run(async () => {
       if (files.length !== 1) throw new Error('Drop one Tabby JSON backup at a time.');
@@ -709,9 +743,21 @@
     $('workspaces').replaceChildren();
     if (!workspaces.length) $('workspaces').append(e('div','empty','No saved workspaces yet. Your first saved group will appear here.'));
     for (const workspace of workspaces) {
-      const card = e('article','workspace');
-      card.append(e('h3','',workspace.name));
-      card.append(e('p','',`${workspace.tabs.length} tabs · ${new Date(workspace.createdAt).toLocaleString()}`));
+      const wrapper = e('div','snapshot-entry');
+      const card = e('details','workspace snapshot-card'), summary = e('summary','snapshot-summary');
+      const date = new Date(workspace.createdAt);
+      const hosts = new Set(workspace.tabs.map(tab=>{try{return new URL(tab.url).hostname;}catch{return '';}}));
+      summary.title = `${workspace.name} — ${date.toLocaleString()} — tabs includes duplicates; sites counts distinct hostnames`;
+      summary.setAttribute('aria-label',`${workspace.name}, ${date.toLocaleString()}, ${workspace.tabs.length} tabs, ${hosts.size} sites`);
+      summary.append(e('span','snapshot-date',date.toLocaleString(undefined,{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})),e('span','snapshot-stats',`${workspace.tabs.length} tabs · ${hosts.size} sites`));
+      card.append(summary,e('h3','snapshot-name',workspace.name));
+      const exportButton = button('Export JSON',()=>exportBackup(workspace.id),'snapshot-export');
+      const remove = button('×',async()=>{
+        await send('snapshot-trash',{id:workspace.id});await loadSaved();
+        notice('Snapshot deleted.');
+        $('status').append(button('Undo',async()=>{await send('snapshot-undo-delete',{id:workspace.id});await loadSaved();notice('Snapshot restored.');},'snapshot-undo'));
+      },'snapshot-delete');
+      remove.title='Delete snapshot';remove.setAttribute('aria-label',`Delete snapshot: ${workspace.name}`);
       const results = workspace.restore.results;
       const opened = Object.values(results).filter(r=>r.state==='opened').length;
       const closeCount = workspace.close.results.filter(r=>r.state==='closed').length;
@@ -745,16 +791,24 @@
         } finally { await loadSaved(); }
       },'primary');
       restore.disabled = pending.length > 0;
-      actions.append(button('Export backup', () => exportBackup(workspace.id)), restore); card.append(actions);
-      const detail = e('details'), summary = e('summary','', 'Saved tabs & recovery details');
-      const list = e('ol');
+      actions.append(restore); card.append(actions);
+      const list = e('div','snapshot-tabs');
       for (const tab of workspace.tabs) {
-        const item = e('li','', `${tab.title} — ${tab.url}`);
+        let requestId;
+        const item = button('',async()=>{
+          requestId ||= crypto.randomUUID();
+          await send('snapshot-open-tab',{id:workspace.id,tabId:tab.id,windowId,requestId});
+          requestId=undefined;notice('Saved tab opened in this window.');
+        },'snapshot-tab');
+        item.title=`Open in this window: ${tab.url}`;
+        item.setAttribute('aria-label',`Open saved tab in this window: ${tab.title || 'Untitled tab'}`);
+        let host=tab.url;try{host=new URL(tab.url).hostname;}catch{}
+        item.append(e('strong','snapshot-tab-title',tab.title || 'Untitled tab'),e('small','snapshot-tab-host',host));
         const result = results[tab.id];
         if (result) item.append(e('p','',`Restore: ${result.state}${result.error ? ` — ${result.error}` : ''}`));
         list.append(item);
       }
-      detail.append(summary,list); card.append(detail); $('workspaces').append(card);
+      card.append(list);wrapper.append(card,exportButton,remove);$('workspaces').append(wrapper);
     }
   }
   async function loadClusterStatus() {
@@ -811,6 +865,8 @@
   $('ai-disconnect').addEventListener('click',()=>{
     if (busy) return;
     pairedToken=''; usage=null; $('ai-token').value=''; $('ai-consent').checked=false;
+    if($('ai-remember'))$('ai-remember').checked=false;
+    api.storage.session?.remove('tabby.dashboard.pairing.'+windowId).catch(()=>aiStatus('Could not clear saved session pairing. Try disconnecting again.',true));
     aiStatus('Disconnected. The pairing token was cleared from this page. Manual workspaces and existing review remain available.'); updateAIControls();
   });
   $('ai-consent').addEventListener('change',updateAIControls);
@@ -844,6 +900,10 @@
     const win = await api.windows.getCurrent(); windowId = win.id;
     if (win.incognito || (win.type && win.type !== 'normal')) throw new Error('Private browsing is excluded. Open the manager in a normal Safari window.');
     await loadSaved(); await scan(); await hydrateLiveGroups(); await loadClusterStatus();
+    if(api.storage.session){
+      const remembered=(await api.storage.session.get('tabby.dashboard.pairing.'+windowId))['tabby.dashboard.pairing.'+windowId];
+      if(typeof remembered==='string' && remembered){pairedToken=remembered;$('ai-token').value=remembered;if($('ai-remember'))$('ai-remember').checked=true;aiStatus('Session pairing loaded. Refresh status to connect; no model request made.');updateAIControls();}
+    }
     if (globalThis.location.hash === '#ai') revealAI();
   });
 })();

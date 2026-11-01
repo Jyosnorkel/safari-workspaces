@@ -185,3 +185,7 @@ Open Tabby default is now Cmd+Shift+X. Design review confirms left-hand reach. N
 ### November 1 — v0.16.3 popup toggle
 
 User-requested Cmd+Shift+F replaces the prior default. Popup handles the same keys to close itself, before Cmd+F search matching, including during busy background operations. Design review and222 checks/native build/signature pass. Apple's Safari list has no listed assignment (Finder uses Recents separately); custom conflicts and actual packaged Safari open/close dispatch remain unverified.
+
+### November 1 — v0.17.0 webpage feature parity
+
+Popup capabilities mirrored into webpage: current-tab search/activation, shared editable settings, preferences in Meta payloads, direct AI application option, session pairing, whole-row reorder/insertion markers/header collapse/outside group deletion, compact snapshots/export/delete Undo/single saved-tab opening. Existing webpage restore/recovery/clustering retained. See FEATURE_PARITY.md for mapping and honest popup-only gaps in the reverse direction. 229 fake-browser/provider checks and native build/signature/package comparisons pass. Product design/themes reviewed fictional desktop/480px visuals; actual Safari/Meta verification remains open.
