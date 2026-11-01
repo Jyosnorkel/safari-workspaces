@@ -38,12 +38,12 @@ html[data-theme=dark] .workspace-count,html[data-theme=dark] .workspace-tab[aria
 html[data-theme=dark] :is(.workspace-help,.workspace-empty,.workspace-tab-host,.popup-ai-note,.popup-ai-reason,.scan-row,.intro,footer,#status,button small,#backup-drop span,#backup-drop small,.workspace-remove){color:var(--dark-muted)}
 @media(prefers-color-scheme:dark){html[data-theme=system] :is(.workspace-count,.workspace-tab[aria-current=page],#backup-drop,.view-nav button[aria-current=page],.popup-ai-panel input,.popup-ai-panel select,.popup-ai-panel pre){background:#29485d;color:var(--dark-text)}html[data-theme=system] :is(.workspace-help,.workspace-empty,.workspace-tab-host,.popup-ai-note,.popup-ai-reason,.scan-row,.intro,footer,#status,button small,#backup-drop span,#backup-drop small,.workspace-remove){color:var(--dark-muted)}}
 
-/* Keep page navigation anchored and use one palette for every popup surface. */
+/* Use one palette for every popup surface. */
 :root{--surface:#fff;--canvas:#f5f9fc;--raised:#eaf4fb;--ink:#203b53;--muted:#526c82;--line:#cbdfea;--accent:#a8dafa;--accent-ink:#173e5b;--hover:#e7f3fc;--error:#9f3838}
 html[data-theme=dark]{--surface:#223646;--canvas:#172430;--raised:#263e50;--ink:#e1edf5;--muted:#b7ccda;--line:#466176;--accent:#83c5f0;--accent-ink:#102c40;--hover:#29485d;--error:#ffb2a9}
 @media(prefers-color-scheme:dark){html[data-theme=system]{--surface:#223646;--canvas:#172430;--raised:#263e50;--ink:#e1edf5;--muted:#b7ccda;--line:#466176;--accent:#83c5f0;--accent-ink:#102c40;--hover:#29485d;--error:#ffb2a9}}
 html body{background:var(--canvas);color:var(--ink)}
-.view-nav{position:sticky;top:-20px;z-index:5;padding:8px 4px;background:var(--raised);border:1px solid var(--line)}
+.view-nav{padding:8px 4px;background:var(--raised);border:1px solid var(--line)}
 html header,html .view-nav{background:var(--raised);color:var(--ink);border-color:var(--line)}
 html body :is(button,input,select,textarea){color:var(--ink);border-color:var(--line)}
 html body :is(button,.live-workspace,.popup-ai-panel,.popup-ai-panel input,.popup-ai-panel select,.workspace-add input){background:var(--surface);color:var(--ink);border-color:var(--line)}

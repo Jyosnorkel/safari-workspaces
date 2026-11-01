@@ -290,3 +290,8 @@ Checked Apple Liquid Glass documentation: native SwiftUI glassEffect is not a su
 ## v0.13.5 anchored navigation and unified themes — November 1
 
 Popup page switches reset the scroll pane to top; sticky navigation remains visible. AI panel no longer scrolls itself into view and token/consent focus uses preventScroll. Theme palette covers popup surfaces, forms, notes, snapshots, drag states and AI actions. Dashboard loads the same local appearance preference and responds to settings changes; decorative glints removed while functional drop/focus markers remain. 209 automated checks include navigation scroll-reset regression; native build/signature pass. Actual packaged Safari appearance remains unverified; no personal Safari interaction.
+
+
+## v0.13.6 navigation clarification — November 1
+
+User clarified navigation need not stay visible. Removed sticky positioning; navigation scrolls normally. Page-switch scroll reset and preventScroll focus remain. Native build/signature pass; CSS-only behavior change, automated suite not repeated.
