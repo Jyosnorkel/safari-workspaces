@@ -117,6 +117,13 @@ Use this single team structure for future work. Earlier agent names are historic
 
 **Root coordinator** owns task selection, cross-field contracts, integration review, final verification, roadmap evidence and GitHub uploads. Root verifies actual built/registered versions and distinguishes automated fixtures from real Safari/Meta evidence. Release research remains evidence, not certification of notarization or clean-install success.
 
+### Required UI and aesthetics review for every new feature
+
+- Before marking any new feature complete, consult the **Product design and themes** role in both its **UI designer** and **Aesthetics and themes manager** responsibilities. This review is mandatory for every new feature; one reusable role agent may cover both responsibilities. Reuse the existing agent rather than spawning a new reviewer per feature.
+- Review the implemented result visually, not just the code or accessibility tree. Check consistency with the app’s theme and colour scheme, light/dark/system appearances, typography, spacing, margins, control styling, contrast, focus states and overall visual quality.
+- Inspect the popup at its actual dimensions, including scrolling content, long tab/group names, empty/loading/error states and narrow available widths. Verify that cards, fields and buttons fit within both margins with no unintended clipping or horizontal overflow.
+- Resolve review findings and inspect the corrected result before release. Root records the review evidence and distinguishes fictional-data/browser previews from actual packaged Safari verification. If a visual check cannot be performed, report the missing verification explicitly and do not claim that appearance was verified.
+
 ### Role coordination
 
 - Use the six consolidated team role names when assigning agents. Hand related follow-up work to the same agent rather than creating one-off reviewer agents for each change. Agent sessions may need recreation across chats; these saved responsibilities persist even when a session does not.
