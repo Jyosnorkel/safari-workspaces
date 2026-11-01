@@ -100,7 +100,7 @@ test('AI starts disconnected with no background service calls; backup controls r
   const h=await harness();assert.equal(h.statusCalls,0);assert.equal(h.suggestCalls,0);assert.equal(h.node('suggest').disabled,true);
   assert.equal(h.node('ai-origin').textContent,'safari-web-extension://fake-test');
   await h.click('snapshot-window');assert(h.sent.some(m=>m.type==='snapshot-window'));
-  await h.click('export-all');assert(h.sent.some(m=>m.type==='export-backup'));assert.equal(h.downloads,1);
+  await h.click('export-all');assert(h.sent.some(m=>m.type==='export-backup'));assert.equal(h.downloads,undefined); // Export no longer creates Safari extension blob URLs.
 });
 test('permission denial leaves manual grouping usable and sends no service requests',async()=>{
   const h=await harness({permission:false});await h.scan();await h.connect();
