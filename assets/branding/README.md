@@ -2,7 +2,9 @@
 
 Generated with the built-in imagegen tool on November 1, 2026. Master: `tabby-master.png`; derived PNG sizes are used by the extension and native app.
 
-Prompt: Exactly three simplified macOS windows stacked diagonally from upper left to lower right. Each has visible red, yellow and green traffic-light controls. Translucent blue liquid glass, cyan edge highlights, azure and cobalt depths, restrained reflections, empty panes, no text or surrounding tile, transparent background, centered square composition with safe padding.
+Current revision: simplified flat blue windows, retaining the approved shapes and red/yellow/green controls. Original glass artwork is preserved as `tabby-glass-v1.png`.
+
+Edit prompt (built-in imagegen): Preserve exactly the three rounded Mac window shapes, proportions, diagonal upper-left to lower-right stack and traffic-light positions. Replace liquid glass with uniform solid blue (#2385EB). No gradients, shine, glow, reflection, bevel, texture or shadow. Narrow transparent separation at overlaps. Flat red/yellow/green circles, no titlebar dividers. Transparent background, no text or added elements.
 
 The branding changes preserve bundle IDs, storage keys and backup format identifiers. Build target and artifact paths retain Safari Dev Lab for compatibility with existing scripts. Real Safari icon rendering remains unverified; no Safari sessions were changed.
 
