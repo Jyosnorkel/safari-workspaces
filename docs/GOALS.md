@@ -51,3 +51,9 @@ A read-back-verified session journal saves before/target orders and move steps b
 ## v0.8.1 wider toolbar popup — November 1
 
 Popup preferred dimensions increased from 360 px wide to 480 × 600 px. Save snapshot and AI organise sit side by side. Root dimensions are declared before content arrives; the body adapts to a constrained viewport and the content pane owns vertical scrolling beneath a fixed layout header. Removed nested scrolling from the workspace list. Fictional-data browser preview expanded eight sample tabs, measured no horizontal overflow, and reached the scroll bottom (425 px scroll offset, 959 px content / 534 px viewport). Existing functionality was unchanged. Native build/signature and packaged CSS comparison pass. Safari's actual native popup geometry remains unverified; no Safari control or model calls.
+
+## Tabby visual theme — November 1 (branding PR)
+
+Visible app/extension branding is Tabby. The approved three-window silhouette now uses pale folder-blue faces with restrained glass edge accents, retaining red/yellow/green window controls. Dashboard, popup and native activation page use cool white/pale-blue surfaces, sky-blue actions and dark blue text; warning/error colours remain distinct. Bundle/storage/backup identifiers and build paths stay compatible. Earlier icon versions and generation prompt history are preserved under assets/branding.
+
+All 176 fake-browser/model checks pass. Fictional-data internal-browser preview verified dashboard/settings and popup appearance, loaded icons, no horizontal overflow and the popup's scrollable main pane. Native build, strict signature and packaged theme/icon comparisons pass. Actual Safari appearance remains unverified. No Safari control or live Meta calls occurred. This is an isolated branding iteration for coordinated integration, not a tagged release.

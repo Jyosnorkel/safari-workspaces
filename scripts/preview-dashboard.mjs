@@ -46,6 +46,7 @@ const server=createServer(async(request,response)=>{
    response.setHeader('Content-Type','text/html');return response.end(html);
   }
   if(name==='preview-browser.js'||name==='preview-ai.js'){response.setHeader('Content-Type','text/javascript');return response.end(name==='preview-browser.js'?browserFixture:fakeAI);}
+  if(/^icons\/tabby-(16|32|48|64|128|256|512|1024)\.png$/.test(name)){response.setHeader('Content-Type','image/png');return response.end(await readFile(path.join(source,'extension',name)));}
   if(!allowed.has(name)){response.statusCode=404;return response.end('Not found');}
   response.setHeader('Content-Type',name.endsWith('.css')?'text/css':'text/javascript');
   response.end(await readFile(path.join(source,'extension',name)));
