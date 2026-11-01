@@ -214,3 +214,8 @@ Native setup adds Keychain key entry/removal, explicit opt-in, app-owned bundled
 
 The user supplied a v0.10.0 launch crash: dyld rejected the separately signed debug dylib under hardened library validation. Disable Xcode debug dylibs for app/extension configurations and reject debug-dylib dependencies before service bundling. Hardened runtime stays enabled. Native v0.10.1/build17, strict signature verification and developer ZIP packaging pass; the host executable has no debug-dylib dependency. All 205 automated fake-provider/browser checks pass. The prior signature-only check did not establish launchability. Actual app launch, Keychain and Safari remain unverified; no app/service launch, Meta request or Safari control occurred for this fix.
 
+
+## v0.10.2 native editing shortcuts — November 1
+
+User reported unavailable copy/paste in desktop setup. The storyboard lacked an Edit menu. Added standard first-responder Undo/Redo/Cut/Copy/Paste/Select All actions and keyboard equivalents. Secure key entry remains NSSecureTextField. Native v0.10.2/build18 and strict signature verification pass; actual native shortcut interaction remains user verification. No credentials read, app/service launch, Safari control or Meta calls occurred. Behavioral suite was not repeated for this menu-only change.
+
