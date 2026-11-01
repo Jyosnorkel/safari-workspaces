@@ -792,10 +792,18 @@
       case 'save': return save(message);
       case 'import-backup': return importBackup(message.json);
       case 'drop-backup': return dropBackup(message);
+      case 'download-backup':
       case 'export-backup': {
         const all = await read();
         const records = message.id ? [verifiedRecord(all[message.id], message.id)] : Object.entries(all).map(([id, record]) => verifiedRecord(record, id));
-        return {json: C.encodeBackup(records)};
+        const json=C.encodeBackup(records);
+        if(message.type==='download-backup'){
+          if(!api.runtime.sendNativeMessage)throw new Error('Native export is unavailable. Enable the updated Tabby extension.');
+          const result=await api.runtime.sendNativeMessage('com.local.safaridevlab',{action:'export-backup',json});
+          if(!result?.ok || typeof result.filename!=='string')throw new Error('Could not save the JSON to Downloads. Check macOS permissions and try again.');
+          return {filename:result.filename};
+        }
+        return {json};
       }
       case 'restore': return restore(message);
       case 'resolve': {

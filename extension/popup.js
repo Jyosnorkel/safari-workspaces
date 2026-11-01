@@ -300,12 +300,8 @@ if (document.querySelectorAll && document.getElementById('settings-open')) (() =
         exportButton.addEventListener('click',()=>action(async()=>{
           exportButton.disabled=true;
           try {
-            const {json}=await send('export-backup',{id:snapshot.id});
-            const url='data:application/json;charset=utf-8,'+encodeURIComponent(json);
-            const link=popupNode('a');link.href=url;
-            link.download=`tabby-snapshot-${new Date(snapshot.createdAt).toISOString().replace(/[:.]/g,'-')}.json`;
-            document.body.append(link);link.click();link.remove();
-            status.textContent='Export requested. The JSON contains full tab URLs and titles.';
+            const {filename}=await send('download-backup',{id:snapshot.id});
+            status.textContent=`Saved ${filename} to Downloads. Contains full tab URLs and titles.`;
           } finally {exportButton.disabled=false;}
         }));
         card.append(exportButton);

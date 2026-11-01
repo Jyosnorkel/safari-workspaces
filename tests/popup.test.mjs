@@ -102,7 +102,7 @@ test('popup navigation keeps snapshot details collapsed and saves appearance and
  let exported=false,exportFails=true;
  const nodes=new Map(ids.map(id=>[id,new Node()])),nav=['home','organise','snapshots'].map(view=>{const n=new Node();n.dataset.view=view;return n;}),writes=[];
  const document={documentElement:new Node(),body:new Node(),getElementById:id=>nodes.get(id),querySelectorAll:()=>nav,createElement:()=>new Node()};
- const browser={storage:{local:{get:async()=>({}),set:async data=>writes.push(data)}},runtime:{sendMessage:async message=>{if(message.type==='export-backup'){exported=true;return exportFails?{ok:false,error:'Export unavailable'}:{ok:true,json:JSON.stringify({title:'A & B # café',tabs:[]})};}return {ok:true,workspaces:[{createdAt:'2026-11-01T12:00:00Z',tabs:[{title:'Example',url:'https://example.com'}]}]};}}};
+ const browser={storage:{local:{get:async()=>({}),set:async data=>writes.push(data)}},runtime:{sendMessage:async message=>{if(message.type==='download-backup'){exported=true;return exportFails?{ok:false,error:'Export unavailable'}:{ok:true,filename:'tabby-snapshot-test.json'};}return {ok:true,workspaces:[{createdAt:'2026-11-01T12:00:00Z',tabs:[{title:'Example',url:'https://example.com'}]}]};}}};
  vm.runInNewContext(source,{document,browser,URL,setTimeout});
  for(let i=0;i<10;i++)await new Promise(r=>setImmediate(r));
  nav[2].listeners.click();for(let i=0;i<10;i++)await new Promise(r=>setImmediate(r));
@@ -111,7 +111,7 @@ test('popup navigation keeps snapshot details collapsed and saves appearance and
  await card.children[1].listeners.click();assert.equal(exported,true);assert.match(nodes.get('status').textContent,/Export unavailable/);
  exportFails=false;document.createElement=()=>{const n=new Node();n.click=()=>{};n.remove=()=>{};return n;};
  await card.children[1].listeners.click();
- const download=document.body.children[0];assert.match(download.href,/^data:application\/json;charset=utf-8,/);assert.deepEqual(JSON.parse(decodeURIComponent(download.href.split(',')[1])),{title:'A & B # café',tabs:[]});assert.match(download.download,/\.json$/);
+ assert.match(nodes.get('status').textContent,/Saved tabby-snapshot-test.json to Downloads/);
  nodes.get('settings-open').listeners.click();assert.equal(nodes.get('settings-view').hidden,false);
  nodes.get('setting-theme').value='dark';nodes.get('setting-preferences').value='Five specific groups';nodes.get('setting-autosave').value='15';nodes.get('setting-compact').checked=true;
  await nodes.get('settings-form').listeners.submit({preventDefault(){}});

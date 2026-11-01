@@ -642,12 +642,8 @@
     notice(`Saved ${workspace.tabs.length} web tabs. ${skipped} restricted or unavailable tabs skipped. All tabs remain open. Export a backup for a separate copy.`);
   }
   async function exportBackup(id) {
-    const {json} = await send('export-backup', id ? {id} : {});
-    const url = 'data:application/json;charset=utf-8,' + encodeURIComponent(json);
-    const link = e('a'); link.href = url;
-    link.download = `safari-workspaces-${new Date().toISOString().replace(/[:.]/g,'-')}.json`;
-    document.body.append(link); link.click(); link.remove();
-    notice('Backup download requested. Keep the JSON file somewhere safe; it contains full URLs and titles.');
+    const {filename} = await send('download-backup', id ? {id} : {});
+    notice(`Saved ${filename} to Downloads. Contains full URLs and titles.`);
   }
   $('snapshot-window').addEventListener('click', () => run(snapshotWindow));
   $('export-all').addEventListener('click', () => run(() => exportBackup()));

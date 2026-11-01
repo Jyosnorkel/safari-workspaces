@@ -253,3 +253,8 @@ Expanded snapshot cards include Export JSON using the existing validated version
 ## v0.13.2 Safari export URL correction — November 1
 
 User screenshot confirms popup blob export failed with WebKitBlobResource:1. Popup and manager export now use fully URI-encoded application/json data URLs, avoiding temporary extension blob URLs. No downloads permission/API added (Safari unsupported). 208 checks pass including JSON/Unicode download encoding; native build/signature pass. Actual Safari download with replacement remains unverified; no personal browser tabs touched.
+
+
+## v0.13.3 direct Downloads export — November 1
+
+Export now delegates validated backup JSON to the native extension via nativeMessaging. Handler bounds/parses data, generates a unique filename, writes without overwriting to Downloads, and reads back bytes before success. No browser navigation/download links or full-content logs. Extension has verified Downloads read/write entitlement. 209 fake-browser/provider checks, native build and signature pass. Packaged Safari/native messaging and real Downloads destination still require live verification; no claim of an actual file export yet.

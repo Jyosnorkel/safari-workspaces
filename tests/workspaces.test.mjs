@@ -16,7 +16,7 @@ const tab = (id, overrides = {}) => ({id, windowId: 1, index: id, title: `Page $
 function harness(initialTabs = [tab(1),tab(2)], initialStore = {}, options = {}) {
   const h = {store: clone(initialStore), tabs: new Map(initialTabs.map(t=>[t.id,clone(t)])), events: [], writes:0, gets:0, nextId:100, failWrite:0, failReadback:false, failCreate:new Set(), failRemove:new Set(), private:false, windowType:'normal', sessionStore:clone(options.sessionStore || {})};
   const browser = {
-    runtime: {id:'test', getURL:path=>`safari-web-extension://test/${path}`, onMessage:{addListener: fn=>h.listener=fn},onStartup:{addListener:fn=>h.startup=fn}},
+    runtime: {sendNativeMessage:async(host,message)=>{h.native={host,message};return h.nativeResult || {ok:true,filename:'tabby-test.json'};},id:'test', getURL:path=>`safari-web-extension://test/${path}`, onMessage:{addListener: fn=>h.listener=fn},onStartup:{addListener:fn=>h.startup=fn}},
     storage: {local: {
       get: async key => { h.gets++; return {[key]:h.reorderKeys ? reverseKeys(clone(h.store[key])) : clone(h.store[key])}; },
       set: async values => {
@@ -558,3 +558,11 @@ test('tab index or URL changes during the immediate pre-move read stop clusterin
   const result=await h.send('cluster-apply',{windowId:1,planId:preview.planId});assert.equal(result.state,'partial');assert.equal(h.moveCalls||0,0);
  }
 });
+
+ test('native download receives validated portable JSON and reports write failures without touching tabs',async()=>{
+ const h=harness();const saved=await h.send('snapshot-window',{windowId:1,name:'Backup',requestId:webcrypto.randomUUID()});
+ assert.equal(saved.ok,true);
+ const result=await h.send('download-backup',{id:saved.workspace.id});assert.equal(result.filename,'tabby-test.json');
+ assert.equal(h.native.host,'com.local.safaridevlab');assert.equal(JSON.parse(h.native.message.json).format,'safari-workspaces-backup');
+ h.nativeResult={ok:false};assert.equal((await h.send('download-backup',{id:saved.workspace.id})).ok,false);assert.equal(h.tabs.size,2);
+ });

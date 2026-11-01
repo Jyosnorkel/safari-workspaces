@@ -60,7 +60,7 @@ async function harness(options={}) {
     if(message.type==='list')return {ok:true,workspaces:h.workspaces||[]};
     if(message.type==='scan'){if(h.scanDeferred)return await h.scanDeferred;return {ok:true,tabs:structuredClone(h.tabs)};}
     if(message.type==='snapshot-window')return {ok:true,workspace:{tabs:h.tabs},skipped:0};
-    if(message.type==='export-backup')return {ok:true,json:'{"workspaces":[]}'};
+    if(message.type==='download-backup')return {ok:true,json:'{"workspaces":[]}'};
     if(message.type==='import-backup')return {ok:true,imported:1};
     if(message.type==='drop-backup')return {ok:true,imported:1,workspaces:[],windowId:2};
     throw new Error(`Unexpected fake browser operation: ${message.type}`);
@@ -100,7 +100,7 @@ test('AI starts disconnected with no background service calls; backup controls r
   const h=await harness();assert.equal(h.statusCalls,0);assert.equal(h.suggestCalls,0);assert.equal(h.node('suggest').disabled,true);
   assert.equal(h.node('ai-origin').textContent,'safari-web-extension://fake-test');
   await h.click('snapshot-window');assert(h.sent.some(m=>m.type==='snapshot-window'));
-  await h.click('export-all');assert(h.sent.some(m=>m.type==='export-backup'));assert.equal(h.downloads,undefined); // Export no longer creates Safari extension blob URLs.
+  await h.click('export-all');assert(h.sent.some(m=>m.type==='download-backup'));assert.equal(h.downloads,undefined); // Export no longer creates Safari extension blob URLs.
 });
 test('permission denial leaves manual grouping usable and sends no service requests',async()=>{
   const h=await harness({permission:false});await h.scan();await h.connect();
