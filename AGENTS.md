@@ -325,3 +325,8 @@ Themes/frontend, snapshot presentation and Meta UI review ran concurrently. Larg
 ## v0.14.2 compact snapshot actions — November 1
 
 Export appears at the right of collapsed snapshot headers as a separate sibling control, avoiding disclosure toggling. Small outside-card delete hides records through verified durable trashedAt; immediate Undo restores them. No permanent purge. Active close/restore records reject deletion, failures preserve data and leave tabs untouched. Automated checks cover backend write/readback/replay/undo; actual Safari layout remains unverified.
+
+
+## v0.14.3 group header interaction — November 1
+
+Whole group header toggles expansion with keyboard-accessible aria-expanded/controls; separate disclosure arrow removed. Group-header clicks no longer activate a Safari tab; individual tab clicks retain activation. Small delete sits outside the card surface and still moves members to Ungrouped. 216 automated checks/native build/signature pass; actual Safari layout remains unverified.

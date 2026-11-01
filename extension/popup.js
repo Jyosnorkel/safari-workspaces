@@ -132,16 +132,9 @@ async function loadLiveGroups(windowId) {
     const focus = popupNode('button','workspace-focus'); focus.type = 'button';
     focus.setAttribute('aria-label',`Switch to ${group.name}, ${group.tabs.length} tabs`);
     focus.append(popupNode('span','workspace-name',group.name),popupNode('span','workspace-count',String(group.tabs.length)));
-    focus.title = `${group.name} — return to the last-used tab`;
-    focus.addEventListener('click',()=>action(async()=> {
-      await send('live-groups-focus',{windowId,groupId:group.id,expectedRevision:liveRevision});
-      status.textContent = `Switched to ${group.name}.`;
-    }));
-    const toggle = popupNode('button','workspace-disclosure','▸'); toggle.type = 'button';
-    toggle.setAttribute('aria-label',`Show tabs in ${group.name}`);
-    toggle.setAttribute('aria-expanded','false');
+    focus.title = `${group.name} — click to show or hide tabs`;
+    const toggle = focus;
     const list = popupNode('div','workspace-tabs'); list.hidden = !expandedGroups.has(group.id);
-    toggle.textContent = list.hidden ? '▸' : '▾';
     toggle.setAttribute('aria-expanded',String(!list.hidden));
     toggle.setAttribute('aria-label',`${list.hidden ? 'Show' : 'Hide'} tabs in ${group.name}`);
     list.id = `workspace-tabs-${group.id}`;
@@ -150,11 +143,11 @@ async function loadLiveGroups(windowId) {
       if (opening || aiBusy) return;
       list.hidden = !list.hidden;
       if (list.hidden) expandedGroups.delete(group.id); else expandedGroups.add(group.id);
-      toggle.textContent = list.hidden ? '▸' : '▾';
-      toggle.setAttribute('aria-expanded',String(!list.hidden));
+        toggle.setAttribute('aria-expanded',String(!list.hidden));
       toggle.setAttribute('aria-label',`${list.hidden ? 'Show' : 'Hide'} tabs in ${group.name}`);
     });
-    header.append(focus,toggle);
+    header.append(focus);
+    let removeControl;
     if (group.id !== 'ungrouped') {
       const remove = popupNode('button','workspace-remove','×');remove.type='button';remove.title='Remove group; keep its tabs in Ungrouped';remove.setAttribute('aria-label',`Remove ${group.name}; move tabs to Ungrouped`);
       remove.addEventListener('click',()=>action(async()=> {
@@ -162,10 +155,11 @@ async function loadLiveGroups(windowId) {
         let ungrouped=next.find(item=>item.id==='ungrouped');
         if(!ungrouped){ungrouped={id:'ungrouped',name:'Ungrouped',tabs:[]};next.push(ungrouped);}
         ungrouped.tabs.push(...group.tabs);expandedGroups.add('ungrouped');await publish(next);status.textContent='Group removed. Tabs moved to Ungrouped.';
-      }));header.append(remove);workspaceButtons.push(remove);
+      }));removeControl=remove;workspaceButtons.push(remove);
     }
     card.append(header,list);
-    workspaceButtons.push(focus,toggle);
+    if(removeControl)card.append(removeControl);
+    workspaceButtons.push(focus);
     for (const tab of group.tabs) {
       const jump = popupNode('button','workspace-tab'); jump.type = 'button';
       jump.draggable = true;

@@ -32,7 +32,7 @@ async function harness(options={}) {
  h.node=id=>nodes.get(id);h.find=label=>all(nodes.get('live-groups')).find(node=>node.attributes['aria-label']===label);
  return h;
 }
-test('switcher shows live group counts and titles safely, with a separate accessible disclosure',async()=>{
+test('switcher shows live group counts and titles safely, with a full-width accessible disclosure',async()=>{
  const h=await harness();const container=h.node('live-groups');assert.equal(container.children.length,3); // Empty groups remain valid drop destinations.
  assert.match(container.textContent,/Research <script>/);assert.match(container.textContent,/Notes <b>one<\/b>/);
  const toggle=h.find('Show tabs in Research <script>');assert.equal(toggle.attributes['aria-expanded'],'false');
@@ -40,8 +40,9 @@ test('switcher shows live group counts and titles safely, with a separate access
  assert.equal(h.find('Switch to tab: Working document').attributes['aria-current'],'page');assert.equal(h.sent.some(message=>message.type==='live-groups-focus'),false);
 });
 test('workspace and tab clicks use the current revision without opening or restoring URLs',async()=>{
- const h=await harness();await h.find('Switch to Research <script>, 2 tabs').click();
- let request=h.sent.filter(message=>message.type==='live-groups-focus').at(-1);assert.equal(request.groupId,'research');assert.equal(request.tabId,undefined);assert.equal(request.expectedRevision,'current-revision');assert.equal(request.windowId,7);
+ const h=await harness();await h.find('Show tabs in Research <script>').click();
+ assert.equal(h.sent.some(message=>message.type==='live-groups-focus'),false);
+ let request;
  await h.find('Switch to tab: Notes <b>one</b>').click();request=h.sent.filter(message=>message.type==='live-groups-focus').at(-1);assert.equal(request.tabId,1);
  assert.equal(h.sent.some(message=>['restore','drop-backup','suggest','save'].includes(message.type)),false);
 });
@@ -65,8 +66,9 @@ test('actual popup and coordinator agree on a validated live switch without reop
  vm.runInContext(readFileSync(new URL('../extension/background.js',import.meta.url),'utf8'),context);
  vm.runInContext(source,context);
  for(let i=0;i<10;i++)await new Promise(resolve=>setImmediate(resolve));
- const focus=all(nodes.get('live-groups')).find(node=>node.attributes['aria-label']==='Switch to Research, 2 tabs');assert(focus);
- await focus.click();assert.deepEqual(updates,[{id:2,active:true}]);
+ const focus=all(nodes.get('live-groups')).find(node=>node.attributes['aria-label']==='Show tabs in Research');assert(focus);
+ await focus.click();assert.equal(updates.length,0);
+ const second=all(nodes.get('live-groups')).find(node=>node.attributes['aria-label']==='Switch to tab: Page 2');await second.click();assert.deepEqual(updates,[{id:2,active:true}]);
  const jump=all(nodes.get('live-groups')).find(node=>node.attributes['aria-label']==='Switch to tab: Page 1');tabs[0].url='https://example.test/changed';await jump.click();
  assert.equal(updates.length,1);assert.match(nodes.get('status').textContent,/no longer in this workspace|changed|Refresh/);
 });
