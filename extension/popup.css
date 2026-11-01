@@ -60,3 +60,8 @@ html body input::placeholder,html body textarea::placeholder{color:var(--muted);
 html body input[type=checkbox]{accent-color:#328fcb}
 
 html body :is(button,input,select,textarea,a):focus-visible{outline:2px solid #267db5;outline-offset:2px}
+
+/* Primary action subtitles must contrast against the blue fill in either theme. */
+html body #save-snapshot small{color:var(--accent-ink)}
+html body header .brand-link{width:auto;padding:4px 0;min-height:36px;background:transparent;border:0;border-radius:4px;font-size:17px;font-weight:650;letter-spacing:-.4px;color:var(--ink);justify-content:flex-start}
+html body header .brand-link:hover{text-decoration:underline;background:transparent}

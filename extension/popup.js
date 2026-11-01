@@ -314,7 +314,7 @@ if (document.querySelectorAll && document.getElementById('settings-open')) (() =
     view=next;
     const pane=document.querySelector?.('main'); if(pane)pane.scrollTop=0;
     for(const id of ['home-view','home-extras'])$(id).hidden=next!=='home';
-    $('home-groups').hidden=!['home','organise'].includes(next);
+    $('home-groups').hidden=next!=='organise';
     $('popup-ai-panel').hidden=next!=='organise';$('snapshots-view').hidden=next!=='snapshots';$('settings-view').hidden=next!=='settings';
     for(const button of document.querySelectorAll('[data-view]'))button.setAttribute('aria-current',button.dataset.view===next?'page':'false');
     if(next==='organise')globalThis.PopupAI?.open();

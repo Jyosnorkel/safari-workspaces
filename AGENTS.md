@@ -300,3 +300,8 @@ User clarified navigation need not stay visible. Removed sticky positioning; nav
 ## v0.13.7 popup focus palette correction — November 1
 
 User screenshot identified leftover green token-field focus outline. Replaced old popup AI green focus/accent/border/fill literals with the blue palette and added a shared accessible focus-visible rule. Native build/signature pass; actual Safari focus appearance requires confirmation. CSS-only change, behavioral tests not repeated.
+
+
+## v0.13.8 simplified popup Home — November 1
+
+Snapshot primary-button subtitle now uses dark accent text on blue in both themes. Live group controls and manual creation appear only in Organise. Removed the separate manager action from Home; the keyboard-accessible Tabby header button opens/reuses the full webpage through the existing manager route. Backup drop remains on Home. 209 automated checks, native build/signature pass; actual Safari appearance remains user verification.
