@@ -245,7 +245,11 @@ document.body.addEventListener('dragleave', event => {
 document.body.addEventListener('drop', async event => {
   event.preventDefault();
   dropArea.classList.toggle('is-over', false);
-  if (opening || aiBusy || !isFileDrag(event.dataTransfer)) return;
+  if (opening || aiBusy) return;
+  if (!isFileDrag(event.dataTransfer)) {
+    if (!Array.from(event.dataTransfer?.types || []).includes('application/x-tabby-row')) status.textContent='Invalid format. Drop a Tabby JSON backup file.';
+    return;
+  }
   setBusy(true);
   try {
     const files = Array.from(event.dataTransfer.files || []);
@@ -258,6 +262,8 @@ document.body.addEventListener('drop', async event => {
     if (win.incognito || !Number.isInteger(win.id) || (win.type && win.type !== 'normal')) throw new Error('Use a normal Safari window. Private browsing is excluded.');
     status.textContent = 'Checking and saving backup, then opening a new window…';
     const json = await file.text();
+    try { if(globalThis.WorkspaceCore)globalThis.WorkspaceCore.decodeBackup(json); }
+    catch { throw new Error('Invalid format. Choose a valid Tabby JSON backup. No tabs were opened.'); }
     const response = await api.runtime.sendMessage({channel:'workspace', type:'drop-backup', json, requestId:crypto.randomUUID(), windowId:win.id});
     if (!response?.ok) throw new Error(response?.error || 'Could not restore this backup. Check Saved workspaces for recovery before trying again.');
     const records = response.workspaces || [];

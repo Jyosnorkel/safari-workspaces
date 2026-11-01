@@ -372,3 +372,9 @@ test('static loopback service permits same-origin connect but never automatic re
  const f=await localFixture(t);const same=await fetch(f.base+'/v1/connect',{method:'POST',headers:{...f.headers,'Content-Type':'application/json'},body:'{}'});assert.equal(same.status,200);assert.equal((await same.json()).connection.updated,false);
  const unknown=await fetch(f.base+'/v1/connect',{method:'POST',headers:{...f.headers,Origin:newUUIDOrigin,'Content-Type':'application/json'},body:'{}'});assert.equal(unknown.status,403);assert.equal((await unknown.json()).usage,undefined);
 });
+
+test('Meta request includes grouping preferences beside tab metadata',()=>{
+ const preferences='Around five groups; always include Reading';
+ const request=makeMetaRequest({tabs:[{id:'1',title:'Example',url:'https://example.com'}],model:'fake',maxOutputTokens:2048,preferences});
+ const input=JSON.parse(request.input);assert.equal(input.groupingPreferences,preferences);assert.equal(input.tabs[0].id,'1');assert.match(request.instructions,/groupingPreferences/);
+});

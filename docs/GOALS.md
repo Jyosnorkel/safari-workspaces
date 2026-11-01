@@ -144,3 +144,8 @@ Snapshot primary-button subtitle now uses dark accent text on blue in both theme
 ## v0.13.9 popup scroll and input compatibility — November 1
 
 User reports Organise scroll snapping and Logitech gesture interference. Preserve scroll across AI-state and live-group redraws; page switches still deliberately reset to top. Removed automatic token/password-field focus, retaining explicit secure entry. Source audit found no global event taps, mouse/keyboard hooks or Accessibility interception. Gesture cause remains unverified, not a compatibility certification. 210 automated checks cover state-refresh scroll preservation and no password autofocus; native build/signature pass. Real Safari/Logitech reproduction remains needed; no system security settings changed.
+
+
+## v0.14.0 popup quality-of-life — November 1
+
+Three concurrent field agents verified Meta preferences, backup validation and themes. Preferences travel beside tabs through guarded transport into both token-count and generation payloads (fake transport test, no real inference). Provider instructions explicitly acknowledge bounded preferences; updated service must restart to use latest prompt. Snapshot cards/rows/export match Organise surfaces. Home actions now share neutral fill/text/subtitle colors. Permanent drop box removed; a noninteractive full-popup file-drag overlay appears on all views. Whole-file validation precedes backend import/restore; invalid formats show clear feedback, internal row drops unaffected. Valid drops retain existing restore-to-new-window semantics. Fictional-data in-app-browser snapshot/save/expand visuals inspected; no actual Safari session touched. Actual packaged Safari drag/native export/live Meta remain separate verification gates.

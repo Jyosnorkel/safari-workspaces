@@ -79,3 +79,26 @@ test('real client refreshes a changed Safari origin on disk without restarting t
   assert.equal(await readFile(usage,'utf8'),usageBytes);assert.equal(modelCalls,0);
  }finally{await new Promise(resolve=>transport.server.close(resolve));await rm(directory,{recursive:true,force:true});}
 });
+
+// Real client/HTTP/guard/Meta adapter; only the provider's fetch is fake.
+test('grouping preferences reach both Meta token count and generation with sanitized tabs',async()=>{
+ const {createMetaProvider}=await import('../server/meta-provider.mjs');
+ const directory=await mkdtemp(path.join(tmpdir(),'workspaces-preferences-contract-'));
+ const token='a'.repeat(64),origin='safari-web-extension://11111111-1111-4111-8111-111111111111';
+ const requests=[],preferences='Around five specific groups; always include Reading';
+ const provider=createMetaProvider({fetchImpl:async(url,options)=>{
+  requests.push({url,body:JSON.parse(options.body)});
+  return new Response(JSON.stringify(url.endsWith('/input_tokens')?{object:'response.input_tokens',input_tokens:100}:{status:'completed',output:[{type:'message',role:'assistant',status:'completed',content:[{type:'output_text',text:JSON.stringify({groups:[{name:'Reading',reason:'Requested category',tabIds:['1']}]})}]}]}),{headers:{'Content-Type':'application/json'}});
+ }});
+ const service=createAIService({env:{AI_LIVE_ENABLED:'true',META_API_PROVIDER_ID:'meta',META_API_MODEL:'fake-model',META_API_KEY:'FAKE-KEY'},provider,statePath:path.join(directory,'usage.json')});
+ const transport=createLoopbackServer({service,token,allowedOrigin:origin,port:0});const address=await transport.listen();
+ try{
+  const context=vm.createContext({URL,AbortController,setTimeout,clearTimeout,location:{origin},fetch:(url,options)=>fetch(url.replace('http://127.0.0.1:8788',`http://127.0.0.1:${address.port}`),{...options,headers:{...options.headers,Origin:origin}})});
+  vm.runInContext(await readFile(new URL('../extension/ai.js',import.meta.url),'utf8'),context);
+  const result=await context.WorkspaceAI.suggest({token,consent:true,preferences,tabs:[{id:'1',title:'Reading',url:'https://user:password@example.com/book?private=yes#draft'}]});
+  assert.equal(result.result.groups[0].name,'Reading');assert.equal(requests.length,2);
+  assert.deepEqual(requests.map(request=>request.url),['https://api.meta.ai/v1/responses/input_tokens','https://api.meta.ai/v1/responses']);
+  for(const request of requests){const input=JSON.parse(request.body.input);assert.equal(input.groupingPreferences,preferences);assert.equal(input.tabs[0].url,'https://example.com/book');assert.equal(input.tabs[0].title,'Reading');}
+  assert.deepEqual(requests[0].body,requests[1].body);assert.equal(result.usage.attemptsToday,2);
+ }finally{await new Promise(resolve=>transport.server.close(resolve));await rm(directory,{recursive:true,force:true});}
+});

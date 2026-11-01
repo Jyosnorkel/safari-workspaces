@@ -22,7 +22,7 @@ function dropHarness(options={}) {
   const handlers={}, classes=new Set(), button={addEventListener(){},disabled:false},status={textContent:''};
   const area={classList:{toggle:(name,on)=>on?classes.add(name):classes.delete(name)}};
   const h={sent:[],button,status,classes,window:{id:7,type:'normal',incognito:false},...options};
-  vm.runInNewContext(source,{URL,crypto:{randomUUID:()=> '5c6d9a98-c1ca-4d15-b673-ac94a190dd27'},
+  vm.runInNewContext(source,{URL,WorkspaceCore:options.core,crypto:{randomUUID:()=> '5c6d9a98-c1ca-4d15-b673-ac94a190dd27'},
     document:{body:{addEventListener:(type,fn)=>handlers[type]=fn},getElementById:id=>id==='open'?button:id==='backup-drop'?area:status},
     browser:{windows:{getCurrent:async()=>h.window},runtime:{sendMessage:async message=>{h.sent.push(message);if(h.failure)return {ok:false,error:h.failure};return {ok:true,workspaces:[{tabs:[{}],restore:{results:{one:{state:'opened'}}}}]};}}}
   });
@@ -117,4 +117,21 @@ test('popup navigation keeps snapshot details collapsed and saves appearance and
  nodes.get('setting-theme').value='dark';nodes.get('setting-preferences').value='Five specific groups';nodes.get('setting-autosave').value='15';nodes.get('setting-compact').checked=true;
  await nodes.get('settings-form').listeners.submit({preventDefault(){}});
  assert.equal(document.documentElement.dataset.theme,'dark');assert.equal(writes[0]['tabby.settings.v1'].preferences,'Five specific groups');assert.equal(writes[0]['tabby.settings.v1'].autosave,15);
+});
+
+
+test('anywhere popup drop validates complete portable backups before dispatch and preserves duplicate URLs',async()=>{
+ const coreContext={TextEncoder,URL};vm.runInNewContext(readFileSync(new URL('../extension/core.js',import.meta.url),'utf8'),coreContext);
+ const core=coreContext.WorkspaceCore;
+ const valid={format:'safari-workspaces-backup',version:1,workspaces:[{name:'Recovery',createdAt:'2026-11-01T12:00:00Z',tabs:[{title:'One',url:'https://example.com/same'},{title:'Two',url:'https://example.com/same'}]}]};
+ for(const value of ['not json',JSON.stringify({hello:'world'}),JSON.stringify({...valid,version:2}),JSON.stringify({...valid,workspaces:[...valid.workspaces,{name:'Invalid',createdAt:'bad',tabs:[]}]})]){
+  const h=dropHarness({core});const event=h.event(['Files'],[{size:value.length,text:async()=>value}]);
+  await h.drop(event);assert.equal(h.sent.length,0);assert.match(h.status.textContent,/Invalid format/);assert.equal(h.button.disabled,false);
+ }
+ const h=dropHarness({core});const json=JSON.stringify(valid);await h.drop(h.event(['Files'],[{size:json.length,text:async()=>json}]));
+ assert.equal(h.sent.length,1);assert.equal(h.sent[0].json,json);assert.equal(JSON.parse(h.sent[0].json).workspaces[0].tabs.length,2);
+});
+test('external non-file drops show invalid format while internal row drags are left alone',async()=>{
+ const h=dropHarness();await h.drop(h.event(['text/uri-list'],[]));assert.match(h.status.textContent,/Invalid format/);assert.equal(h.sent.length,0);
+ h.status.textContent='Drag tab';await h.drop(h.event(['application/x-tabby-row'],[]));assert.equal(h.status.textContent,'Drag tab');assert.equal(h.sent.length,0);
 });
