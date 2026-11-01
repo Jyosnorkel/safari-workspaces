@@ -49,7 +49,7 @@ test('popup shows background validation/recovery errors and remains usable',asyn
 async function actionHarness() {
  const nodes=new Map(),sent=[],created=[];let aiOpens=0;
  for(const id of ['open','status','save-snapshot','ai-organise','refresh-tabs','tab-count','scan-time','backup-drop'])nodes.set(id,{textContent:'',disabled:false,listeners:{},addEventListener(type,fn){this.listeners[type]=fn;},classList:{toggle(){}}});
- const browser={windows:{getCurrent:async()=>({id:1,type:'normal'})},runtime:{getURL:path=>`safari-web-extension://test/${path}`,sendMessage:async message=>{sent.push(message);if(message.type==='scan')return {ok:true,tabs:[{eligible:true},{eligible:false}]};if(message.type==='snapshot-window')return {ok:true,workspace:{tabs:[{},{}]}};return undefined;}},tabs:{query:async()=>[],create:async options=>created.push(options)}};
+ const browser={windows:{getCurrent:async()=>({id:1,type:'normal'})},runtime:{getURL:path=>`safari-web-extension://test/${path}`,sendMessage:async message=>{sent.push(message);if(message.type==='live-groups-sync-scan')return {ok:true};if(message.type==='scan')return {ok:true,tabs:[{eligible:true},{eligible:false}]};if(message.type==='snapshot-window')return {ok:true,workspace:{tabs:[{},{}]}};return undefined;}},tabs:{query:async()=>[],create:async options=>created.push(options)}};
  vm.runInNewContext(source,{URL,PopupAI:{open:async()=>{aiOpens++;}},crypto:{randomUUID:()=> '5c6d9a98-c1ca-4d15-b673-ac94a190dd27'},document:{getElementById:id=>nodes.get(id),body:{addEventListener(){}}},browser});
  for(let i=0;i<10;i++)await new Promise(resolve=>setImmediate(resolve));
  return {nodes,sent,created,get aiOpens(){return aiOpens;},click:id=>nodes.get(id).listeners.click()};

@@ -94,3 +94,23 @@ test('explicit status refresh reuses only page-supplied or remembered pairing an
  assert.equal(result.state,'accepted');assert.equal(h.modelCalls,1);
  const live=await h.send('live-groups-get');assert(live.groups.some(group=>group.tabs.length));
  });
+
+
+test('explicit scan seeds eligible ungrouped tabs, preserves manual groups, and revises only for new membership',async()=>{
+ const h=harness({tabs:[tab(1),tab(2),tab(3,{pinned:true}),tab(4,{incognito:true}),tab(5,{url:'safari://settings'}),tab(6,{pendingUrl:'https://example.test/next'}),tab(7,{url:'safari-web-extension://test/dashboard.html'})]});
+ assert.equal((await h.send('live-groups-get')).revision,null);
+ let live=await h.send('live-groups-sync-scan');assert.equal(live.ok,true);assert.deepEqual(Array.from(live.groups[0].tabs,t=>t.id),[1,2]);
+ const initial=live.revision;assert.equal((await h.send('live-groups-sync-scan')).revision,initial);
+ const id=webcrypto.randomUUID();live=await h.send('live-groups-set',{expectedRevision:initial,groups:[{id,name:'Manual',tabs:[{id:2,url:tab(2).url,excluded:true},{id:1,url:tab(1).url,excluded:false}]}]});
+ const manualRevision=live.revision;h.tabs.push(tab(8));
+ live=await h.send('live-groups-sync-scan');assert.notEqual(live.revision,manualRevision);assert.deepEqual(Array.from(live.groups[0].tabs,t=>t.id),[2,1]);assert.equal(live.groups[0].tabs[0].excluded,true);assert.deepEqual(Array.from(live.groups.find(g=>g.id==='ungrouped').tabs,t=>t.id),[8]);
+ assert.equal((await h.send('live-groups-set',{expectedRevision:manualRevision,groups:[]})).ok,false);
+ h.tabs[0].url='https://example.test/changed';live=await h.send('live-groups-sync-scan');assert.deepEqual(Array.from(live.groups[0].tabs,t=>t.id),[2]);assert.deepEqual(Array.from(live.groups.find(g=>g.id==='ungrouped').tabs,t=>t.id),[8,1]);
+ assert.equal(h.modelCalls,0);
+});
+
+test('scan membership sync rejects private windows, untrusted pages and failed writes',async()=>{
+ const privateWindow=harness({private:true});assert.equal((await privateWindow.send('live-groups-sync-scan')).ok,false);
+ const h=harness();const untrusted=h.listener({channel:'workspace',type:'live-groups-sync-scan',windowId:1},{id:'test',url:'safari-web-extension://test/other.html'});assert.equal(untrusted,undefined);
+ h.failWrite=1;assert.equal((await h.send('live-groups-sync-scan')).ok,false);assert.equal((await h.send('live-groups-get')).revision,null);assert.equal(h.modelCalls,0);
+});

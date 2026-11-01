@@ -588,3 +588,23 @@ test('snapshot removal rejects active operations and failed durable writes',asyn
  h.failWrite=0;h.failReadback=true;assert.equal((await h.send('snapshot-trash',{id})).ok,false);assert.equal((await h.send('list')).workspaces.length,1);
  assert.equal((await h.send('snapshot-trash',{id:'invalid'})).ok,false);
 });
+
+
+test('saved-tab opening uses stored URL and suppresses concurrent, replayed and restart duplicate requests',async()=>{
+ const h=harness();const snapshot=(await h.send('snapshot-window',{windowId:1,name:'Open one',requestId:webcrypto.randomUUID()})).workspace;
+ const request={id:snapshot.id,tabId:snapshot.tabs[0].id,windowId:1,requestId:webcrypto.randomUUID(),url:'https://forged.test'};
+ const [first,second]=await Promise.all([h.send('snapshot-open-tab',request),h.send('snapshot-open-tab',request)]);
+ assert.equal(first.ok,true);assert.equal(second.repeated,true);assert.equal(h.tabs.size,3);assert.equal(h.tabs.get(first.tabId).url,snapshot.tabs[0].url);assert.equal(h.tabs.get(first.tabId).active,true);
+ const restarted=harness([...h.tabs.values()],h.store);assert.equal((await restarted.send('snapshot-open-tab',request)).repeated,true);assert.equal(restarted.tabs.size,3);
+ assert.equal((await h.send('snapshot-open-tab',{...request,tabId:snapshot.tabs[1].id})).ok,false);
+ assert.deepEqual(h.store['workspaces.v1'][snapshot.id],clone(snapshot));
+});
+test('saved-tab opening rejects invalid IDs/private targets and does not retry an uncertain or failed attempt',async()=>{
+ const h=harness();const snapshot=(await h.send('snapshot-window',{windowId:1,name:'Safety',requestId:webcrypto.randomUUID()})).workspace;
+ const request={id:snapshot.id,tabId:snapshot.tabs[0].id,windowId:1,requestId:webcrypto.randomUUID()};
+ assert.equal((await h.send('snapshot-open-tab',{...request,tabId:webcrypto.randomUUID()})).ok,false);
+ h.private=true;assert.equal((await h.send('snapshot-open-tab',request)).ok,false);h.private=false;
+ h.failWrite=h.writes+1;assert.equal((await h.send('snapshot-open-tab',request)).ok,false);assert.equal(h.tabs.size,2);h.failWrite=0;
+ h.failCreate.add(snapshot.tabs[0].url);assert.equal((await h.send('snapshot-open-tab',request)).ok,false);h.failCreate.clear();
+ assert.equal((await h.send('snapshot-open-tab',request)).ok,false);assert.equal(h.tabs.size,2);
+});

@@ -330,3 +330,8 @@ Export appears at the right of collapsed snapshot headers as a separate sibling 
 ## v0.14.3 group header interaction — November 1
 
 Whole group header toggles expansion with keyboard-accessible aria-expanded/controls; separate disclosure arrow removed. Group-header clicks no longer activate a Safari tab; individual tab clicks retain activation. Small delete sits outside the card surface and still moves members to Ungrouped. 216 automated checks/native build/signature pass; actual Safari layout remains unverified.
+
+
+## v0.15.0 manual scan inventory and saved-tab opening — November 1
+
+Popup scan calls trusted live-groups-sync-scan to place eligible new/changed identities in Ungrouped while preserving existing manual groups/order/exclusions. Membership changes update CAS revision; protected/private/pending tabs excluded. Snapshot summary uses inline date/counts (tabs includes duplicates; sites means distinct hostnames). Snapshot rows open stored validated URLs in current normal window, never caller URLs; persistent admission/readback/replay guard prevents uncertain retries. Snapshot data unchanged. Known limitation: saved-tab opening ledger fails closed after 500 admitted requests; no unsafe history eviction. 219 automated checks/native build/signature pass; actual Safari scan/drag/open behavior remains user verification.

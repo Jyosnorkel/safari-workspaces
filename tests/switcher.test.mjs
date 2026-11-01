@@ -22,7 +22,7 @@ async function harness(options={}) {
  const browser={windows:{getCurrent:async()=>({id:7,type:'normal'})},runtime:{getURL:path=>`safari-web-extension://test/${path}`,sendMessage:async message=>{
   h.sent.push(structuredClone(message));
   if(message.channel==='workspace-dashboard')return undefined;
-  if(message.type==='scan')return {ok:true,tabs:[{eligible:true},{eligible:true}]};
+  if(message.type==='live-groups-sync-scan')return {ok:true};if(message.type==='scan')return {ok:true,tabs:[{eligible:true},{eligible:true}]};
   if(message.type==='live-groups-get')return {ok:true,revision:'current-revision',groups:h.groups};
   if(message.type==='live-groups-focus')return h.focusError?{ok:false,error:h.focusError}:{ok:true,tabId:message.tabId??2};
   throw new Error(`Unexpected operation ${message.type}`);

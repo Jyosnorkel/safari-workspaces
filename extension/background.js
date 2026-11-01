@@ -289,6 +289,22 @@
     const {revision,groups} = await liveView(windowId);
     return {revision,groups};
   }
+  // Explicit scan reconciliation only: ordinary reads never invent memberships.
+  async function syncLiveGroupsScan({windowId}) {
+    const {all,record} = await liveView(windowId);
+    const inventory = await liveInventory(windowId);
+    const assigned = new Set((record?.groups || []).flatMap(group => group.tabs.map(tab => tab.id)));
+    const additions = inventory.filter(tab => tab.windowId === windowId && tab.eligible && !tab.pendingUrl && !assigned.has(tab.id));
+    if (!additions.length) return getLiveGroups({windowId});
+    const next = (record?.groups || []).map(group => ({...group,tabs:[...group.tabs]}));
+    let ungrouped = next.find(group => group.id === 'ungrouped');
+    if (!ungrouped) { ungrouped = {id:'ungrouped',name:'Ungrouped',reason:'',tabs:[]}; next.push(ungrouped); }
+    for (const tab of additions) ungrouped.tabs.push({id:tab.id,url:tab.url,excluded:false});
+    validateLiveGroups(next);
+    all[windowId] = {windowId,revision:crypto.randomUUID(),groups:next};
+    await writeLive(all);
+    return getLiveGroups({windowId});
+  }
   async function setLiveGroups({windowId,expectedRevision,groups}) {
     await normalWindow(windowId);
     validateLiveGroups(groups);
@@ -771,6 +787,7 @@
       case 'cluster-apply': return applyCluster(message);
       case 'cluster-status': return clusterStatus(message);
       case 'live-groups-get': return getLiveGroups(message);
+      case 'live-groups-sync-scan': return syncLiveGroupsScan(message);
       case 'live-groups-set': return setLiveGroups(message);
       case 'live-groups-focus': return focusLiveGroup(message);
       case 'scan': {
@@ -790,6 +807,35 @@
         return {workspace: record, skipped: inventory.length - candidates.length};
       }
       case 'list': return {workspaces: Object.values(await read()).filter(record => record.trashedAt === undefined).sort((a,b) => b.createdAt.localeCompare(a.createdAt))};
+      case 'snapshot-open-tab': {
+        if (!uuid(message.id) || !uuid(message.tabId) || !uuid(message.requestId)) throw new Error('Select a saved tab and use a new valid open request.');
+        await normalWindow(message.windowId);
+        const all=await read(), record=verifiedRecord(all[message.id],message.id);
+        const saved=record.tabs.find(tab=>tab.id===message.tabId);
+        if (!saved) throw new Error('This tab is not in the saved snapshot.');
+        const key='workspaces.snapshot-open.v1', stored=(await api.storage.local.get(key))[key];
+        if(stored!==undefined && !object(stored))throw new Error('Saved-tab request history is unreadable. No tab opened.');
+        const requests=stored || {}, previous=requests[message.requestId];
+        if(previous){
+          if(previous.snapshotId!==message.id || previous.tabId!==message.tabId || previous.windowId!==message.windowId)throw new Error('This open request belongs to a different saved tab.');
+          if(previous.state==='opened')return {tabId:previous.openedTabId,repeated:true};
+          throw new Error('This open request was already attempted. Check Safari before deliberately opening another copy.');
+        }
+        // Retain every admitted ID; fail closed at the bound rather than evicting replay protection.
+        if(Object.keys(requests).length>=500)throw new Error('Saved-tab open request history is full. Use full snapshot restore instead.');
+        requests[message.requestId]={snapshotId:message.id,tabId:message.tabId,windowId:message.windowId,state:'pending'};
+        const persist=async()=>{
+          await api.storage.local.set({[key]:requests});
+          const observed=(await api.storage.local.get(key))[key];
+          if(JSON.stringify(canonical(observed))!==JSON.stringify(canonical(requests)))throw new Error('Could not verify saved-tab request history. Check Safari before trying again.');
+        };
+        await persist();
+        await normalWindow(message.windowId);
+        const opened=await api.tabs.create({windowId:message.windowId,url:saved.url,active:true});
+        requests[message.requestId]={...requests[message.requestId],state:'opened',openedTabId:opened.id};
+        await persist();
+        return {tabId:opened.id};
+      }
       case 'snapshot-trash':
       case 'snapshot-undo-delete': {
         if (!uuid(message.id)) throw new Error('Select a saved snapshot first.');
@@ -832,7 +878,7 @@
   api.runtime.onMessage.addListener((message, sender) => {
     if (sender.id !== api.runtime.id || !sender.url?.startsWith(api.runtime.getURL(''))) return undefined;
     if (message?.channel !== 'workspace') return undefined;
-    if (['popup-ai-state','popup-ai-connect','popup-ai-refresh','popup-ai-forget','popup-ai-disconnect','popup-ai-suggest','popup-ai-accept','popup-ai-discard','live-groups-get','live-groups-set','live-groups-focus','cluster-preview','cluster-undo-preview','cluster-apply','cluster-status'].includes(message.type) &&
+    if (['popup-ai-state','popup-ai-connect','popup-ai-refresh','popup-ai-forget','popup-ai-disconnect','popup-ai-suggest','popup-ai-accept','popup-ai-discard','live-groups-get','live-groups-sync-scan','live-groups-set','live-groups-focus','cluster-preview','cluster-undo-preview','cluster-apply','cluster-status'].includes(message.type) &&
         !['popup.html','dashboard.html'].includes(sender.url.slice(api.runtime.getURL('').length).split(/[?#]/)[0])) return undefined;
     if (message.type==='popup-ai-suggest') {
       const admission=queue.then(()=>preparePopupSuggestion(message));

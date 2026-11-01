@@ -206,6 +206,7 @@ async function refreshTabs() {
   document.getElementById('scan-time').textContent = `Updated ${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`;
   // A loaded manager merges fresh metadata without replacing the user's grouping.
   await browser.runtime.sendMessage({channel:'workspace-dashboard',type:'refresh-inventory',windowId:win.id}).catch(() => {});
+  await send('live-groups-sync-scan',{windowId:win.id});
   await loadLiveGroups(win.id);
   await globalThis.PopupAI?.refreshInventory?.();
   status.textContent = 'Tabs refreshed. No data sent to AI.';
@@ -301,7 +302,7 @@ if (document.querySelectorAll && document.getElementById('settings-open')) (() =
         const date=new Date(snapshot.createdAt);
         const dateLabel=date.toLocaleString(undefined,{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
         summary.setAttribute('aria-label',`${date.toLocaleString()} · ${snapshot.tabs.length} tabs · ${domains.size} sites`);
-        summary.title=date.toLocaleString();
+        summary.title=`${date.toLocaleString()} — tabs includes duplicates; sites counts distinct hostnames`;
         summary.append(popupNode('span','snapshot-date',dateLabel),popupNode('span','snapshot-stats',`${snapshot.tabs.length} tabs · ${domains.size} sites`));
         card.append(summary);
         const exportButton=popupNode('button','snapshot-export','Export JSON');exportButton.type='button';
@@ -319,7 +320,14 @@ if (document.querySelectorAll && document.getElementById('settings-open')) (() =
           undo.addEventListener('click',()=>action(async()=>{await send('snapshot-undo-delete',{id:snapshot.id});await snapshots();status.textContent='Snapshot restored.';}));status.append(undo);
         }));
         for(const tab of snapshot.tabs){
-          const row=popupNode('div','snapshot-tab');row.title=tab.url;
+          const row=popupNode('button','snapshot-tab');row.type='button';row.title=`Open in this window: ${tab.url}`;
+          let requestId;
+          row.addEventListener('click',()=>action(async()=>{
+            requestId ||= crypto.randomUUID();
+            const win=await currentWindow();
+            await send('snapshot-open-tab',{id:snapshot.id,tabId:tab.id,windowId:win.id,requestId});
+            requestId=undefined;status.textContent='Saved tab opened in this window.';
+          }));
           let host=tab.url;try{host=new URL(tab.url).hostname;}catch{}
           row.append(popupNode('strong','snapshot-tab-title',tab.title || 'Untitled tab'),popupNode('small','snapshot-tab-host',host));
           card.append(row);
