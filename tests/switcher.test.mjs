@@ -33,7 +33,7 @@ async function harness(options={}) {
  return h;
 }
 test('switcher shows live group counts and titles safely, with a separate accessible disclosure',async()=>{
- const h=await harness();const container=h.node('live-groups');assert.equal(container.children.length,2); // Empty groups remain valid drop destinations.
+ const h=await harness();const container=h.node('live-groups');assert.equal(container.children.length,3); // Empty groups remain valid drop destinations.
  assert.match(container.textContent,/Research <script>/);assert.match(container.textContent,/Notes <b>one<\/b>/);
  const toggle=h.find('Show tabs in Research <script>');assert.equal(toggle.attributes['aria-expanded'],'false');
  const list=container.children[0].children[1];assert.equal(list.hidden,true);await toggle.click();assert.equal(list.hidden,false);assert.equal(toggle.attributes['aria-expanded'],'true');
@@ -47,7 +47,7 @@ test('workspace and tab clicks use the current revision without opening or resto
 });
 test('stale activation is visible and empty workspaces explain how to start',async()=>{
  const h=await harness({focusError:'This tab changed. Refresh workspaces before switching.'});await h.find('Switch to tab: Notes <b>one</b>').click();assert.match(h.node('status').textContent,/This tab changed/);
- const empty=await harness({groups:[]});assert.match(empty.node('live-groups').textContent,/Organise tabs in the manager/);
+ const empty=await harness({groups:[]});assert.match(empty.node('live-groups').textContent,/Add a group or use AI organise/);
 });
 
 test('actual popup and coordinator agree on a validated live switch without reopening URLs',async()=>{

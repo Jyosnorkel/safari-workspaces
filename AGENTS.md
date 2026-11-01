@@ -231,3 +231,8 @@ Integrated verification: 205 automated fake-browser/provider checks pass, native
 ## v0.11.0 popup row dragging — November 1
 
 Confirmed live workspace rows can be dragged anywhere on the row to another group, or dropped above a row to reorder. Group headers append; empty groups stay available as destinations. Uses existing revision-checked, live-identity-validated publication and preserves exclusions. Expanded groups survive redraw. No native tab movement, opening, closing or Meta requests. User-approved v0.10.2-stable-popup tag remains available. Automated row-event tests cover cross-group movement, ordering, exclusion/revision preservation and external-drop rejection. Actual Safari pointer drag remains unverified.
+
+
+## v0.12.0 direct popup organisation — November 1
+
+User explicitly removed the popup AI review requirement. Popup requests now opt into validated automatic application after sharing consent; stale inventory/revisions preserve existing groups. Background completion applies even if popup is dismissed, without inference retries. Dashboard review behavior remains unchanged. Popup supports named manual groups, removal to Ungrouped, and a blue insertion line above row drop targets. No real Safari movement/closure or live inference used for verification.

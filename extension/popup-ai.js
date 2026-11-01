@@ -114,7 +114,7 @@
     else if (next==='review' && state.stale) message('Tabs or groups changed. Discard these suggestions and refresh the input before requesting again.',true);
     else if (next==='review' && previousState!=='review') message('Review the suggested groups, then accept them. Existing groups remain unchanged until acceptance.');
     else if (next==='error') message(state.error || 'Suggestions failed. Existing groups are unchanged.',true);
-    else if (next==='accepted') message('Groups applied. Use Open workspaces below to switch between them.');
+    else if (next==='accepted') { message('Groups applied. Drag tabs between groups below.'); panel.hidden=true; if(previousState!=='accepted') hooks.onAccepted?.(windowId); }
     render();schedulePoll();
   }
   async function send(type,values={}) {
@@ -184,7 +184,7 @@
     $('popup-ai-consent').checked=false;
     message('Sending the selected metadata for one suggestion request…');
     try {
-      receive(await send('popup-ai-suggest',{requestId,expectedRevision:state.revision,inventoryToken:state.inventoryToken,tabIds,consent:true,...(pageToken?{token:pageToken}:{})}));
+      receive(await send('popup-ai-suggest',{requestId,expectedRevision:state.revision,inventoryToken:state.inventoryToken,tabIds,consent:true,autoApply:true,...(pageToken?{token:pageToken}:{})}));
     } catch (error) {
       // A lost response is not permission to request another paid generation.
       try {
@@ -203,7 +203,6 @@
     const groups=draft.groups.map(group=>({name:group.name.trim(),reason:group.reason || '',tabIds:[...draft.assignments].filter(([,id])=>id===group.id).map(([id])=>id)})).filter(group=>group.tabIds.length);
     if(groups.some(group=>!group.name))throw new Error('Give every nonempty group a name before accepting.');
     receive(await send('popup-ai-accept',{requestId:state.requestId,expectedRevision:state.revision,groups}));
-    await hooks.onAccepted?.(windowId);
   }));
   globalThis.PopupAI=Object.freeze({open,refreshInventory,isBusy:busy,configure:options=>{hooks={...hooks,...options};updateControls();}});
   initialise();

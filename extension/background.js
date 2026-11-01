@@ -496,7 +496,7 @@
     record.state='requesting';record.requestId=requestId;record.usedIds=[...record.usedIds,requestId].slice(-100);delete record.error;delete record.proposal;
     all[windowId]=record;await writePopupAI(all);
     popupAIFlight={windowId,requestId};
-    return {windowId,requestId,token,payload};
+    return {windowId,requestId,token,payload,autoApply:message.autoApply === true};
   }
   async function performPopupSuggestion(job) {
     if(job.repeated)return {...job.state,repeated:true};
@@ -516,7 +516,12 @@
           record.state='review';record.usage=safeUsage(response?.usage) || record.usage;
         } catch {record.state='error';record.error='The model returned invalid groups. Existing workspaces are unchanged.';record.connected=false;}
       }
-      await writePopupAI(all);return popupPublic(record,job.windowId);
+      await writePopupAI(all);
+      if (job.autoApply && record.state === 'review') {
+        try { return await acceptPopupAI({windowId:job.windowId,requestId:job.requestId,expectedRevision:record.revision,groups:record.proposal.groups}); }
+        catch { record.state='error';record.error='Tabs or groups changed. Refresh and try again. Existing groups were kept.';await writePopupAI(all); }
+      }
+      return popupPublic(record,job.windowId);
     });
     queue=commit.catch(()=>{});
     try{return await commit;}finally{if(popupAIFlight?.requestId===job.requestId)popupAIFlight=null;}

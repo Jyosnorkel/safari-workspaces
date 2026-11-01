@@ -88,3 +88,9 @@ test('explicit status refresh reuses only page-supplied or remembered pairing an
  refreshed=await remembered.send('popup-ai-refresh');assert.equal(refreshed.connected,true);assert.equal(refreshed.remembered,true);assert.equal(remembered.statusCalls,2);assert.equal(remembered.modelCalls,0);assert.equal(JSON.stringify(refreshed).includes(token),false);
  remembered.statusError=new Error('Fake service offline');assert.equal((await remembered.send('popup-ai-refresh')).ok,false);assert.equal((await remembered.send('popup-ai-state')).connected,false);
 });
+
+ test('popup auto-apply publishes validated suggestions without a review click',async()=> {
+ const h=harness();const state=await h.begin();const result=await h.suggest(state,{autoApply:true});
+ assert.equal(result.state,'accepted');assert.equal(h.modelCalls,1);
+ const live=await h.send('live-groups-get');assert(live.groups.some(group=>group.tabs.length));
+ });

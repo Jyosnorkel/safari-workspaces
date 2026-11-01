@@ -86,4 +86,12 @@ test('confirmed popup rows move between groups and reorder with revision and exc
  for(let i=0;i<10;i++)await new Promise(r=>setImmediate(r));
  assert.deepEqual(Array.from(groups[1].tabs,t=>t.id),[1,3]);
  cards=nodes.get('live-groups').children;cards[0].listeners.drop(event());assert.equal(writes.length,2);
+ const form=cards[cards.length-1];form.children[0].value='Manual';
+ context.crypto={randomUUID:()=> 'new-group'};
+ form.listeners.submit(event());for(let i=0;i<10;i++)await new Promise(r=>setImmediate(r));
+ assert(groups.some(group=>group.name==='Manual' && group.tabs.length===0));
+ cards=nodes.get('live-groups').children;
+ cards[1].children[0].children[2].listeners.click();for(let i=0;i<10;i++)await new Promise(r=>setImmediate(r));
+ assert(!groups.some(group=>group.id==='b'));
+ assert.deepEqual(Array.from(groups.find(group=>group.id==='ungrouped').tabs,t=>t.id),[1,3]);
 });

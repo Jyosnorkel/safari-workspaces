@@ -21,3 +21,5 @@ button:focus-visible{outline-color:#267db5}.intro,button small,.scan-row,.worksp
 .workspace-tab[aria-current=page]{background:#e7f3fc}.workspace-tab[aria-current=page] .workspace-tab-title::before{color:#267db5}
 
 .workspace-tab[draggable="true"]{cursor:grab}.workspace-tab[draggable="true"]:active{cursor:grabbing}.live-workspace.is-drop-target{outline:2px solid #328fcb;outline-offset:2px}.workspace-tab[draggable="true"]:hover{border-top-color:#328fcb}
+
+.workspace-tab.drop-before{box-shadow:inset 0 3px #168de2}.workspace-add{display:flex;gap:8px;margin:10px 0}.workspace-add input{min-width:0;flex:1;padding:8px;border:1px solid #b7cddd;border-radius:8px}.workspace-add button,.workspace-remove{width:auto}.workspace-remove{padding:8px;font-size:18px}

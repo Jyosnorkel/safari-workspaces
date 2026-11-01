@@ -78,9 +78,20 @@ async function loadLiveGroups(windowId) {
   liveRevision = response.revision;
   workspaceButtons = [];
   container.replaceChildren();
+  const publish = async groups => {
+    await send('live-groups-set',{windowId,expectedRevision:liveRevision,groups:groups.map(({id,name,reason,tabs})=>({id,name,reason:reason || '',tabs:tabs.map(({id,url,excluded})=>({id,url,excluded:Boolean(excluded)}))}))});
+    await loadLiveGroups(windowId);
+    await browser.runtime.sendMessage({channel:'workspace-dashboard',type:'live-groups-changed',windowId}).catch(()=>{});
+  };
+  const addForm = popupNode('form','workspace-add');
+  const nameInput = popupNode('input'); nameInput.type='text';nameInput.maxLength=80;nameInput.placeholder='New group name';nameInput.setAttribute('aria-label','New group name');
+  const addButton = popupNode('button','','Add group');addButton.type='submit';
+  addForm.append(nameInput,addButton);
+  addForm.addEventListener('submit',event=> {event.preventDefault();if(!nameInput.value.trim())return;action(async()=> {await publish([...response.groups,{id:crypto.randomUUID(),name:nameInput.value.trim(),tabs:[]}]);status.textContent='Group added.';});});
+  workspaceButtons.push(addButton,nameInput);
   const groups = response.groups;
   if (!groups.length) {
-    container.append(popupNode('p','workspace-empty','Organise tabs in the manager to see your workspaces here.'));
+    container.append(addForm,popupNode('p','workspace-empty','Add a group or use AI organise to get started.'));
     return;
   }
   for (const group of groups) {
@@ -141,7 +152,17 @@ async function loadLiveGroups(windowId) {
       toggle.setAttribute('aria-expanded',String(!list.hidden));
       toggle.setAttribute('aria-label',`${list.hidden ? 'Show' : 'Hide'} tabs in ${group.name}`);
     });
-    header.append(focus,toggle);card.append(header,list);
+    header.append(focus,toggle);
+    if (group.id !== 'ungrouped') {
+      const remove = popupNode('button','workspace-remove','×');remove.type='button';remove.setAttribute('aria-label',`Remove ${group.name}; move tabs to Ungrouped`);
+      remove.addEventListener('click',()=>action(async()=> {
+        const next=response.groups.filter(item=>item.id!==group.id).map(item=>({...item,tabs:[...item.tabs]}));
+        let ungrouped=next.find(item=>item.id==='ungrouped');
+        if(!ungrouped){ungrouped={id:'ungrouped',name:'Ungrouped',tabs:[]};next.push(ungrouped);}
+        ungrouped.tabs.push(...group.tabs);expandedGroups.add('ungrouped');await publish(next);status.textContent='Group removed. Tabs moved to Ungrouped.';
+      }));header.append(remove);workspaceButtons.push(remove);
+    }
+    card.append(header,list);
     workspaceButtons.push(focus,toggle);
     for (const tab of group.tabs) {
       const jump = popupNode('button','workspace-tab'); jump.type = 'button';
@@ -153,8 +174,15 @@ async function loadLiveGroups(windowId) {
         event.dataTransfer.setData('application/x-tabby-row','internal');
         event.dataTransfer.effectAllowed = 'move';
       });
-      jump.addEventListener('dragend',()=> { popupDrag = null; for (const node of container.querySelectorAll('.is-drop-target')) node.classList.remove('is-drop-target'); });
-      jump.addEventListener('drop',event=>dropTab(event,tab.id));
+      jump.addEventListener('dragend',()=> { popupDrag = null; for (const node of container.querySelectorAll('.is-drop-target, .drop-before')) node.classList.remove('is-drop-target','drop-before'); });
+      jump.addEventListener('dragover',event=> {
+        if (!validDrag(event)) return;
+        event.preventDefault();event.stopPropagation();event.dataTransfer.dropEffect='move';
+        for(const node of container.querySelectorAll('.drop-before'))node.classList.remove('drop-before');
+        jump.classList.add('drop-before');
+      });
+      jump.addEventListener('dragleave',()=>jump.classList.remove('drop-before'));
+      jump.addEventListener('drop',event=>{jump.classList.remove('drop-before');dropTab(event,tab.id);});
       const title = tab.title || 'Untitled tab';
       jump.setAttribute('aria-label',`Switch to tab: ${title}`);
       if (tab.active) jump.setAttribute('aria-current','page');
@@ -170,6 +198,7 @@ async function loadLiveGroups(windowId) {
     }
     container.append(card);
   }
+  container.append(addForm);
 }
 async function refreshTabs() {
   const win = await currentWindow();
