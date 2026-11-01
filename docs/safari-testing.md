@@ -1,3 +1,7 @@
+## v0.8.1 popup sizing
+
+CSS-only layout change requests 480 × 600 px instead of 360 px width, places primary actions side by side and uses one scrollable content pane beneath the header. Fictional-data browser preview verified no horizontal overflow and scrolling through an expanded eight-tab workspace to bottom controls. Native build/signature and packaged CSS comparison pass. No new automated tests were added for CSS declarations. Actual Safari native popup dimensions/clipping remain unverified. No real browser tabs changed.
+
 ## v0.8.0 clustering and undo — November 1
 
 176 automated fake-browser/model checks pass. Clustering requires preview/confirmation, accepted/manual groups and a current live revision. Protected tabs bound each movable span. Tests cover topology and immediate pre-move identity/index changes, failed journal writes/readback, partial moves, stale or replayed requests, corrupt journals, private/non-normal routes and exact-state undo. Internal-browser fictional APIs verified the full confirmation/apply/undo handlers, with fixed pinned/restricted examples. Native build/signature and packaged background/dashboard comparisons pass. Actual Safari reordering/undo remain unverified; no real tabs moved, opened, closed or reloaded. Existing Safari session safety restrictions remain in force.

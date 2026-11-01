@@ -10,6 +10,7 @@ Scan tabs → get meaningful Meta AI group suggestions → review and edit → s
 
 ## Current implementation
 
+- The toolbar popup requests a 480 × 600 px area, with side-by-side primary actions and one scrollable content pane beneath its header. Actual Safari sizing remains user verification.
 - The toolbar popup leads with Save snapshot, AI organise and Refresh tabs. Saving keeps tabs open; AI organise opens review/settings and never sends metadata automatically.
 - Open workspaces in the popup lists current-window groups. Click a group to return to its last-used tab, or expand it and choose a live tab. Switching activates existing tabs without reopening URLs, moving or closing anything. Manual and accepted AI groups are shared locally with the dashboard; unaccepted proposals stay separate.
 - Tab inventory refreshes when the popup opens and when the dashboard opens. The visible dashboard refreshes every five minutes, pausing during editing, dragging and busy operations. Existing groups, exclusions and custom order survive refresh; new/navigated tabs are ungrouped.
@@ -61,7 +62,7 @@ Open http://localhost:8765/ in Safari. The existing test page still describes th
 
 ## Verification status and known limitations
 
-- The v0.8.0 native build and strict code-signature verification passed on November 1, 2026; the packaged AI client matches source.
+- The v0.8.1 native build and strict code-signature verification passed on November 1, 2026; the packaged AI client matches source.
 - The new group-chip mouse dragging, unchecked-tab preservation and keyboard collapse/expand were verified in the internal browser with fictional tab APIs. Actual Safari testing of this UI remains pending.
 - Live Safari popup rendering and current-window scanning were verified. A live storage-verification failure was reproduced and fixed with regression coverage; full save/close/restore retesting and restart persistence are **not yet verified**.
 - `node scripts/check.mjs` passes 176 automated checks for workspace rules, fake-DOM review flows, fake Meta providers, authenticated local HTTP contracts and usage budgets. Syntax and native resource checks are included. These do not replace Safari testing.
