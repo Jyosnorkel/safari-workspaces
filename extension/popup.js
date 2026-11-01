@@ -1,6 +1,6 @@
 const button = document.getElementById('open');
 const status = document.getElementById('status');
-let opening = false;
+let opening = false, aiBusy = false;
 let liveRevision = 0;
 let workspaceButtons = [];
 
@@ -18,9 +18,9 @@ function setBusy(value) {
   opening = value;
   for (const id of ['open','save-snapshot','ai-organise','refresh-tabs']) {
     const control = document.getElementById(id);
-    if (control) control.disabled = value;
+    if (control) control.disabled = value || aiBusy;
   }
-  for (const control of workspaceButtons) control.disabled = value;
+  for (const control of workspaceButtons) control.disabled = value || aiBusy;
 }
 async function currentWindow() {
   const api = globalThis.browser;
@@ -36,7 +36,7 @@ async function send(type, values) {
   return response;
 }
 async function action(work) {
-  if (opening) return;
+  if (opening || aiBusy) return;
   setBusy(true);
   try { await work(); }
   catch (error) { status.textContent = error.message || 'Could not complete this action. Try again.'; }
@@ -58,7 +58,10 @@ async function openManager(ai = false) {
   status.textContent = 'Workspace manager opened.';
 }
 button.addEventListener('click', () => action(() => openManager()));
-document.getElementById('ai-organise')?.addEventListener?.('click', () => action(() => openManager(true)));
+document.getElementById('ai-organise')?.addEventListener?.('click', () => action(async () => {
+  if (!globalThis.PopupAI?.open) throw new Error('AI controls could not load. Refresh the extension and try again.');
+  await globalThis.PopupAI.open();
+}));
 function popupNode(tag, className, text) {
   const node = document.createElement(tag);
   if (className) node.className = className;
@@ -95,7 +98,7 @@ async function loadLiveGroups(windowId) {
     list.id = `workspace-tabs-${group.id}`;
     toggle.setAttribute('aria-controls',list.id);
     toggle.addEventListener('click',()=> {
-      if (opening) return;
+      if (opening || aiBusy) return;
       list.hidden = !list.hidden;
       toggle.textContent = list.hidden ? '▸' : '▾';
       toggle.setAttribute('aria-expanded',String(!list.hidden));
@@ -131,6 +134,7 @@ async function refreshTabs() {
   // A loaded manager merges fresh metadata without replacing the user's grouping.
   await browser.runtime.sendMessage({channel:'workspace-dashboard',type:'refresh-inventory',windowId:win.id}).catch(() => {});
   await loadLiveGroups(win.id);
+  await globalThis.PopupAI?.refreshInventory?.();
   status.textContent = 'Tabs refreshed. No data sent to AI.';
 }
 document.getElementById('refresh-tabs')?.addEventListener?.('click', () => action(refreshTabs));
@@ -153,7 +157,7 @@ const dropArea = document.getElementById('backup-drop');
 const isFileDrag = transfer => Array.from(transfer?.types || []).includes('Files');
 document.body.addEventListener('dragover', event => {
   event.preventDefault();
-  const allowed = !opening && isFileDrag(event.dataTransfer);
+  const allowed = !opening && !aiBusy && isFileDrag(event.dataTransfer);
   dropArea.classList.toggle('is-over', allowed);
   if (event.dataTransfer) event.dataTransfer.dropEffect = allowed ? 'copy' : 'none';
 });
@@ -163,7 +167,7 @@ document.body.addEventListener('dragleave', event => {
 document.body.addEventListener('drop', async event => {
   event.preventDefault();
   dropArea.classList.toggle('is-over', false);
-  if (opening || !isFileDrag(event.dataTransfer)) return;
+  if (opening || aiBusy || !isFileDrag(event.dataTransfer)) return;
   setBusy(true);
   try {
     const files = Array.from(event.dataTransfer.files || []);
@@ -188,3 +192,13 @@ document.body.addEventListener('drop', async event => {
     setBusy(false);
   }
 });
+
+// Popup AI has its own in-flight lock, independent of short toolbar actions.
+globalThis.PopupAIHooks = {
+  setBusy(value) { aiBusy = Boolean(value); setBusy(opening); },
+  async onAccepted() {
+    const win = await currentWindow();
+    await loadLiveGroups(win.id);
+    await browser.runtime.sendMessage({channel:'workspace-dashboard',type:'live-groups-changed',windowId:win.id}).catch(()=>{});
+  }
+};

@@ -62,7 +62,7 @@ Open http://localhost:8765/ in Safari. The existing test page still describes th
 
 ## Verification status and known limitations
 
-- The v0.8.1 native build and strict code-signature verification passed on November 1, 2026; the packaged AI client matches source.
+- The v0.9.0 native build and strict code-signature verification passed on November 1, 2026; the packaged AI client matches source.
 - The new group-chip mouse dragging, unchecked-tab preservation and keyboard collapse/expand were verified in the internal browser with fictional tab APIs. Actual Safari testing of this UI remains pending.
 - Live Safari popup rendering and current-window scanning were verified. A live storage-verification failure was reproduced and fixed with regression coverage; full save/close/restore retesting and restart persistence are **not yet verified**.
 - `node scripts/check.mjs` passes 176 automated checks for workspace rules, fake-DOM review flows, fake Meta providers, authenticated local HTTP contracts and usage budgets. Syntax and native resource checks are included. These do not replace Safari testing.
@@ -104,3 +104,7 @@ Project source is released under the [MIT License](LICENSE). Apple's SDKs and de
 ## Safe dashboard preview
 
 `node scripts/preview-dashboard.mjs` serves a development-only dashboard at http://127.0.0.1:8790 using fictional tabs, in-memory snapshots and a fake AI service. It cannot read or close actual browser tabs and makes no model requests. Use the normal Scan/New group controls to try group chips and dragging. Never enter real credentials into a preview. The preview is not proof of Safari extension integration.
+
+Use AI directly from the toolbar popup: choose **AI organise**, expand **Local AI connection**, enter the existing local pairing token and choose **Connect**. Keep the local service running. Optionally keep pairing for this browser session. Review the selected metadata, give sharing consent, request suggestions, edit and choose **Use reviewed groups**. The Meta API key stays in the service; do not enter it in the popup. Requests retain the existing limits and never retry automatically.
+
+Popup AI validation: 198 automated checks and a fictional-data browser flow passed; actual Safari/live Meta verification remains pending.

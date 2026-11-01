@@ -1,3 +1,9 @@
+## v0.9.0 AI inside the toolbar popup — November 1
+
+The popup now connects to the existing local AI service, previews selected sanitized metadata, requests explicit sharing consent, and offers editable group names and tab assignments before acceptance. No workspace-manager visit is required. Existing groups remain unchanged until acceptance; stale proposals are rejected. Background request coordination retains staged results when the popup is dismissed, with no inference retry. Optional browser-session pairing stores only the separate pairing token in session storage; the provider key stays in the service. Refresh status is explicit, and existing request limits remain unchanged.
+
+198 automated fake-browser/model checks pass. Fictional-data browser preview verified connection, generation, renaming, moving a tab and acceptance into the popup switcher. Native v0.9.0/build15 and packaged resources pass. Actual packaged Safari popup lifecycle and real Meta calls remain unverified. No real Safari control, tab/window closure or live inference occurred.
+
 ## v0.8.1 popup sizing
 
 CSS-only layout change requests 480 × 600 px instead of 360 px width, places primary actions side by side and uses one scrollable content pane beneath the header. Fictional-data browser preview verified no horizontal overflow and scrolling through an expanded eight-tab workspace to bottom controls. Native build/signature and packaged CSS comparison pass. No new automated tests were added for CSS declarations. Actual Safari native popup dimensions/clipping remain unverified. No real browser tabs changed.

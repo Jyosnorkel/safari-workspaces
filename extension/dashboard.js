@@ -816,9 +816,15 @@
   },5 * 60 * 1000);
   api?.runtime?.onMessage?.addListener((message,sender)=> {
     if (message?.channel !== 'workspace-dashboard' || message.windowId !== windowId || sender?.id !== api.runtime.id) return undefined;
-    if (!['refresh-inventory','ai-organise'].includes(message.type)) return undefined;
+    if (!['refresh-inventory','ai-organise','live-groups-changed'].includes(message.type)) return undefined;
     const origin = api.runtime.getURL('');
     if (!sender.url?.startsWith(origin) || !['popup.html','dashboard.html'].includes(sender.url.slice(origin.length).split(/[?#]/)[0])) return undefined;
+    if (message.type === 'live-groups-changed') {
+      liveConflict = true;
+      liveStatus('Groups changed in the toolbar popup. Your edits are kept here. Use Load shared groups to load the accepted groups.',true);
+      updateAIControls();
+      return Promise.resolve({ok:true});
+    }
     if (busy || draggedTab || editingReview()) return Promise.resolve({ok:false,error:'Review is busy. Refresh again when ready.'});
     let result = {ok:false,error:'Could not refresh tabs. Check the manager for details.'};
     return run(async()=> { await scan(); if (message.type === 'ai-organise') revealAI(); result = {ok:await queueLivePublish()}; if (!result.ok) result.error = 'Toolbar groups could not be updated. Your review is kept in the manager.'; }).then(()=>result);

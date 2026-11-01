@@ -327,6 +327,225 @@
     await api.tabs.update(chosen.id,{active:true});
     return {tabId:chosen.id};
   }
+  // Popup AI runs in the coordinator so closing the popup cannot turn a paid
+  // response into an automatic retry. Only explicit connect/suggest calls use HTTP.
+  const POPUP_AI_KEY = 'workspaces.popup-ai.v1';
+  const POPUP_TOKEN_KEY = 'workspaces.popup-ai-token.v1';
+  let popupAIFlight = null;
+  const tokenValid = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
+  const popupError = message => new Error(message);
+  function safeUsage(value) {
+    if (!object(value)) return undefined;
+    const result = {};
+    for (const field of ['enabled','configured','busy']) if (typeof value[field]==='boolean') result[field]=value[field];
+    for (const field of ['attemptsToday','remainingToday','remainingThisMinute','perMinute','perDay','requestsPerSuggestion','maxOutputTokens','dailyResetAt','retryAt']) {
+      if (value[field]===null || (typeof value[field]==='number' && Number.isFinite(value[field]) && value[field]>=0)) result[field]=value[field];
+    }
+    if (value.timezone==='UTC') result.timezone='UTC';
+    return result;
+  }
+  async function readPopupAI() {
+    if (liveResetFailed) throw popupError('AI review could not be reset for this browser session.');
+    const all = (await liveStorage.get(POPUP_AI_KEY))[POPUP_AI_KEY];
+    if (all===undefined) return {};
+    if (!object(all)) throw popupError('Local AI review is unreadable. No suggestions were sent.');
+    for (const [key,record] of Object.entries(all)) {
+      if (!safeId(Number(key)) || String(Number(key))!==key || !object(record) ||
+          !['idle','requesting','review','error','accepted'].includes(record.state) || !Array.isArray(record.inventory) || record.inventory.length>100 ||
+          !uuid(record.inventoryToken) || !Array.isArray(record.usedIds) || record.usedIds.length>100 || !record.usedIds.every(uuid) ||
+          (record.revision!==null && !uuid(record.revision))) throw popupError('Local AI review is unreadable. No suggestions were sent.');
+      const ids=new Set();
+      for(const tab of record.inventory) {
+        if(!object(tab)||!safeId(tab.id)||ids.has(tab.id)||typeof tab.url!=='string'||tab.url.length>32768||!C.restorable(tab.url)||typeof tab.title!=='string'||tab.title.length>8192||typeof tab.included!=='boolean') throw popupError('Local AI inventory is invalid. Refresh before requesting suggestions.');
+        ids.add(tab.id);
+      }
+      if(record.requestId!==undefined&&!uuid(record.requestId)) throw popupError('Local AI request identity is invalid.');
+      if(record.selectedIds!==undefined&&(!Array.isArray(record.selectedIds)||!record.selectedIds.every(id=>safeId(id)&&ids.has(id))||new Set(record.selectedIds).size!==record.selectedIds.length)) throw popupError('Local AI selection is invalid.');
+      if(record.proposal!==undefined) C.suggestions(record.proposal,record.inventory.filter(tab=>record.selectedIds?.includes(tab.id)).map(tab=>({...tab,eligible:true})));
+    }
+    return all;
+  }
+  async function writePopupAI(all) {
+    await liveStorage.set({[POPUP_AI_KEY]:all});
+    if(!same(await readPopupAI(),all)) throw popupError('Could not verify the local AI review. No automatic retry will be made.');
+  }
+  async function popupTokens() {
+    if(!api.storage.session) return {};
+    const tokens=(await api.storage.session.get(POPUP_TOKEN_KEY))[POPUP_TOKEN_KEY];
+    if(tokens===undefined)return {};
+    if(!object(tokens)||Object.entries(tokens).some(([key,value])=>!safeId(Number(key))||String(Number(key))!==key||!tokenValid(value))) throw popupError('Session pairing is unreadable. Forget the saved connection and connect again.');
+    return tokens;
+  }
+  async function rememberPopupToken(windowId,token,remember) {
+    if(remember && !api.storage.session) throw popupError('This Safari version cannot remember pairing safely for a browser session. Leave that option unchecked.');
+    if(!api.storage.session)return;
+    const tokens=await popupTokens();
+    if(remember)tokens[windowId]=token;else delete tokens[windowId];
+    await api.storage.session.set({[POPUP_TOKEN_KEY]:tokens});
+    if(!same(await popupTokens(),tokens)) throw popupError('Could not verify session pairing. Connect again without remembering it.');
+  }
+  async function popupInventory(windowId) {
+    await normalWindow(windowId);
+    const live=await getLiveGroups({windowId});
+    const exclusions=new Set(live.groups.flatMap(group=>group.tabs.filter(tab=>tab.excluded).map(tab=>tab.id)));
+    const tabs=(await liveInventory(windowId)).filter(tab=>tab.eligible && !tab.pendingUrl);
+    if(tabs.length>100)throw popupError('Popup AI supports up to 100 eligible tabs. Use a smaller window before requesting suggestions.');
+    return {revision:live.revision,inventory:tabs.map(tab=>({id:tab.id,url:tab.url,title:tab.title.slice(0,8192),included:!exclusions.has(tab.id)}))};
+  }
+  function newPopupState(view,previous={}) {
+    return {state:'idle',inventoryToken:crypto.randomUUID(),inventory:view.inventory,revision:view.revision,
+      usedIds:previous.usedIds || [],connected:Boolean(previous.connected),...(previous.usage?{usage:previous.usage}:{})};
+  }
+  async function popupPublic(record,windowId) {
+    const selected=record.selectedIds || record.inventory.filter(tab=>tab.included).map(tab=>tab.id);
+    const tabs=C.aiInventory(record.inventory.map(tab=>({...tab,eligible:true}))).map(tab=>({...tab,id:Number(tab.id),included:record.inventory.find(item=>String(item.id)===tab.id).included}));
+    const remembered=Boolean((await popupTokens())[windowId]);
+    let stale=false;
+    if(record.state==='review') {
+      try {await recheckPopupInput(record,windowId);}
+      catch {stale=true;}
+    }
+    return {state:record.state,tabs,input:C.aiInventory(record.inventory.filter(tab=>selected.includes(tab.id)).map(tab=>({...tab,eligible:true}))),
+      inventoryToken:record.inventoryToken,inventoryId:record.inventoryToken,revision:record.revision,connected:record.connected,remembered,stale,
+      ...(record.requestId?{requestId:record.requestId}:{}),...(record.proposal?{proposal:{...record.proposal,tabs:C.aiInventory(record.inventory.filter(tab=>record.selectedIds.includes(tab.id)).map(tab=>({...tab,eligible:true})))}}:{}),
+      ...(record.usage?{usage:record.usage}:{}),...(record.error?{error:record.error}:{})};
+  }
+  async function getPopupAIState({windowId}) {
+    await normalWindow(windowId);
+    const all=await readPopupAI();let record=all[windowId];
+    if(record?.state==='requesting' && popupAIFlight?.requestId!==record.requestId) {
+      record.state='error';record.error='The previous request was interrupted. No request will repeat automatically. Check usage before deliberately requesting again.';record.connected=false;
+      await writePopupAI(all);
+    }
+    if(!record || ['idle','accepted','error'].includes(record.state)) {
+      const next=await popupInventory(windowId);
+      if(!record || record.revision!==next.revision || !same(record.inventory,next.inventory)) {
+        const error=record?.error, oldState=record?.state;
+        record=newPopupState(next,record);if(error){record.state=oldState;record.error=error;}
+        all[windowId]=record;await writePopupAI(all);
+      }
+    }
+    return popupPublic(record,windowId);
+  }
+  async function connectPopupAI({windowId,token,rememberSession=false}) {
+    await normalWindow(windowId);
+    if(typeof rememberSession!=='boolean'||!tokenValid(token))throw popupError('Enter the 64-character local pairing token, not your Meta API key.');
+    if(rememberSession && !api.storage.session)throw popupError('Session pairing is unavailable. Leave Remember for this browser session unchecked.');
+    if(!globalThis.WorkspaceAI?.status)throw popupError('The AI connector is unavailable in this build.');
+    const all=await readPopupAI();const record=all[windowId] || newPopupState(await popupInventory(windowId));
+    if(record.state==='requesting')throw popupError('A suggestion is already running.');
+    const response=await WorkspaceAI.status({token});
+    if(!response?.ok||!response.usage)throw popupError('The local service returned an invalid status.');
+    await rememberPopupToken(windowId,token,rememberSession);
+    record.connected=true;record.usage=safeUsage(response.usage);delete record.error;
+    all[windowId]=record;await writePopupAI(all);return popupPublic(record,windowId);
+  }
+  async function refreshPopupAI({windowId,token}) {
+    await normalWindow(windowId);
+    const all=await readPopupAI(),record=all[windowId] || newPopupState(await popupInventory(windowId));
+    if(record.state==='requesting')throw popupError('A suggestion is already running.');
+    token=token || (await popupTokens())[windowId];
+    if(!tokenValid(token))throw popupError('Enter the local pairing token to refresh service status.');
+    if(!globalThis.WorkspaceAI?.status)throw popupError('The AI connector is unavailable in this build.');
+    try {
+      const response=await WorkspaceAI.status({token});
+      if(!response?.ok||!response.usage)throw popupError('The local service returned an invalid status.');
+      record.connected=true;record.usage=safeUsage(response.usage);delete record.error;
+      all[windowId]=record;await writePopupAI(all);
+    } catch(error) {
+      record.connected=false;all[windowId]=record;await writePopupAI(all);
+      throw error;
+    }
+    return getPopupAIState({windowId});
+  }
+  async function forgetPopupAI({windowId}) {
+    await normalWindow(windowId);await rememberPopupToken(windowId,'',false);
+    const all=await readPopupAI();if(all[windowId]){all[windowId].connected=false;delete all[windowId].usage;await writePopupAI(all);}
+    return getPopupAIState({windowId});
+  }
+  async function recheckPopupInput(record,windowId) {
+    await normalWindow(windowId);
+    if((await getLiveGroups({windowId})).revision!==record.revision)throw popupError('Workspace groups changed. Refresh AI input before requesting or accepting suggestions.');
+    const live=new Map((await liveInventory(windowId)).map(tab=>[tab.id,tab]));
+    for(const saved of record.inventory.filter(tab=>record.selectedIds?.includes(tab.id))) {
+      const tab=live.get(saved.id);
+      if(!tab||!tab.eligible||tab.pendingUrl||tab.windowId!==windowId||tab.url!==saved.url||tab.title.slice(0,8192)!==saved.title)throw popupError('A selected tab changed or is navigating. Refresh AI input before requesting or accepting suggestions.');
+    }
+  }
+  async function preparePopupSuggestion(message) {
+    const {windowId,requestId,expectedRevision,tabIds,consent}=message;
+    await normalWindow(windowId);
+    if(!uuid(requestId)||consent!==true||!Array.isArray(tabIds)||!tabIds.length||tabIds.length>100)throw popupError('Choose tabs and explicitly agree to send their metadata before requesting suggestions.');
+    const all=await readPopupAI(),record=all[windowId];
+    if(!record)throw popupError('Open AI organise and review the current input first.');
+    if(record.usedIds.includes(requestId))return {repeated:true,state:await popupPublic(record,windowId)};
+    if(popupAIFlight || record.state==='requesting')throw popupError('A suggestion is already running. No second request was sent.');
+    if(record.state==='review')throw popupError('Accept or discard the current suggestion before requesting another.');
+    if(record.inventoryToken!==(message.inventoryId ?? message.inventoryToken)||record.revision!==expectedRevision)throw popupError('AI input changed. Refresh and review it before requesting suggestions.');
+    const selected=tabIds.map(id=>typeof id==='string' && /^(0|[1-9][0-9]*)$/.test(id)?Number(id):id);
+    if(!selected.every(safeId)||new Set(selected).size!==selected.length||selected.some(id=>!record.inventory.some(tab=>tab.id===id)))throw popupError('The AI selection contains an unknown or duplicate tab.');
+    const token=message.token || (await popupTokens())[windowId];
+    if(!tokenValid(token))throw popupError('Connect with the local pairing token first.');
+    if(!record.connected || !record.usage?.enabled || !record.usage?.configured)throw popupError('Connect and enable the configured local Meta service first.');
+    if(!globalThis.WorkspaceAI?.suggest)throw popupError('The AI connector is unavailable in this build.');
+    record.selectedIds=selected;
+    record.inventory=record.inventory.map(tab=>({...tab,included:selected.includes(tab.id)}));
+    await recheckPopupInput(record,windowId);
+    const payload=C.aiInventory(record.inventory.filter(tab=>selected.includes(tab.id)).map(tab=>({...tab,eligible:true})));
+    if(new TextEncoder().encode(JSON.stringify(payload)).length>12000)throw popupError('The selected input is too large. Include fewer tabs.');
+    record.state='requesting';record.requestId=requestId;record.usedIds=[...record.usedIds,requestId].slice(-100);delete record.error;delete record.proposal;
+    all[windowId]=record;await writePopupAI(all);
+    popupAIFlight={windowId,requestId};
+    return {windowId,requestId,token,payload};
+  }
+  async function performPopupSuggestion(job) {
+    if(job.repeated)return {...job.state,repeated:true};
+    let response,error;
+    try {response=await WorkspaceAI.suggest({token:job.token,tabs:job.payload,consent:true});}
+    catch(caught){error=caught;}
+    job.token='';
+    const commit=queue.then(async()=>{
+      const all=await readPopupAI(),record=all[job.windowId];
+      if(!record||record.requestId!==job.requestId||record.state!=='requesting')throw popupError('AI review changed while the request was running. No suggestions were applied.');
+      if(error){record.state='error';record.error=typeof error.message==='string'?error.message.slice(0,500):'Suggestions failed. No automatic retry was made.';record.connected=false;if(error.usage)record.usage=safeUsage(error.usage);}
+      else {
+        try {
+          const eligible=record.inventory.filter(tab=>record.selectedIds.includes(tab.id)).map(tab=>({...tab,eligible:true}));
+          const validated=C.suggestions(response?.result,eligible);
+          record.proposal={groups:validated.groups.map(({name,reason,tabIds})=>({name,reason,tabIds})),ungrouped:validated.ungrouped};
+          record.state='review';record.usage=safeUsage(response?.usage) || record.usage;
+        } catch {record.state='error';record.error='The model returned invalid groups. Existing workspaces are unchanged.';record.connected=false;}
+      }
+      await writePopupAI(all);return popupPublic(record,job.windowId);
+    });
+    queue=commit.catch(()=>{});
+    try{return await commit;}finally{if(popupAIFlight?.requestId===job.requestId)popupAIFlight=null;}
+  }
+  async function acceptPopupAI({windowId,requestId,expectedRevision,groups}) {
+    await normalWindow(windowId);const all=await readPopupAI(),record=all[windowId];
+    if(!record||record.requestId!==requestId)throw popupError('This AI review is no longer available.');
+    if(record.state==='accepted')return {...await popupPublic(record,windowId),repeated:true};
+    if(record.state!=='review'||expectedRevision!==record.revision)throw popupError('Refresh the current AI review before accepting.');
+    await recheckPopupInput(record,windowId);
+    const selected=record.inventory.filter(tab=>record.selectedIds.includes(tab.id)),eligible=selected.map(tab=>({...tab,eligible:true}));
+    const validated=C.suggestions({groups},eligible);
+    const live=await getLiveGroups({windowId});
+    const chosen=new Set(record.selectedIds),next=live.groups.map(group=>({id:group.id,name:group.name,reason:group.reason || '',tabs:group.tabs.filter(tab=>!chosen.has(tab.id)).map(({id,url,excluded})=>({id,url,excluded:Boolean(excluded)}))}));
+    let ungrouped=next.find(group=>group.id==='ungrouped');if(!ungrouped){ungrouped={id:'ungrouped',name:'Ungrouped',reason:'',tabs:[]};next.unshift(ungrouped);}
+    for(const group of validated.groups)next.push({id:crypto.randomUUID(),name:group.name,reason:group.reason,tabs:group.tabIds.map(id=>{const tab=selected.find(tab=>String(tab.id)===id);return {id:tab.id,url:tab.url,excluded:false};})});
+    for(const id of validated.ungrouped){const tab=selected.find(tab=>String(tab.id)===id);ungrouped.tabs.push({id:tab.id,url:tab.url,excluded:false});}
+    const published=await setLiveGroups({windowId,expectedRevision:record.revision,groups:next.filter(group=>group.id==='ungrouped'||group.tabs.length)});
+    record.state='accepted';record.revision=published.revision;record.connected=Boolean(record.connected);delete record.proposal;delete record.selectedIds;
+    all[windowId]=record;await writePopupAI(all);
+    return {...await popupPublic(record,windowId),liveGroups:published.groups,liveRevision:published.revision};
+  }
+  async function discardPopupAI({windowId,requestId}) {
+    await normalWindow(windowId);const all=await readPopupAI(),record=all[windowId];
+    if(record?.state==='requesting')throw popupError('A suggestion is still running. Wait before discarding it.');
+    if(record?.requestId && record.requestId!==requestId)throw popupError('The current AI review changed. Refresh first.');
+    const next=newPopupState(await popupInventory(windowId),record);all[windowId]=next;await writePopupAI(all);return popupPublic(next,windowId);
+  }
+
   // Reordering has its own browser-session journal; no snapshot or restore URLs change.
   const CLUSTER_KEY = 'workspaces.cluster.v1';
   const same = (a,b) => JSON.stringify(canonical(a)) === JSON.stringify(canonical(b));
@@ -514,7 +733,7 @@
   api.runtime.onStartup?.addListener(() => {
     // Also clear session storage: browser restoration must not inherit prior tab IDs.
     const task = queue.then(async () => {
-      try { await writeLive({}); await writeClusters({}); }
+      try { await writeLive({}); await writeClusters({}); await writePopupAI({}); if(api.storage.session)await api.storage.session.set({[POPUP_TOKEN_KEY]:{}}); }
       catch { liveResetFailed = true; }
     });
     queue = task.catch(() => { liveResetFailed = true; });
@@ -523,6 +742,8 @@
     const task = queue.then(async () => {
       const all = await readLive();
       if (all[windowId]) { delete all[windowId]; await writeLive(all); }
+      const popupReviews=await readPopupAI();if(popupReviews[windowId]){delete popupReviews[windowId];await writePopupAI(popupReviews);}
+      await rememberPopupToken(windowId,'',false);
       const clusters = await readClusters();
       if (clusters[windowId]) { delete clusters[windowId]; await writeClusters(clusters); }
     });
@@ -530,6 +751,13 @@
   });
   async function handle(message) {
     switch (message.type) {
+      case 'popup-ai-state': return getPopupAIState(message);
+      case 'popup-ai-connect': return connectPopupAI(message);
+      case 'popup-ai-refresh': return refreshPopupAI(message);
+      case 'popup-ai-forget': return forgetPopupAI(message);
+      case 'popup-ai-disconnect': return forgetPopupAI(message);
+      case 'popup-ai-accept': return acceptPopupAI(message);
+      case 'popup-ai-discard': return discardPopupAI(message);
       case 'cluster-preview': return previewCluster(message);
       case 'cluster-undo-preview': return previewClusterUndo(message);
       case 'cluster-apply': return applyCluster(message);
@@ -578,8 +806,13 @@
   api.runtime.onMessage.addListener((message, sender) => {
     if (sender.id !== api.runtime.id || !sender.url?.startsWith(api.runtime.getURL(''))) return undefined;
     if (message?.channel !== 'workspace') return undefined;
-    if (['live-groups-get','live-groups-set','live-groups-focus','cluster-preview','cluster-undo-preview','cluster-apply','cluster-status'].includes(message.type) &&
+    if (['popup-ai-state','popup-ai-connect','popup-ai-refresh','popup-ai-forget','popup-ai-disconnect','popup-ai-suggest','popup-ai-accept','popup-ai-discard','live-groups-get','live-groups-set','live-groups-focus','cluster-preview','cluster-undo-preview','cluster-apply','cluster-status'].includes(message.type) &&
         !['popup.html','dashboard.html'].includes(sender.url.slice(api.runtime.getURL('').length).split(/[?#]/)[0])) return undefined;
+    if (message.type==='popup-ai-suggest') {
+      const admission=queue.then(()=>preparePopupSuggestion(message));
+      queue=admission.catch(()=>{});
+      return admission.then(performPopupSuggestion).then(state=>({ok:true,...state}),error=>({ok:false,error:error.message || 'Suggestions failed. No automatic retry was made.'}));
+    }
     const result = queue.then(async () => {
       try { return {ok: true, ...await handle(message)}; }
       catch (error) { return {ok: false, error: error.message || 'Operation failed.'}; }

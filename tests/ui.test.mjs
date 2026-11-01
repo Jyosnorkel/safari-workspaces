@@ -441,3 +441,9 @@ test('no-op and interrupted clustering do not retry moves; partial status stays 
  const h=await clusteredReview({clusterPartial:true});await h.click('cluster-tabs');assert.equal(h.sent.filter(message=>message.type==='cluster-apply').length,1);assert.equal(h.node('undo-cluster').hidden,true);assert.match(h.node('cluster-status').textContent,/stopped after 1 confirmed move/);
  const failed=await clusteredReview({clusterError:'Tabs changed. No further moves.'});await failed.click('cluster-tabs');assert.equal(failed.sent.filter(message=>message.type==='cluster-apply').length,1);assert.match(failed.node('status').textContent,/Tabs changed/);
 });
+
+test('accepted popup groups notify an open dashboard without silently replacing its manual edits',async()=>{
+ const h=await harness();await h.click('new-group');await h.change(named(h,'groups','Workspace 1'),'Unfinished local edit','input');
+ const response=await h.runtimeListener({channel:'workspace-dashboard',type:'live-groups-changed',windowId:1},{id:'test',url:'safari-web-extension://test/popup.html'});
+ assert.equal(response.ok,true);assert(named(h,'groups','Unfinished local edit'));assert.match(h.node('live-status').textContent,/Groups changed in the toolbar popup/);assert.equal(h.node('live-reload').hidden,false);
+});

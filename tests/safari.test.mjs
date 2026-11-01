@@ -66,7 +66,9 @@ test('manifest popup and background resources are included in the native extensi
   const phase=project.match(/8FFCB11B3090F03E0088828C \/\* Resources \*\/ = \{[\s\S]*?\n\t\t\};/)[0];
   const dashboard=readFileSync(path.join(root,'extension/dashboard.html'),'utf8');
   const dashboardFiles=Array.from(dashboard.matchAll(/(?:src|href)="([^"]+\.(?:js|css))"/g),match=>match[1]);
-  for(const file of ['manifest.json',manifest.action.default_popup,'popup.js','popup.css','dashboard.html',...dashboardFiles,...manifest.background.scripts]) {
+  const popupHTML=readFileSync(path.join(root,'extension/popup.html'),'utf8');
+  const popupFiles=Array.from(popupHTML.matchAll(/(?:src|href)="([^"]+\.(?:js|css))"/g),match=>match[1]);
+  for(const file of ['manifest.json',manifest.action.default_popup,...popupFiles,'dashboard.html',...dashboardFiles,...manifest.background.scripts]) {
     assert(existsSync(path.join(root,'extension',file)),`${file} exists`);
     assert(phase.includes(`${file} in Resources`),`${file} belongs to the extension copy phase`);
   }

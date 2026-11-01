@@ -196,3 +196,9 @@ Verified session journal stores full before/target/steps before changes. Full to
 ## v0.8.1 popup size correction — November 1
 
 User reported cropped toolbar popup. CSS now requests explicit 480×600 html/body geometry (previous 360 wide), viewport-bounded body, side-by-side main actions and a single scrollable main pane beneath the header. Removed nested workspace-list scroll and body max-height-only sizing. Fictional-data browser verified no horizontal overflow and bottom reachability with eight expanded sample tabs. Native v0.8.1/build14/signature and packaged CSS match pass. Actual Safari popup geometry remains unverified; no Safari control/model calls. Existing 176 behavioral tests were unchanged; no CSS-mirroring test added.
+
+## v0.9.0 AI inside the toolbar popup — November 1
+
+The popup now connects to the existing local AI service, previews selected sanitized metadata, requests explicit sharing consent, and offers editable group names and tab assignments before acceptance. No workspace-manager visit is required. Existing groups remain unchanged until acceptance; stale proposals are rejected. Background request coordination retains staged results when the popup is dismissed, with no inference retry. Optional browser-session pairing stores only the separate pairing token in session storage; the provider key stays in the service. Refresh status is explicit, and existing request limits remain unchanged.
+
+198 automated fake-browser/model checks pass. Fictional-data browser preview verified connection, generation, renaming, moving a tab and acceptance into the popup switcher. Native v0.9.0/build15 and packaged resources pass. Actual packaged Safari popup lifecycle and real Meta calls remain unverified. No real Safari control, tab/window closure or live inference occurred.
