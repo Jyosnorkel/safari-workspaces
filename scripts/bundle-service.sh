@@ -8,6 +8,13 @@ runtime=${runtime:A}
 license=${WORKSPACES_NODE_LICENSE:-${runtime:h:h}/LICENSE}
 [[ -x "$runtime" && -f "$license" ]] || { print -u2 'Node runtime and its LICENSE are required. Set WORKSPACES_NODE_PATH and WORKSPACES_NODE_LICENSE.'; exit 1; }
 [[ "$($runtime -p 'process.platform')" == darwin ]] || { print -u2 'Use a macOS Node runtime.'; exit 1; }
+# Ad-hoc hardened apps cannot load Xcode's separately signed debug dylib.
+# Signature verification alone does not detect this launch-time failure.
+executable=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist")
+if /usr/bin/otool -L "$app/Contents/MacOS/$executable" | /usr/bin/grep -q '\.debug\.dylib'; then
+  print -u2 'Rebuild with ENABLE_DEBUG_DYLIB=NO before bundling the development app.'
+  exit 1
+fi
 destination="$app/Contents/Resources/AIService"
 mkdir -p "$destination/runtime" "$destination/server"
 cp "$runtime" "$destination/runtime/node"

@@ -1,3 +1,7 @@
+## v0.10.1 launch-signature correction — November 1
+
+The user supplied a v0.10.0 launch crash: dyld rejected the separately signed debug dylib under hardened library validation. Disable Xcode debug dylibs for app/extension configurations and reject debug-dylib dependencies before service bundling. Hardened runtime stays enabled. Native v0.10.1/build17, strict signature verification and developer ZIP packaging pass; the host executable has no debug-dylib dependency. All 205 automated fake-provider/browser checks pass. The prior signature-only check did not establish launchability. Actual app launch, Keychain and Safari remain unverified; no app/service launch, Meta request or Safari control occurred for this fix.
+
 ## v0.10.0 desktop setup and bundled service — November 1
 
 Native onboarding replaces terminal startup with secure Keychain entry, explicit AI opt-in, Start/Stop, Safari settings/status and a separate connection-token copy button. Reopening the app starts AI only after prior opt-in. Window close keeps the host running; quit stops only its own helper. The bundled runtime and service use the existing pairing and usage ledger; corrupted files and occupied ports fail safely. Manual pairing-token paste into the popup remains required. No login item is installed.
