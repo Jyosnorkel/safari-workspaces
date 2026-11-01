@@ -301,11 +301,10 @@ if (document.querySelectorAll && document.getElementById('settings-open')) (() =
           exportButton.disabled=true;
           try {
             const {json}=await send('export-backup',{id:snapshot.id});
-            const url=URL.createObjectURL(new Blob([json],{type:'application/json'}));
+            const url='data:application/json;charset=utf-8,'+encodeURIComponent(json);
             const link=popupNode('a');link.href=url;
             link.download=`tabby-snapshot-${new Date(snapshot.createdAt).toISOString().replace(/[:.]/g,'-')}.json`;
             document.body.append(link);link.click();link.remove();
-            setTimeout(()=>URL.revokeObjectURL(url),60000);
             status.textContent='Export requested. The JSON contains full tab URLs and titles.';
           } finally {exportButton.disabled=false;}
         }));

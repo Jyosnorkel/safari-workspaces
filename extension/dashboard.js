@@ -643,11 +643,10 @@
   }
   async function exportBackup(id) {
     const {json} = await send('export-backup', id ? {id} : {});
-    const url = URL.createObjectURL(new Blob([json], {type: 'application/json'}));
+    const url = 'data:application/json;charset=utf-8,' + encodeURIComponent(json);
     const link = e('a'); link.href = url;
     link.download = `safari-workspaces-${new Date().toISOString().replace(/[:.]/g,'-')}.json`;
     document.body.append(link); link.click(); link.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
     notice('Backup download requested. Keep the JSON file somewhere safe; it contains full URLs and titles.');
   }
   $('snapshot-window').addEventListener('click', () => run(snapshotWindow));

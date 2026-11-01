@@ -248,3 +248,8 @@ Home/Organise/Snapshots navigation stays inside the popup. Header settings offer
 ## v0.13.1 popup snapshot export — November 1
 
 Expanded snapshot cards include Export JSON using the existing validated versioned portable backup operation. Duplicate clicks are disabled, failures remain visible, and export does not open/close tabs or alter snapshots. 208 automated checks and native build pass; actual Safari popup download remains unverified.
+
+
+## v0.13.2 Safari export URL correction — November 1
+
+User screenshot confirms popup blob export failed with WebKitBlobResource:1. Popup and manager export now use fully URI-encoded application/json data URLs, avoiding temporary extension blob URLs. No downloads permission/API added (Safari unsupported). 208 checks pass including JSON/Unicode download encoding; native build/signature pass. Actual Safari download with replacement remains unverified; no personal browser tabs touched.
