@@ -114,7 +114,7 @@
     else if (next==='review' && state.stale) message('Tabs or groups changed. Discard these suggestions and refresh the input before requesting again.',true);
     else if (next==='review' && previousState!=='review') message('Review the suggested groups, then accept them. Existing groups remain unchanged until acceptance.');
     else if (next==='error') message(state.error || 'Suggestions failed. Existing groups are unchanged.',true);
-    else if (next==='accepted') { message('Groups applied. Drag tabs between groups below.'); panel.hidden=true; if(previousState!=='accepted') hooks.onAccepted?.(windowId); }
+    else if (next==='accepted') { message('Groups applied. Drag tabs between groups below.'); if(previousState!=='accepted') hooks.onAccepted?.(windowId); }
     render();schedulePoll();
   }
   async function send(type,values={}) {

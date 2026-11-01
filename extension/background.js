@@ -496,12 +496,14 @@
     record.state='requesting';record.requestId=requestId;record.usedIds=[...record.usedIds,requestId].slice(-100);delete record.error;delete record.proposal;
     all[windowId]=record;await writePopupAI(all);
     popupAIFlight={windowId,requestId};
-    return {windowId,requestId,token,payload,autoApply:message.autoApply === true};
+    const settings=(await api.storage.local.get('tabby.settings.v1'))['tabby.settings.v1'];
+    const preferences=typeof settings?.preferences==='string'?settings.preferences.slice(0,1200):'';
+    return {windowId,requestId,token,payload,preferences,autoApply:message.autoApply === true};
   }
   async function performPopupSuggestion(job) {
     if(job.repeated)return {...job.state,repeated:true};
     let response,error;
-    try {response=await WorkspaceAI.suggest({token:job.token,tabs:job.payload,consent:true});}
+    try {response=await WorkspaceAI.suggest({token:job.token,tabs:job.payload,preferences:job.preferences,consent:true});}
     catch(caught){error=caught;}
     job.token='';
     const commit=queue.then(async()=>{

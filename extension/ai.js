@@ -3,7 +3,7 @@
   const baseURL='http://127.0.0.1:8788';
   const clientOrigin=globalThis.location?.origin&&globalThis.location.origin!=='null'
     ? globalThis.location.origin : globalThis.location ? `${globalThis.location.protocol}//${globalThis.location.host}` : '';
-  async function call(path,{token,tabs,consent}={}) {
+  async function call(path,{token,tabs,consent,preferences}={}) {
     if(typeof token!=='string'||!/^[a-f0-9]{64}$/.test(token.trim())) {
       const error=new Error('Enter the local service token from your private connection file, not the Meta API key.');error.code='local_token_required';throw error;
     }
@@ -13,7 +13,7 @@
         // Privileged extension GET requests can omit Origin when CORS is bypassed.
         // POST uses Fetch's non-GET Origin path while retaining strict server checks.
         method:'POST',headers:{Authorization:`Bearer ${token.trim()}`,'Content-Type':'application/json'},
-        body:JSON.stringify(path==='/v1/suggestions'?{tabs,consent}:{}),signal:controller.signal,mode:'cors',
+        body:JSON.stringify(path==='/v1/suggestions'?{tabs,consent,...(preferences?{preferences}:{})}:{}),signal:controller.signal,mode:'cors',
         credentials:'omit',cache:'no-store',redirect:'error'
       });
       const data=await response.json();

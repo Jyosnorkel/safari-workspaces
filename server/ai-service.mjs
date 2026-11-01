@@ -56,13 +56,14 @@ export function createAIService({env = process.env, provider, statePath, now = D
   const configured = () => config.enabled && Boolean(config.apiKey.trim() && config.model.trim() && config.providerId.trim()) && provider?.id === config.providerId && typeof provider.generate === 'function' && typeof provider.countInputTokens === 'function';
   return {
     async status() { return {enabled: config.enabled, configured: Boolean(configured()), ...await guard.status({requiredAttempts: provider?.remoteTokenCount ? 2 : 1}), maxInputBytes: config.maxInputBytes, maxInputTokens: config.maxInputTokens, maxOutputTokens: config.maxOutputTokens, requestsPerSuggestion: provider?.remoteTokenCount ? 2 : 1}; },
-    async suggest(tabs, {consent = false} = {}) {
+    async suggest(tabs, {consent = false, preferences = ''} = {}) {
       if (!configured()) throw new UsageError('not_configured', 'Live AI is disabled or its provider/model/key adapter is not configured. No request was sent.');
       if (consent !== true) throw new UsageError('consent_required', 'Confirm sending tab titles and sanitized URL paths to the configured provider. Titles and paths may contain sensitive information.');
+      if(typeof preferences!=='string'||preferences.length>1200)throw new UsageError('invalid_input','Grouping preferences must be at most 1200 characters.');
       const input = inputTabs(tabs);
-      const body = JSON.stringify(input);
+      const body = JSON.stringify({tabs:input,preferences});
       if (Buffer.byteLength(body, 'utf8') > config.maxInputBytes) throw new UsageError('input_limit', 'The tab inventory exceeds the configured input byte limit.');
-      const options = {tabs: input, model: config.model, apiKey: config.apiKey, maxOutputTokens: config.maxOutputTokens};
+      const options = {tabs: input, preferences, model: config.model, apiKey: config.apiKey, maxOutputTokens: config.maxOutputTokens};
       const checkCount = count => {
         if (!Number.isSafeInteger(count) || count < 0 || count > config.maxInputTokens) throw new UsageError('input_limit', 'The complete prompt exceeds the input token limit or cannot be counted.');
       };

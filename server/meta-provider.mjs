@@ -43,10 +43,10 @@ const schema = {
     }}
   }
 };
-export function makeMetaRequest({tabs, model, maxOutputTokens}) {
+export function makeMetaRequest({tabs, model, maxOutputTokens, preferences = ''}) {
   if (!Number.isSafeInteger(maxOutputTokens) || maxOutputTokens < 16) throw new UsageError('invalid_config', 'Meta requires an output-token cap of at least 16.');
   return {
-    model, instructions: INSTRUCTIONS, input: JSON.stringify({tabs}),
+    model, instructions: INSTRUCTIONS, input: JSON.stringify(preferences ? {tabs,groupingPreferences:preferences} : {tabs}),
     text: {format: {type: 'json_schema', name: 'tab_workspaces', strict: true, schema}},
     reasoning: {effort: 'minimal'}, max_output_tokens: maxOutputTokens,
     store: false, stream: false, background: false, tools: []

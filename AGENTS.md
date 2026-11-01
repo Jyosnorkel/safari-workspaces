@@ -236,3 +236,8 @@ Confirmed live workspace rows can be dragged anywhere on the row to another grou
 ## v0.12.0 direct popup organisation — November 1
 
 User explicitly removed the popup AI review requirement. Popup requests now opt into validated automatic application after sharing consent; stale inventory/revisions preserve existing groups. Background completion applies even if popup is dismissed, without inference retries. Dashboard review behavior remains unchanged. Popup supports named manual groups, removal to Ungrouped, and a blue insertion line above row drop targets. No real Safari movement/closure or live inference used for verification.
+
+
+## v0.13.0 popup navigation and settings — November 1
+
+Home/Organise/Snapshots navigation stays inside the popup. Header settings offers system/light/dark appearance, bounded grouping preferences, compact rows, and optional interval-based snapshot-on-popup-open (not background autosave). Snapshot summaries show timestamp, tab count and site count; tab details expand on demand. Grouping preferences flow through the authenticated guarded service into the Meta prompt and token counting; no automatic inference. Service/client update needs local service restart to accept preferences. Real Safari visual/settings interaction remains unverified.

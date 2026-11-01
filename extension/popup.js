@@ -278,3 +278,57 @@ globalThis.PopupAIHooks = {
     await browser.runtime.sendMessage({channel:'workspace-dashboard',type:'live-groups-changed',windowId:win.id}).catch(()=>{});
   }
 };
+
+
+// Popup navigation and local preferences; no background inference or tab mutations.
+if (document.querySelectorAll && document.getElementById('settings-open')) (() => {
+  const key='tabby.settings.v1', defaults={theme:'system',preferences:'',autosave:0,compact:false};
+  let settings={...defaults},view='home';
+  const $=id=>document.getElementById(id);
+  function theme(){document.documentElement.dataset.theme=settings.theme;document.body.classList.toggle('compact',settings.compact);}
+  async function snapshots(){
+    const list=$('snapshot-list');list.textContent='Loading…';
+    try {
+      const result=await send('list',{});list.replaceChildren();
+      if(!result.workspaces.length)list.append(popupNode('p','workspace-help','No snapshots yet. Save your first snapshot from Home.'));
+      for(const snapshot of result.workspaces){
+        const card=popupNode('details','snapshot-card'),summary=popupNode('summary');
+        const domains=new Set(snapshot.tabs.map(tab=>{try{return new URL(tab.url).hostname;}catch{return '';}}));
+        summary.textContent=`${new Date(snapshot.createdAt).toLocaleString()} · ${snapshot.tabs.length} tabs · ${domains.size} sites`;
+        card.append(summary);
+        for(const tab of snapshot.tabs){const row=popupNode('div','snapshot-tab');row.append(popupNode('strong','',tab.title || 'Untitled tab'),popupNode('small','',tab.url));card.append(row);}
+        list.append(card);
+      }
+    }catch(error){list.textContent=error.message;}
+  }
+  function show(next){
+    view=next;
+    for(const id of ['home-view','home-extras'])$(id).hidden=next!=='home';
+    $('home-groups').hidden=!['home','organise'].includes(next);
+    $('popup-ai-panel').hidden=next!=='organise';$('snapshots-view').hidden=next!=='snapshots';$('settings-view').hidden=next!=='settings';
+    for(const button of document.querySelectorAll('[data-view]'))button.setAttribute('aria-current',button.dataset.view===next?'page':'false');
+    if(next==='organise')globalThis.PopupAI?.open();
+    if(next==='snapshots')snapshots();
+  }
+  for(const button of document.querySelectorAll('[data-view]'))button.addEventListener('click',()=>{if(!opening&&!aiBusy)show(button.dataset.view);});
+  $('settings-open').addEventListener('click',()=>{if(!opening&&!aiBusy)show(view==='settings'?'home':'settings');});
+  $('ai-organise').addEventListener('click',()=>{if(!aiBusy)show('organise');});
+  $('popup-ai-close').addEventListener('click',()=>{if(!aiBusy)show('home');});
+  $('settings-form').addEventListener('submit',async event=>{
+    event.preventDefault();
+    const next={theme:$('setting-theme').value,preferences:$('setting-preferences').value.trim().slice(0,1200),autosave:Number($('setting-autosave').value),compact:$('setting-compact').checked};
+    try{await browser.storage.local.set({[key]:next});settings=next;theme();status.textContent='Settings saved.';}catch{status.textContent='Settings could not be saved. Try again.';}
+  });
+  (async()=>{
+    try{
+      const saved=(await browser.storage.local.get(key))[key];
+      if(saved && ['system','light','dark'].includes(saved.theme) && typeof saved.preferences==='string' && [0,5,15,30,60].includes(saved.autosave))settings={...defaults,...saved};
+      $('setting-theme').value=settings.theme;$('setting-preferences').value=settings.preferences;$('setting-autosave').value=String(settings.autosave);$('setting-compact').checked=settings.compact;theme();show('home');
+      for(let wait=0;opening && wait<50;wait++)await new Promise(resolve=>setTimeout(resolve,100));
+      if(settings.autosave){
+        const win=await currentWindow(),stampKey=`tabby.autosave.${win.id}`,last=(await browser.storage.local.get(stampKey))[stampKey] || 0;
+        if(Date.now()-last>=settings.autosave*60000 && !opening&&!aiBusy){await action(async()=>{await send('snapshot-window',{windowId:win.id,name:`Autosave ${new Date().toLocaleString()}`.slice(0,80),requestId:crypto.randomUUID()});await browser.storage.local.set({[stampKey]:Date.now()});status.textContent='Autosave snapshot saved. All tabs remain open.';});}
+      }
+    }catch{status.textContent='Could not load settings or autosave. Manual actions remain available.';}
+  })();
+})();
