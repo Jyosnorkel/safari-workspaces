@@ -354,3 +354,7 @@ User screenshot exposed default search-input appearance and overflowing Home car
 ## v0.16.2 left-hand popup shortcut — November 1
 
 User requested a left-hand alternative. Default Open Tabby shortcut is now Command+Shift+X, replacing K. Product design/themes reviewed ergonomics; no layout changes. Apple Safari shortcut reference does not list this combination, but custom macOS/other-extension conflicts and real packaged dispatch remain unverified. Existing user shortcut overrides may persist across upgrades. Native build/signature verified; manifest-only behavior change, no inference or Safari window actions.
+
+## v0.16.3 requested popup toggle shortcut — November 1
+
+User-selected default is now Cmd+Shift+F to open Tabby; exact popup-local matching closes only the popup with window.close before search/busy checks. Ignores key repeat and composition; Cmd+F remains search. Product design/themes reviewed interaction. Apple Safari shortcut reference does not list this combination; Apple documents Finder Recents for the same keys when Finder is active. Custom assignments can conflict. 222 checks include exact close/no-repeat/search regression; native build/signature/registration pass. Actual Safari command delivery and popup close remain unverified; no real Safari windows/tabs closed. Existing Safari user shortcut overrides may persist.

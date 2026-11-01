@@ -181,3 +181,7 @@ Shared-theme search field and constrained Home tab grid fix reported native-look
 ### November 1 — v0.16.2 left-hand shortcut
 
 Open Tabby default is now Cmd+Shift+X. Design review confirms left-hand reach. No matching standard action listed in Apple's Safari shortcuts; custom assignments can still conflict and real command dispatch remains unverified. Native build/signature pass; existing Safari shortcut customizations may need manual adjustment.
+
+### November 1 — v0.16.3 popup toggle
+
+User-requested Cmd+Shift+F replaces the prior default. Popup handles the same keys to close itself, before Cmd+F search matching, including during busy background operations. Design review and222 checks/native build/signature pass. Apple's Safari list has no listed assignment (Finder uses Recents separately); custom conflicts and actual packaged Safari open/close dispatch remain unverified.

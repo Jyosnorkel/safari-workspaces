@@ -99,12 +99,12 @@ test('confirmed popup rows move between groups and reorder with revision and exc
 test('popup navigation keeps snapshot details collapsed and saves appearance and grouping preferences',async()=>{
  class Node{constructor(){this.children=[];this.listeners={};this.dataset={};this.classList={toggle(){}};this.value='';}append(...n){this.children.push(...n);}replaceChildren(){this.children=[];}setAttribute(){}addEventListener(t,f){this.listeners[t]=f;}}
  const ids=['open','status','settings-open','settings-view','settings-form','setting-theme','setting-preferences','setting-autosave','setting-compact','home-view','home-groups','home-extras','popup-ai-panel','popup-ai-close','ai-organise','snapshots-view','snapshot-list','backup-drop','home-tab-search'];
- let exported=false,exportFails=true;
+ let exported=false,exportFails=true,closed=0;
  const nodes=new Map(ids.map(id=>[id,new Node()])),nav=['home','organise','snapshots'].map(view=>{const n=new Node();n.dataset.view=view;return n;}),writes=[];
  const pane={scrollTop:300};
  const documentHandlers={};const document={addEventListener(type,fn){documentHandlers[type]=fn;},querySelector:()=>pane,documentElement:new Node(),body:new Node(),getElementById:id=>nodes.get(id),querySelectorAll:()=>nav,createElement:()=>new Node()};
  const browser={storage:{local:{get:async()=>({}),set:async data=>writes.push(data)}},runtime:{sendMessage:async message=>{if(message.type==='download-backup'){exported=true;return exportFails?{ok:false,error:'Export unavailable'}:{ok:true,filename:'tabby-snapshot-test.json'};}return {ok:true,workspaces:[{createdAt:'2026-11-01T12:00:00Z',tabs:[{title:'Example',url:'https://example.com'}]}]};}}};
- vm.runInNewContext(source,{document,browser,URL,setTimeout});
+ vm.runInNewContext(source,{document,browser,URL,setTimeout,window:{close:()=>closed++}});
  for(let i=0;i<10;i++)await new Promise(r=>setImmediate(r));
  pane.scrollTop=300;nav[2].listeners.click();assert.equal(pane.scrollTop,0);for(let i=0;i<10;i++)await new Promise(r=>setImmediate(r));
  assert.equal(nodes.get('home-view').hidden,true);assert.equal(nodes.get('snapshots-view').hidden,false);
@@ -120,6 +120,8 @@ test('popup navigation keeps snapshot details collapsed and saves appearance and
  const shortcut={key:'f',metaKey:true,target:{tagName:'TEXTAREA'},preventDefault(){this.prevented=true;}};
  documentHandlers.keydown(shortcut);assert.equal(shortcut.prevented,true);assert.equal(focusCount,1);assert.equal(nodes.get('home-view').hidden,false);
  documentHandlers.keydown({key:'/',target:{tagName:'TEXTAREA'},preventDefault(){throw new Error('Typing a slash in preferences must remain ordinary input');}});assert.equal(focusCount,1);
+ documentHandlers.keydown({key:'F',metaKey:true,shiftKey:true,target:{tagName:'INPUT'},preventDefault(){}});assert.equal(closed,1);assert.equal(focusCount,1);
+ documentHandlers.keydown({key:'F',metaKey:true,shiftKey:true,repeat:true,preventDefault(){}});assert.equal(closed,1);
  assert.equal(document.documentElement.dataset.theme,'dark');assert.equal(writes[0]['tabby.settings.v1'].preferences,'Five specific groups');assert.equal(writes[0]['tabby.settings.v1'].autosave,15);
 });
 

@@ -395,7 +395,13 @@ if (document.querySelectorAll && document.getElementById('settings-open')) (() =
     if(next==='snapshots')snapshots();
   }
   document.addEventListener?.('keydown',event=>{
-    if(event.isComposing || event.altKey || opening || aiBusy)return;
+    if(event.isComposing || event.altKey)return;
+    if(event.metaKey && event.shiftKey && !event.ctrlKey && event.key.toLowerCase()==='f'){
+      event.preventDefault();
+      if(!event.repeat)window.close();
+      return;
+    }
+    if(opening || aiBusy)return;
     const editing=['INPUT','TEXTAREA','SELECT'].includes(event.target?.tagName) || event.target?.isContentEditable;
     if(((event.metaKey || event.ctrlKey) && event.key.toLowerCase()==='f') || (event.key==='/' && !editing && !event.metaKey && !event.ctrlKey)){
       event.preventDefault();if(view!=='home')show('home');homeSearch?.focus();homeSearch?.select?.();
