@@ -77,3 +77,10 @@ Popup preferred dimensions increased from 360 px wide to 480 × 600 px. Save sna
 Visible app/extension branding is Tabby. The approved three-window silhouette now uses pale folder-blue faces with restrained glass edge accents, retaining red/yellow/green window controls. Dashboard, popup and native activation page use cool white/pale-blue surfaces, sky-blue actions and dark blue text; warning/error colours remain distinct. Bundle/storage/backup identifiers and build paths stay compatible. Earlier icon versions and generation prompt history are preserved under assets/branding.
 
 All 176 fake-browser/model checks pass. Fictional-data internal-browser preview verified dashboard/settings and popup appearance, loaded icons, no horizontal overflow and the popup's scrollable main pane. Native build, strict signature and packaged theme/icon comparisons pass. Actual Safari appearance remains unverified. No Safari control or live Meta calls occurred. This is an isolated branding iteration for coordinated integration, not a tagged release.
+
+
+## User-approved stable popup baseline — November 1
+
+The user accepted the integrated v0.10.2/build18 plus latest Tabby visual theme as the preferred stable, user-friendly baseline. Keep ordinary tab review, local pairing-token entry, AI suggestions, corrections and acceptance inside the toolbar popup; do not require an additional manager window for that workflow. The desktop setup window remains available for initial provider-key setup. Future changes should preserve this popup-first behavior.
+
+Integrated verification: 205 automated fake-browser/provider checks pass, native build and strict signature pass, and all packaged extension resources match source. macOS registration was reduced to the integrated v0.10.2 package, removing the older branding-only v0.8.1 registration. User confirmed the resulting version is good. This acceptance does not establish every outstanding Safari/recovery/distribution release gate. Preserve all existing Safari safety restrictions.
