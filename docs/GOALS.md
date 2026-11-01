@@ -139,3 +139,8 @@ User screenshot identified leftover green token-field focus outline. Replaced ol
 ## v0.13.8 simplified popup Home — November 1
 
 Snapshot primary-button subtitle now uses dark accent text on blue in both themes. Live group controls and manual creation appear only in Organise. Removed the separate manager action from Home; the keyboard-accessible Tabby header button opens/reuses the full webpage through the existing manager route. Backup drop remains on Home. 209 automated checks, native build/signature pass; actual Safari appearance remains user verification.
+
+
+## v0.13.9 popup scroll and input compatibility — November 1
+
+User reports Organise scroll snapping and Logitech gesture interference. Preserve scroll across AI-state and live-group redraws; page switches still deliberately reset to top. Removed automatic token/password-field focus, retaining explicit secure entry. Source audit found no global event taps, mouse/keyboard hooks or Accessibility interception. Gesture cause remains unverified, not a compatibility certification. 210 automated checks cover state-refresh scroll preservation and no password autofocus; native build/signature pass. Real Safari/Logitech reproduction remains needed; no system security settings changed.

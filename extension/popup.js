@@ -74,6 +74,7 @@ async function loadLiveGroups(windowId) {
   const container = document.getElementById('live-groups');
   if (!container) return;
   const response = await send('live-groups-get',{windowId});
+  const scrollPane=document.querySelector?.('main'),savedScroll=scrollPane?.scrollTop;
   popupDrag = null;
   liveRevision = response.revision;
   workspaceButtons = [];
@@ -199,6 +200,7 @@ async function loadLiveGroups(windowId) {
     container.append(card);
   }
   container.append(addForm);
+  if(scrollPane && Number.isFinite(savedScroll))scrollPane.scrollTop=savedScroll;
 }
 async function refreshTabs() {
   const win = await currentWindow();

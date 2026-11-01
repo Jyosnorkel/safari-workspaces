@@ -56,7 +56,7 @@ async function harness(options={}) {
 }
 test('popup AI startup/open only reads local state and never launches the dashboard or provider',async()=>{
  const h=await harness();assert.deepEqual(h.sent.map(message=>message.type),['popup-ai-state']);assert.equal(h.node('popup-ai-panel').hidden,true);
- await h.context.PopupAI.open();assert.equal(h.node('popup-ai-panel').hidden,false);assert(h.node('popup-ai-token').focused);assert(h.sent.every(message=>message.type==='popup-ai-state'));assert.equal(h.permissionCalls,0);assert.equal(h.node('popup-ai-generate').disabled,true);
+ await h.context.PopupAI.open();assert.equal(h.node('popup-ai-panel').hidden,false);assert.equal(h.node('popup-ai-token').focused,undefined);assert(h.sent.every(message=>message.type==='popup-ai-state'));assert.equal(h.permissionCalls,0);assert.equal(h.node('popup-ai-generate').disabled,true);
 });
 test('connection clears token field, remembers only explicit checkbox, and consent is per selected input',async()=>{
  const h=await harness();await h.connect();assert.equal(h.node('popup-ai-token').value,'');assert.equal(h.sent.find(message=>message.type==='popup-ai-connect').rememberSession,false);assert.equal(h.node('popup-ai-generate').disabled,true);
@@ -100,4 +100,10 @@ test('stale proposals cannot be accepted and draft review blocks another generat
 test('explicit refresh uses the page token without another generation or requiring another paste',async()=>{
  const h=await harness();await h.connect();await h.click('popup-ai-refresh');const request=h.sent.find(message=>message.type==='popup-ai-refresh');assert.equal(request.token,'a'.repeat(64));assert.equal(h.sent.some(message=>message.type==='popup-ai-suggest'),false);assert.match(h.node('popup-ai-status').textContent,/No model request/);
  h.current={...h.current,connected:false,state:'error',error:'Provider unavailable'};await h.context.PopupAI.refreshInventory();await h.consent();assert.equal(h.node('popup-ai-generate').disabled,true);
+});
+
+test('background AI state refresh preserves Organise scroll position',async()=>{
+ const h=await harness();const pane={scrollTop:250};h.context.document.querySelector=()=>pane;
+ await h.context.PopupAI.open();pane.scrollTop=250;await h.context.PopupAI.refreshInventory();
+ assert.equal(pane.scrollTop,250);assert.equal(h.node('popup-ai-token').focused,undefined);
 });

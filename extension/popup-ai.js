@@ -95,7 +95,9 @@
     }
   }
   function render() {
+    const pane=document.querySelector?.('main'),scrollTop=pane?.scrollTop;
     editable=[];renderTabs();renderUsage();renderReview();updateControls();
+    if(pane && Number.isFinite(scrollTop))pane.scrollTop=scrollTop;
   }
   function receive(response) {
     const previousState=state?.state;
@@ -148,7 +150,7 @@
     if (!Number.isInteger(windowId)) await initialise();
     else await refreshInventory();
     if (!pageToken && !state?.remembered && $('popup-ai-setup')) $('popup-ai-setup').open=true;
-    (pageToken || state?.remembered ? $('popup-ai-consent') : $('popup-ai-token')).focus({preventScroll:true});
+    // Do not automatically focus a password field: leave secure input to an explicit click.
   }
   async function initialise() {
     try {
