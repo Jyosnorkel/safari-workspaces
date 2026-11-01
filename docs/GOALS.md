@@ -1,3 +1,9 @@
+## v0.10.0 desktop setup and bundled service — November 1
+
+Native onboarding replaces terminal startup with secure Keychain entry, explicit AI opt-in, Start/Stop, Safari settings/status and a separate connection-token copy button. Reopening the app starts AI only after prior opt-in. Window close keeps the host running; quit stops only its own helper. The bundled runtime and service use the existing pairing and usage ledger; corrupted files and occupied ports fail safely. Manual pairing-token paste into the popup remains required. No login item is installed.
+
+205 fake-browser/provider automated checks pass; ten desktop/local HTTP checks also pass under the bundled Node runtime. Native v0.10.0/build16 and strict signature verification pass. A developer ZIP is packaged. This is **not a public-ready signed download**: Developer ID, notarization, independently verified per-architecture runtime, clean-Mac installation, Keychain/UI and actual Safari/provider verification remain gates. No real keys, app launch, Safari control, inference or window closure occurred. See [release plan](release.md).
+
 ## v0.9.0 AI inside the toolbar popup — November 1
 
 The popup now connects to the existing local AI service, previews selected sanitized metadata, requests explicit sharing consent, and offers editable group names and tab assignments before acceptance. No workspace-manager visit is required. Existing groups remain unchanged until acceptance; stale proposals are rejected. Background request coordination retains staged results when the popup is dismissed, with no inference retry. Optional browser-session pairing stores only the separate pairing token in session storage; the provider key stays in the service. Refresh status is explicit, and existing request limits remain unchanged.

@@ -2,7 +2,11 @@
 
 This iteration ships the Meta Responses adapter, authenticated loopback service, private pairing, and `extension/ai.js` client. The coordinator integrates the dashboard review UI and Safari permissions. **No live inference, real key, or branded Safari extension connection has been tested by this workstream.** All tests use fake providers or loopback-only fake services.
 
-## Start locally
+## Desktop setup
+
+The containing app now provides a Keychain-backed setup window and bundled local service. Use the app setup instructions in [README](../README.md#app-setup-new-desktop-flow). No terminal is needed for the intended recipient flow. The steps below remain a developer alternative; do not run both services at once. Both use the same pairing and usage directory. The app does not import shell credentials or reset usage. Real desktop/Safari verification remains pending.
+
+## Start locally (developer alternative)
 
 Use Node.js 20.12 or newer on the Mac running Safari. No npm dependencies are needed.
 

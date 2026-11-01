@@ -1,21 +1,10 @@
-//
-//  AppDelegate.swift
-//  Safari Dev Lab
-//
-//  Created by Jeffrey Yeung on 27/10/2026.
-//
-
 import Cocoa
 
 @main
 class AppDelegate: NSObject, NSApplicationDelegate {
-
-    func applicationDidFinishLaunching(_ notification: Notification) {
-        // Override point for customization after application launch.
-    }
-
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag { sender.windows.first(where: { $0.contentViewController is ViewController })?.makeKeyAndOrderFront(nil) }
         return true
     }
-
 }

@@ -31,6 +31,16 @@ The Meta integration includes a local authenticated service, the official Respon
 
 To use your existing terminal key, follow [local Meta setup](docs/meta-setup.md). The key remains in the local service environment; the extension receives only a separate pairing token. Each connection/status check and suggestion automatically authenticates and refreshes Safari’s changed origin in connection.json; no repeated manual JSON edits or re-pairing are needed. Suggestions require disclosure/consent and explicit acceptance. Default limits are one in flight, two outbound attempts per minute and twenty per UTC day, with no retries. Token counting and generation consume separate attempts.
 
+## App setup (new desktop flow)
+
+Open the built **Safari Dev Lab.app** (display name **Safari Workspaces**). The setup window guides you through enabling the Safari extension, saving your Meta API key in macOS Keychain and starting the local AI connection. The app bundles its own runtime: recipients do not need Node, a terminal or this repository. AI stays off until you explicitly enable it; each suggestion still requires the extension’s data-sharing consent.
+
+Choose **Copy connection token** in the app, then paste it into **Local AI connection** in the Safari popup and choose **Connect**. This token is separate from your Meta key. Keep the app running while using AI; closing its window keeps the connection running, and quitting the app stops only the service it started. Reopen the app to start it again after login. Manual grouping and snapshots remain available without AI.
+
+If you already started the old terminal service, stop that service first. The app does not stop unknown processes or replace your existing pairing and usage ledger. Existing terminal-only keys are not imported; enter your key locally in the app, never in chat or GitHub.
+
+This is a development build, **not yet a signed public download**. The new setup and bundled helper need real macOS/Safari verification. Apple signing, notarization, clean-Mac installation and architecture-specific runtime validation remain release gates. See [release checklist](docs/release.md).
+
 ## Build and try locally
 
 Requires macOS, Safari, Xcode and its command-line tools. No npm dependencies are needed for the current extension.
@@ -40,7 +50,7 @@ Requires macOS, Safari, Xcode and its command-line tools. No npm dependencies ar
 open 'build/Build/Products/Debug/Safari Dev Lab.app'
 ```
 
-The native host still uses the starter name **Safari Dev Lab**. The web extension is named **Safari Workspaces**. Both retain the original bundle identifier prefix so existing local installs can be updated.
+The build filename remains **Safari Dev Lab.app** for compatibility; the setup window uses **Safari Workspaces**. Existing bundle identifiers are preserved.
 
 1. Enable Safari's developer features and **Allow unsigned extensions** for this ad-hoc development build. Authentication may be required, and Safari may reset this setting after quitting.
 2. Enable the extension in Safari Settings → Extensions. The `tabs` permission provides tab metadata; `storage` persists workspaces locally.
@@ -65,7 +75,7 @@ Open http://localhost:8765/ in Safari. The existing test page still describes th
 - The v0.9.0 native build and strict code-signature verification passed on November 1, 2026; the packaged AI client matches source.
 - The new group-chip mouse dragging, unchecked-tab preservation and keyboard collapse/expand were verified in the internal browser with fictional tab APIs. Actual Safari testing of this UI remains pending.
 - Live Safari popup rendering and current-window scanning were verified. A live storage-verification failure was reproduced and fixed with regression coverage; full save/close/restore retesting and restart persistence are **not yet verified**.
-- `node scripts/check.mjs` passes 176 automated checks for workspace rules, fake-DOM review flows, fake Meta providers, authenticated local HTTP contracts and usage budgets. Syntax and native resource checks are included. These do not replace Safari testing.
+- `node scripts/check.mjs` passes 205 automated checks for workspace rules, fake-DOM review flows, fake Meta providers, authenticated local HTTP contracts and usage budgets. Syntax and native resource checks are included. These do not replace Safari testing.
 - Completed snapshots support an explicit **Restore another copy** action. New restore sessions are protected against replayed requests and stale dashboards.
 - Unsaved forms, browsing history, scroll position and complete page state are not saved. Restoration reopens URLs only.
 - Groups are edited in the dashboard and used from the toolbar switcher. Native Safari Tab Groups are not controlled. Live memberships are browser-session state; saved snapshots remain durable. Groups survive dashboard/event-page reloads but reset on browser startup to avoid reusing stale tab IDs.

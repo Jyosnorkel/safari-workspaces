@@ -1,3 +1,12 @@
+## 0.10.0 — 2026-11-01
+
+- Add native setup, Keychain API-key storage/removal and explicit AI enable/start/stop.
+- Bundle the local service and Node runtime; no recipient terminal or Node installation needed for startup.
+- Preserve shared pairing and usage limits; fail safely on corrupt files and occupied ports.
+- Keep app available after window close; copy separate pairing token for Safari connection.
+- Add guarded developer/public packaging and release requirements.
+- Verification: 205 automated fake-provider/browser checks, ten bundled-runtime local checks and native build/signature pass. Public signing/notarization, real Keychain/UI and Safari verification remain pending.
+
 # Changelog
 
 ## 0.2.2 — 2026-10-30
