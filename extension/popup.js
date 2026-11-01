@@ -312,6 +312,7 @@ if (document.querySelectorAll && document.getElementById('settings-open')) (() =
   }
   function show(next){
     view=next;
+    const pane=document.querySelector?.('main'); if(pane)pane.scrollTop=0;
     for(const id of ['home-view','home-extras'])$(id).hidden=next!=='home';
     $('home-groups').hidden=!['home','organise'].includes(next);
     $('popup-ai-panel').hidden=next!=='organise';$('snapshots-view').hidden=next!=='snapshots';$('settings-view').hidden=next!=='settings';

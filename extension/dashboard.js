@@ -1,6 +1,19 @@
 (() => {
   const api = globalThis.browser;
   const C = WorkspaceCore;
+  // Appearance is shared with the popup; invalid/missing settings follow macOS.
+  const applyTheme = value => {
+    if (document.documentElement) document.documentElement.dataset.theme = ['light','dark','system'].includes(value) ? value : 'system';
+  };
+  applyTheme('system');
+  try {
+    const loading = api?.storage?.local?.get('tabby.settings.v1');
+    loading?.then(value => applyTheme(value?.['tabby.settings.v1']?.theme)).catch(() => {});
+    api?.storage?.onChanged?.addListener((changes, area) => {
+      if (area === 'local' && changes?.['tabby.settings.v1']) applyTheme(changes['tabby.settings.v1'].newValue?.theme);
+    });
+  } catch { /* Storage availability never blocks manual workspace controls. */ }
+
   const $ = id => document.getElementById(id);
   let tabs = [], windowId, busy = false, generation = 0, reviewRevision = 0;
   let pairedToken = '', usage = null, pendingSuggestions = null, draggedTab = null, connectionUpdated = false;

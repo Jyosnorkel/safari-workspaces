@@ -144,11 +144,11 @@
     receive(await send('popup-ai-state'));
   }
   async function open() {
-    panel.hidden=false;panel.scrollIntoView?.({block:'start'});
+    panel.hidden=false;
     if (!Number.isInteger(windowId)) await initialise();
     else await refreshInventory();
     if (!pageToken && !state?.remembered && $('popup-ai-setup')) $('popup-ai-setup').open=true;
-    (pageToken || state?.remembered ? $('popup-ai-consent') : $('popup-ai-token')).focus();
+    (pageToken || state?.remembered ? $('popup-ai-consent') : $('popup-ai-token')).focus({preventScroll:true});
   }
   async function initialise() {
     try {

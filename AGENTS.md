@@ -285,3 +285,8 @@ Export now delegates validated backup JSON to the native extension via nativeMes
 ## v0.13.4 flat popup controls — November 1
 
 Checked Apple Liquid Glass documentation: native SwiftUI glassEffect is not a supported CSS material for this HTML extension popup. Removed imitation inset glints, native button bevels and decorative shadows; retained functional insertion lines/focus indicators. Improved dark/system-dark contrast, small control targets and full group-name tooltips. Fictional-data internal-browser Home/Settings navigation and system-dark appearance inspected; 209 automated checks/native build pass. No retained isolated SafariDriver session located; no real Safari UI actions, tabs or windows touched. Actual packaged Safari visual verification remains open.
+
+
+## v0.13.5 anchored navigation and unified themes — November 1
+
+Popup page switches reset the scroll pane to top; sticky navigation remains visible. AI panel no longer scrolls itself into view and token/consent focus uses preventScroll. Theme palette covers popup surfaces, forms, notes, snapshots, drag states and AI actions. Dashboard loads the same local appearance preference and responds to settings changes; decorative glints removed while functional drop/focus markers remain. 209 automated checks include navigation scroll-reset regression; native build/signature pass. Actual packaged Safari appearance remains unverified; no personal Safari interaction.

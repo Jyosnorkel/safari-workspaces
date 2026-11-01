@@ -101,11 +101,12 @@ test('popup navigation keeps snapshot details collapsed and saves appearance and
  const ids=['open','status','settings-open','settings-view','settings-form','setting-theme','setting-preferences','setting-autosave','setting-compact','home-view','home-groups','home-extras','popup-ai-panel','popup-ai-close','ai-organise','snapshots-view','snapshot-list','backup-drop'];
  let exported=false,exportFails=true;
  const nodes=new Map(ids.map(id=>[id,new Node()])),nav=['home','organise','snapshots'].map(view=>{const n=new Node();n.dataset.view=view;return n;}),writes=[];
- const document={documentElement:new Node(),body:new Node(),getElementById:id=>nodes.get(id),querySelectorAll:()=>nav,createElement:()=>new Node()};
+ const pane={scrollTop:300};
+ const document={querySelector:()=>pane,documentElement:new Node(),body:new Node(),getElementById:id=>nodes.get(id),querySelectorAll:()=>nav,createElement:()=>new Node()};
  const browser={storage:{local:{get:async()=>({}),set:async data=>writes.push(data)}},runtime:{sendMessage:async message=>{if(message.type==='download-backup'){exported=true;return exportFails?{ok:false,error:'Export unavailable'}:{ok:true,filename:'tabby-snapshot-test.json'};}return {ok:true,workspaces:[{createdAt:'2026-11-01T12:00:00Z',tabs:[{title:'Example',url:'https://example.com'}]}]};}}};
  vm.runInNewContext(source,{document,browser,URL,setTimeout});
  for(let i=0;i<10;i++)await new Promise(r=>setImmediate(r));
- nav[2].listeners.click();for(let i=0;i<10;i++)await new Promise(r=>setImmediate(r));
+ pane.scrollTop=300;nav[2].listeners.click();assert.equal(pane.scrollTop,0);for(let i=0;i<10;i++)await new Promise(r=>setImmediate(r));
  assert.equal(nodes.get('home-view').hidden,true);assert.equal(nodes.get('snapshots-view').hidden,false);
  const card=nodes.get('snapshot-list').children[0];assert.equal(card.open,undefined);assert.match(card.children[0].textContent,/1 tabs · 1 sites/);
  await card.children[1].listeners.click();assert.equal(exported,true);assert.match(nodes.get('status').textContent,/Export unavailable/);
