@@ -169,3 +169,7 @@ Whole group header toggles expansion with keyboard-accessible aria-expanded/cont
 ## v0.15.0 manual scan inventory and saved-tab opening — November 1
 
 Popup scan calls trusted live-groups-sync-scan to place eligible new/changed identities in Ungrouped while preserving existing manual groups/order/exclusions. Membership changes update CAS revision; protected/private/pending tabs excluded. Snapshot summary uses inline date/counts (tabs includes duplicates; sites means distinct hostnames). Snapshot rows open stored validated URLs in current normal window, never caller URLs; persistent admission/readback/replay guard prevents uncertain retries. Snapshot data unchanged. Known limitation: saved-tab opening ledger fails closed after 500 admitted requests; no unsafe history eviction. 220 automated checks/native build/signature pass; actual Safari scan/drag/open behavior remains user verification.
+
+### November 1 — v0.16.0 Home search
+
+Home lists the latest scanned tabs with local title/website search. Click or use arrow keys and Return to switch existing tabs after identity revalidation. Cmd+F or slash focuses search; requested Safari popup shortcut is Cmd+Shift+K (customizable in Safari 26 extension settings; actual dispatch remains unverified). 222 automated checks and native build/signature pass. Fictional-data browser inventory inspected; actual packaged Safari shortcuts/search remain user verification. No windows/tabs closed or live inference made.

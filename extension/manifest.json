@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Tabby",
-  "version": "0.15.0",
+  "version": "0.16.0",
   "description": "Review, save and restore Safari workspaces. Keep related tabs together and resume later.",
   "permissions": [
     "tabs",
@@ -25,6 +25,14 @@
     "default_icon": {
       "16": "icons/tabby-16.png",
       "32": "icons/tabby-32.png"
+    }
+  },
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "mac": "Command+Shift+K"
+      },
+      "description": "Open Tabby"
     }
   },
   "content_security_policy": {

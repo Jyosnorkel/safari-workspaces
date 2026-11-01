@@ -150,3 +150,12 @@ html body .live-workspace>.workspace-remove{position:absolute;right:-27px;top:5p
 .live-workspace .workspace-tabs{border-radius:0 0 8px 8px;overflow:hidden}
 
 .snapshot-entry summary{display:flex;align-items:center;gap:7px;flex-wrap:wrap;min-height:56px;font-size:11px;padding-right:92px}.snapshot-entry summary::before{content:'▸';font-size:10px}.snapshot-entry details[open]>summary::before{content:'▾'}.snapshot-entry summary{list-style:none}.snapshot-entry summary::-webkit-details-marker{display:none}.snapshot-entry .snapshot-stats{display:inline;margin:0;font-size:10px;white-space:nowrap}.snapshot-entry .snapshot-date{font-size:11px}.snapshot-entry .snapshot-stats::before{content:'· ';}.snapshot-entry .snapshot-tab{display:block;width:calc(100% - 22px);text-align:left;border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent;padding:10px 0;color:var(--ink)}.snapshot-entry .snapshot-tab:hover{background:var(--hover)}
+
+/* Home inventory shares Organise row surfaces. */
+.home-tabs { margin-top: 18px; }
+.home-search-label { display:block; margin:10px 0 6px; color:var(--ink); font-weight:600; }
+#home-tab-search { width:100%; box-sizing:border-box; }
+#home-tab-list { display:grid; gap:5px; }
+html body .home-tab { width:100%; border:1px solid var(--line); border-radius:9px; background:var(--surface); color:var(--ink); text-align:left; padding:10px 12px; }
+html body .home-tab.is-selected { border-color:var(--accent); background:var(--hover); }
+html body .home-tab:hover { background:var(--hover); }

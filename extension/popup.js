@@ -23,6 +23,7 @@ function setBusy(value) {
     if (control) control.disabled = value || aiBusy;
   }
   for (const control of workspaceButtons) control.disabled = value || aiBusy;
+  for (const control of (document.querySelectorAll?.('.home-tab') || [])) control.disabled = value || aiBusy;
 }
 async function currentWindow() {
   const api = globalThis.browser;
@@ -197,10 +198,57 @@ async function loadLiveGroups(windowId) {
   container.append(addForm);
   if(scrollPane && Number.isFinite(savedScroll))scrollPane.scrollTop=savedScroll;
 }
+// Home search uses the latest explicit local scan; activation never opens a URL.
+let homeInventory = [], homeWindowId, homeSelection = 0, homeMatches = [];
+function renderHomeTabs() {
+  const list = document.getElementById('home-tab-list');
+  if (!list) return;
+  const query = (document.getElementById('home-tab-search')?.value || '').trim().toLocaleLowerCase();
+  homeMatches = homeInventory.filter(tab => `${tab.title || ''} ${tab.url || ''}`.toLocaleLowerCase().includes(query));
+  homeSelection = Math.max(0, Math.min(homeSelection, homeMatches.length - 1));
+  list.replaceChildren();
+  const count = document.getElementById('home-tab-results');
+  if (count) count.textContent = `${homeMatches.length} of ${homeInventory.length} tabs`;
+  if (!homeMatches.length) list.append(popupNode('p','workspace-empty',query ? 'No matching tabs.' : 'No tabs available. Refresh tabs to try again.'));
+  homeMatches.forEach((tab,index) => {
+    const row = popupNode('button','workspace-tab home-tab'); row.type = 'button';
+    row.classList.toggle('is-selected',index === homeSelection);
+    row.title = tab.url || tab.title || 'Untitled tab';
+    row.setAttribute('aria-label',`Switch to tab: ${tab.title || 'Untitled tab'}`);
+    if (tab.active) row.setAttribute('aria-current','page');
+    let host = ''; try { host = new URL(tab.url).hostname; } catch {}
+    row.append(popupNode('span','workspace-tab-title',tab.title || 'Untitled tab'),popupNode('small','workspace-tab-host',host || 'Safari tab'));
+    row.disabled = opening || aiBusy;
+    row.addEventListener('click',()=>activateHomeTab(tab));
+    list.append(row);
+  });
+}
+function activateHomeTab(tab) {
+  return action(async()=> {
+    const live = await browser.tabs.get(tab.id);
+    if (live.incognito || live.windowId !== homeWindowId || live.url !== tab.url) throw new Error('This tab changed. Refresh tabs and try again.');
+    await browser.tabs.update(tab.id,{active:true});
+    status.textContent = `Switched to ${tab.title || 'tab'}.`;
+  });
+}
+const homeSearch = document.getElementById('home-tab-search');
+homeSearch?.addEventListener?.('input',()=>{homeSelection=0;renderHomeTabs();});
+homeSearch?.addEventListener?.('keydown',event=>{
+  if (event.isComposing || event.altKey || event.metaKey || event.ctrlKey) return;
+  if (['ArrowDown','ArrowUp'].includes(event.key) && homeMatches.length) {
+    event.preventDefault();
+    homeSelection = (homeSelection + (event.key === 'ArrowDown' ? 1 : -1) + homeMatches.length) % homeMatches.length;
+    renderHomeTabs();
+    document.getElementById('home-tab-list')?.children[homeSelection]?.scrollIntoView?.({block:'nearest'});
+  } else if (event.key === 'Enter' && homeMatches.length) {
+    event.preventDefault();activateHomeTab(homeMatches[homeSelection]);
+  }
+});
 async function refreshTabs() {
   const win = await currentWindow();
   status.textContent = 'Refreshing tabs…';
   const result = await send('scan',{windowId:win.id});
+  homeWindowId=win.id;homeInventory=result.tabs.filter(tab=>Number.isInteger(tab.id) && !tab.incognito);homeSelection=0;renderHomeTabs();
   const eligible = result.tabs.filter(tab => tab.eligible).length;
   document.getElementById('tab-count').textContent = `${result.tabs.length} tabs · ${eligible} available to organise`;
   document.getElementById('scan-time').textContent = `Updated ${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`;
@@ -346,6 +394,13 @@ if (document.querySelectorAll && document.getElementById('settings-open')) (() =
     if(next==='organise')globalThis.PopupAI?.open();
     if(next==='snapshots')snapshots();
   }
+  document.addEventListener?.('keydown',event=>{
+    if(event.isComposing || event.altKey || opening || aiBusy)return;
+    const editing=['INPUT','TEXTAREA','SELECT'].includes(event.target?.tagName) || event.target?.isContentEditable;
+    if(((event.metaKey || event.ctrlKey) && event.key.toLowerCase()==='f') || (event.key==='/' && !editing && !event.metaKey && !event.ctrlKey)){
+      event.preventDefault();if(view!=='home')show('home');homeSearch?.focus();homeSearch?.select?.();
+    }
+  });
   for(const button of document.querySelectorAll('[data-view]'))button.addEventListener('click',()=>{if(!opening&&!aiBusy)show(button.dataset.view);});
   $('settings-open').addEventListener('click',()=>{if(!opening&&!aiBusy)show(view==='settings'?'home':'settings');});
   $('ai-organise').addEventListener('click',()=>{if(!aiBusy)show('organise');});
