@@ -672,6 +672,7 @@
     if (liveReady) await queueLivePublish();
   }
   function revealAI() {
+    globalThis.DashboardPages?.show('organise');
     $('ai').open = true;
     if (!pairedToken) $('connection-settings').open = true;
     $('ai').scrollIntoView?.({block:'start',behavior:'smooth'});

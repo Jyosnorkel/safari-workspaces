@@ -189,3 +189,7 @@ User-requested Cmd+Shift+F replaces the prior default. Popup handles the same ke
 ### November 1 — v0.17.0 webpage feature parity
 
 Popup capabilities mirrored into webpage: current-tab search/activation, shared editable settings, preferences in Meta payloads, direct AI application option, session pairing, whole-row reorder/insertion markers/header collapse/outside group deletion, compact snapshots/export/delete Undo/single saved-tab opening. Existing webpage restore/recovery/clustering retained. See FEATURE_PARITY.md for mapping and honest popup-only gaps in the reverse direction. 229 fake-browser/provider checks and native build/signature/package comparisons pass. Product design/themes reviewed fictional desktop/480px visuals; actual Safari/Meta verification remains open.
+
+### November 1 — v0.18.0 separate webpage views
+
+Sidebar now switches Home/Organise/Snapshots/Settings, showing one functionality area at a time without losing edits. Legacy links, browser history, scroll reset and search-to-Home are supported. 231 automated checks/native build/signature/package checks pass. Product design/themes reviewed fictional desktop pages; actual packaged Safari verification remains open.

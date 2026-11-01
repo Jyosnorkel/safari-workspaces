@@ -64,7 +64,7 @@
     if(event.isComposing || event.altKey || event.shiftKey)return;
     const editing=['INPUT','TEXTAREA','SELECT'].includes(event.target?.tagName) || event.target?.isContentEditable;
     if(((event.metaKey||event.ctrlKey)&&event.key.toLowerCase()==='f') || (event.key==='/'&&!editing&&!event.metaKey&&!event.ctrlKey)){
-      event.preventDefault();$('dashboard-tab-search').focus();$('dashboard-tab-search').select();
+      event.preventDefault();globalThis.DashboardPages?.show('home');$('dashboard-tab-search').focus();$('dashboard-tab-search').select();
     }
   });
   $('dashboard-settings-form').addEventListener('submit',async event=>{

@@ -136,3 +136,36 @@ input,select,textarea{font:inherit}
 .backup-drop-hint{padding:0;border:0;border-radius:0;background:transparent;color:var(--muted)}
 /* Retain the familiar dropdown affordance while keeping the shared palette. */
 select{-webkit-appearance:menulist;appearance:auto}
+
+/* Each sidebar destination is a focused page; navigation remains reachable. */
+html{scroll-behavior:auto}
+aside{overflow-y:auto}
+.nav-item{display:block;min-height:42px;border:1px solid transparent;line-height:1.4}
+.nav-item[aria-current=page]{background:var(--surface);border-color:var(--line);color:var(--ink);font-weight:650}
+.nav-item[aria-current=page]:hover{background:var(--surface-hover)}
+[data-page]{min-width:0;scroll-margin-top:20px}
+[data-page][hidden]{display:none!important}
+.page-heading{margin:28px 0 22px;padding:0;max-width:850px}
+.page-heading h1{font-size:32px;letter-spacing:-1.1px;line-height:1.15;margin:0 0 9px}
+.page-heading p{margin:0;font-size:13px;line-height:1.6;color:var(--muted)}
+[data-page]>.hero{padding-top:28px;padding-bottom:16px}
+[data-page]>.hero h1{font-size:32px;letter-spacing:-1.1px;line-height:1.15;margin-bottom:10px}
+[data-page]>.toolbar:first-child{margin-top:24px}
+[data-page] .saved-section,[data-page] #dashboard-settings,[data-page] #current-tabs{margin-top:0}
+[data-page] .privacy{margin-top:24px}
+@media(max-width:600px){
+ aside{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;padding:15px 18px}
+ aside .brand{grid-column:1/-1;margin-bottom:8px}
+ aside .nav-item{display:flex;align-items:center;justify-content:center;margin:0;padding:10px 4px;min-width:0;min-height:42px;text-align:center;font-size:11px;line-height:1.4;overflow-wrap:anywhere}
+ aside .nav-label,aside .aside-note{display:none}
+ aside .nav-item b{float:none;margin-left:5px;padding:1px 4px;font-size:9px}
+ main{padding:20px 18px}
+ .page-heading{margin:24px 0 18px}
+ .page-heading h1,[data-page]>.hero h1{font-size:28px;letter-spacing:-.8px}
+ .page-heading p{font-size:12px}
+}
+aside nav{display:grid;gap:6px;min-width:0}
+aside nav .nav-item{margin-bottom:0}
+@media(max-width:600px){aside nav{grid-column:1/-1;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}}
+.page-action{display:inline-flex;align-items:center;justify-content:center;min-height:43px;margin-bottom:8px;padding:13px 18px;border:1px solid var(--line);border-radius:9px;background:var(--surface);color:var(--ink);text-decoration:none;font-size:12px;font-weight:600;white-space:nowrap}
+.page-action:hover{background:var(--surface-hover);color:var(--ink)}

@@ -27,3 +27,7 @@ Autosave is an interface-opening check when the shared interval has elapsed, not
 Evidence: 229 automated fake-browser/provider checks; native build and strict signature verification; packaged new controls compared with source. Fictional-data visual inspection at desktop and480×600 (light/system-dark) showed no horizontal overflow. This is not actual packaged Safari or live Meta verification. Real shortcut delivery, native Downloads and OS integration remain separate live checks.
 
 The final visual check using a deliberately long-title fixture could not run because the preview browser became unavailable. Ellipsis/min-width constraints are implemented; long-title visual verification and a complete loading/error-state visual sweep remain open.
+
+## v0.18.0 webpage navigation
+
+The webpage now uses four separate sidebar destinations: Home (current tabs/search, refresh and snapshot), Organise (AI, groups and real Safari clustering), Snapshots (export/import/restore/recovery), and Settings (shared preferences and explanatory information). Only the selected destination is visible. Switching preserves DOM/edit state and resets scroll; browser Back/Forward and legacy #ai/#saved links remain supported. Search shortcuts reveal Home before focusing the field. JSON backup drop remains available in every view.
