@@ -339,3 +339,7 @@ Popup scan calls trusted live-groups-sync-scan to place eligible new/changed ide
 ## v0.16.0 searchable Home inventory — November 1
 
 Home shows the latest scanned normal-window inventory (including pinned/restricted tabs for switching only), filtered locally by title/URL. Rows activate existing IDs after live window/private/URL identity checks; no URL is opened and no tab closes. Popup-local Cmd+F or slash focuses Home search; arrows choose results and Return activates. Slash remains text in editable fields. Manifest reserved _execute_action requests Command+Shift+K; Safari 26 supports editable extension keyboard shortcuts (Apple Safari26 release notes/WebKit source), but real packaged command dispatch/conflicts remain unverified. 222 automated checks, native build/signature pass; fictional-data internal-browser Home list inspected. No personal Safari actions or live Meta requests.
+
+## v0.16.1 Home search appearance correction — November 1
+
+User screenshot exposed default search-input appearance and overflowing Home card grid. Search now explicitly uses semantic theme tokens, matching font/padding and 8px rounded border. Grid minmax(0,1fr) and row min-width constraints preserve right margins; titles/hosts ellipsize. Fictional-data browser inspected at480×600: list client/scroll width both417px, every row417px wide with no internal overflow, search38px high. Native build/signature pass. CSS-only fix; previous222 behavioral checks not repeated. Actual packaged Safari visual confirmation remains open.

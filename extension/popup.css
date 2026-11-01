@@ -152,10 +152,15 @@ html body .live-workspace>.workspace-remove{position:absolute;right:-27px;top:5p
 .snapshot-entry summary{display:flex;align-items:center;gap:7px;flex-wrap:wrap;min-height:56px;font-size:11px;padding-right:92px}.snapshot-entry summary::before{content:'▸';font-size:10px}.snapshot-entry details[open]>summary::before{content:'▾'}.snapshot-entry summary{list-style:none}.snapshot-entry summary::-webkit-details-marker{display:none}.snapshot-entry .snapshot-stats{display:inline;margin:0;font-size:10px;white-space:nowrap}.snapshot-entry .snapshot-date{font-size:11px}.snapshot-entry .snapshot-stats::before{content:'· ';}.snapshot-entry .snapshot-tab{display:block;width:calc(100% - 22px);text-align:left;border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent;padding:10px 0;color:var(--ink)}.snapshot-entry .snapshot-tab:hover{background:var(--hover)}
 
 /* Home inventory shares Organise row surfaces. */
-.home-tabs { margin-top: 18px; }
-.home-search-label { display:block; margin:10px 0 6px; color:var(--ink); font-weight:600; }
-#home-tab-search { width:100%; box-sizing:border-box; }
-#home-tab-list { display:grid; gap:5px; }
-html body .home-tab { width:100%; border:1px solid var(--line); border-radius:9px; background:var(--surface); color:var(--ink); text-align:left; padding:10px 12px; }
+.home-tabs { margin-top:18px; min-width:0; max-width:100%; }
+.home-tabs h2 { font-size:14px; line-height:1.4; margin:0 0 12px; }
+.home-search-label { display:block; margin:10px 0 6px; color:var(--ink); font-size:12px; line-height:1.4; font-weight:600; }
+html body #home-tab-search { -webkit-appearance:none; appearance:none; display:block; box-sizing:border-box; width:100%; min-width:0; min-height:38px; padding:9px 11px; border:1px solid var(--line); border-radius:8px; background:var(--surface); color:var(--ink); font:inherit; font-size:12px; line-height:1.5; box-shadow:none; }
+#home-tab-search::-webkit-search-decoration { -webkit-appearance:none; }
+.home-tabs > .workspace-help { margin-top:7px; }
+#home-tab-list { display:grid; grid-template-columns:minmax(0,1fr); gap:5px; width:100%; min-width:0; }
+html body .home-tab { box-sizing:border-box; width:100%; min-width:0; max-width:100%; overflow:hidden; border:1px solid var(--line); border-radius:9px; background:var(--surface); color:var(--ink); text-align:left; padding:10px 12px; }
 html body .home-tab.is-selected { border-color:var(--accent); background:var(--hover); }
 html body .home-tab:hover { background:var(--hover); }
+
+.home-tab :is(.workspace-tab-title,.workspace-tab-host) { display:block; min-width:0; max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }

@@ -173,3 +173,7 @@ Popup scan calls trusted live-groups-sync-scan to place eligible new/changed ide
 ### November 1 — v0.16.0 Home search
 
 Home lists the latest scanned tabs with local title/website search. Click or use arrow keys and Return to switch existing tabs after identity revalidation. Cmd+F or slash focuses search; requested Safari popup shortcut is Cmd+Shift+K (customizable in Safari 26 extension settings; actual dispatch remains unverified). 222 automated checks and native build/signature pass. Fictional-data browser inventory inspected; actual packaged Safari shortcuts/search remain user verification. No windows/tabs closed or live inference made.
+
+### November 1 — v0.16.1 Home layout correction
+
+Shared-theme search field and constrained Home tab grid fix reported native-looking input and clipped right edges. Fictional-data480×600 visual/DOM inspection confirms matching colors, full card edges and no horizontal row/list overflow. Native build/signature pass; actual packaged Safari appearance remains user verification. Behavioral suite unchanged from222 passing checks.
