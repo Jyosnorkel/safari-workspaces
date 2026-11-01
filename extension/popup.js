@@ -296,6 +296,20 @@ if (document.querySelectorAll && document.getElementById('settings-open')) (() =
         const domains=new Set(snapshot.tabs.map(tab=>{try{return new URL(tab.url).hostname;}catch{return '';}}));
         summary.textContent=`${new Date(snapshot.createdAt).toLocaleString()} · ${snapshot.tabs.length} tabs · ${domains.size} sites`;
         card.append(summary);
+        const exportButton=popupNode('button','snapshot-export','Export JSON');exportButton.type='button';
+        exportButton.addEventListener('click',()=>action(async()=>{
+          exportButton.disabled=true;
+          try {
+            const {json}=await send('export-backup',{id:snapshot.id});
+            const url=URL.createObjectURL(new Blob([json],{type:'application/json'}));
+            const link=popupNode('a');link.href=url;
+            link.download=`tabby-snapshot-${new Date(snapshot.createdAt).toISOString().replace(/[:.]/g,'-')}.json`;
+            document.body.append(link);link.click();link.remove();
+            setTimeout(()=>URL.revokeObjectURL(url),60000);
+            status.textContent='Export requested. The JSON contains full tab URLs and titles.';
+          } finally {exportButton.disabled=false;}
+        }));
+        card.append(exportButton);
         for(const tab of snapshot.tabs){const row=popupNode('div','snapshot-tab');row.append(popupNode('strong','',tab.title || 'Untitled tab'),popupNode('small','',tab.url));card.append(row);}
         list.append(card);
       }

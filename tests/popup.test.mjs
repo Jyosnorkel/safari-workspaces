@@ -99,14 +99,16 @@ test('confirmed popup rows move between groups and reorder with revision and exc
 test('popup navigation keeps snapshot details collapsed and saves appearance and grouping preferences',async()=>{
  class Node{constructor(){this.children=[];this.listeners={};this.dataset={};this.classList={toggle(){}};this.value='';}append(...n){this.children.push(...n);}replaceChildren(){this.children=[];}setAttribute(){}addEventListener(t,f){this.listeners[t]=f;}}
  const ids=['open','status','settings-open','settings-view','settings-form','setting-theme','setting-preferences','setting-autosave','setting-compact','home-view','home-groups','home-extras','popup-ai-panel','popup-ai-close','ai-organise','snapshots-view','snapshot-list','backup-drop'];
+ let exported=false;
  const nodes=new Map(ids.map(id=>[id,new Node()])),nav=['home','organise','snapshots'].map(view=>{const n=new Node();n.dataset.view=view;return n;}),writes=[];
  const document={documentElement:new Node(),body:new Node(),getElementById:id=>nodes.get(id),querySelectorAll:()=>nav,createElement:()=>new Node()};
- const browser={storage:{local:{get:async()=>({}),set:async data=>writes.push(data)}},runtime:{sendMessage:async()=>({ok:true,workspaces:[{createdAt:'2026-11-01T12:00:00Z',tabs:[{title:'Example',url:'https://example.com'}]}]})}};
+ const browser={storage:{local:{get:async()=>({}),set:async data=>writes.push(data)}},runtime:{sendMessage:async message=>{if(message.type==='export-backup'){exported=true;return {ok:false,error:'Export unavailable'};}return {ok:true,workspaces:[{createdAt:'2026-11-01T12:00:00Z',tabs:[{title:'Example',url:'https://example.com'}]}]};}}};
  vm.runInNewContext(source,{document,browser,URL,setTimeout});
  for(let i=0;i<10;i++)await new Promise(r=>setImmediate(r));
  nav[2].listeners.click();for(let i=0;i<10;i++)await new Promise(r=>setImmediate(r));
  assert.equal(nodes.get('home-view').hidden,true);assert.equal(nodes.get('snapshots-view').hidden,false);
  const card=nodes.get('snapshot-list').children[0];assert.equal(card.open,undefined);assert.match(card.children[0].textContent,/1 tabs · 1 sites/);
+ await card.children[1].listeners.click();assert.equal(exported,true);assert.match(nodes.get('status').textContent,/Export unavailable/);
  nodes.get('settings-open').listeners.click();assert.equal(nodes.get('settings-view').hidden,false);
  nodes.get('setting-theme').value='dark';nodes.get('setting-preferences').value='Five specific groups';nodes.get('setting-autosave').value='15';nodes.get('setting-compact').checked=true;
  await nodes.get('settings-form').listeners.submit({preventDefault(){}});

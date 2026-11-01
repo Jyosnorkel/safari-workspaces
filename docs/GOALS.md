@@ -99,3 +99,8 @@ User explicitly removed the popup AI review requirement. Popup requests now opt 
 ## v0.13.0 popup navigation and settings — November 1
 
 Home/Organise/Snapshots navigation stays inside the popup. Header settings offers system/light/dark appearance, bounded grouping preferences, compact rows, and optional interval-based snapshot-on-popup-open (not background autosave). Snapshot summaries show timestamp, tab count and site count; tab details expand on demand. Grouping preferences flow through the authenticated guarded service into the Meta prompt and token counting; no automatic inference. Service/client update needs local service restart to accept preferences. Real Safari visual/settings interaction remains unverified.
+
+
+## v0.13.1 popup snapshot export — November 1
+
+Expanded snapshot cards include Export JSON using the existing validated versioned portable backup operation. Duplicate clicks are disabled, failures remain visible, and export does not open/close tabs or alter snapshots. 208 automated checks and native build pass; actual Safari popup download remains unverified.

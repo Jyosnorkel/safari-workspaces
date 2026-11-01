@@ -100,6 +100,8 @@ Remaining priorities: integrate reviewed agent fixes and isolated Safari tests; 
 
 ## Development workflow and agent boundaries
 
+- Use subagents for tasks with separable implementation, investigation, review or verification work. The root coordinator should delegate suitable bounded subtasks proactively, retain responsibility for integration and final verification, and avoid delegation overhead for trivial edits. Use separate worktrees/branches for concurrent code changes, communicate file ownership, and keep at most three active subagents. This is an explicit user instruction authorizing subagent use for project tasks.
+
 - Root coordinator reviews integrations and versions; agents use separate worktrees/branches, linked GitHub issues and PRs. User explicitly authorized subagent collaboration and regular GitHub uploads. Maximum three active subagents.
 - Workstream ownership/instructions: workstreams/*/AGENTS.md and docs/WORKSTREAMS.md. Current direct assignments override stale queued/boundary text. Communicate API changes before crossing file ownership.
 - Prefer safaridriver isolated automation windows for actual extension testing; Playwright WebKit may test UI but is not branded Safari. User explicitly authorized browser automation. Do not touch personal tabs, quit Safari, or change security settings without applicable approval.
@@ -241,3 +243,8 @@ User explicitly removed the popup AI review requirement. Popup requests now opt 
 ## v0.13.0 popup navigation and settings — November 1
 
 Home/Organise/Snapshots navigation stays inside the popup. Header settings offers system/light/dark appearance, bounded grouping preferences, compact rows, and optional interval-based snapshot-on-popup-open (not background autosave). Snapshot summaries show timestamp, tab count and site count; tab details expand on demand. Grouping preferences flow through the authenticated guarded service into the Meta prompt and token counting; no automatic inference. Service/client update needs local service restart to accept preferences. Real Safari visual/settings interaction remains unverified.
+
+
+## v0.13.1 popup snapshot export — November 1
+
+Expanded snapshot cards include Export JSON using the existing validated versioned portable backup operation. Duplicate clicks are disabled, failures remain visible, and export does not open/close tabs or alter snapshots. 208 automated checks and native build pass; actual Safari popup download remains unverified.
