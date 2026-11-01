@@ -16,3 +16,5 @@
 .ai-review .tab.draggable-proposal{grid-template-columns:23px minmax(0,1fr)}
 
 .hero h1{font-size:36px;letter-spacing:-1.2px;line-height:1.15}.hero{padding:30px 0 22px}.ai-panel-summary{font-size:14px;font-weight:600;cursor:pointer}.ai-panel[open]>.ai-panel-summary{margin-bottom:20px}.backup-drop-hint{font-size:11px;padding:11px 14px;background:transparent}.eyebrow{letter-spacing:.7px}
+
+.brand img{object-fit:contain;flex:none}

@@ -9,3 +9,4 @@
 .popup-ai-tab{display:flex!important;align-items:flex-start;gap:8px;line-height:1.4}.popup-ai-tab input{accent-color:#618b41;flex:0 0 auto;margin-top:2px}.popup-ai-tab-title,.popup-ai-tab-url{display:block}.popup-ai-tab-url{font-size:9px;overflow-wrap:anywhere;color:#829180;margin-top:3px}
 
 .popup-ai-actions{flex-wrap:wrap}.popup-ai-actions button{flex:1 1 110px}.popup-ai-proposal-tab{padding:9px 0;border-top:1px solid #edf1e8;font-size:11px;line-height:1.5}.popup-ai-proposal-tab select{margin-top:5px}.popup-ai-reason{font-size:10px;color:#718275;line-height:1.5}
+.tabby-logo{object-fit:contain;flex:none}

@@ -28,6 +28,7 @@
 		BB0000000000000000000005 /* dashboard.js in Resources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000005 /* dashboard.js */; };
 		BB0000000000000000000006 /* ai.js in Resources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000006 /* ai.js */; };
 		BB0000000000000000000007 /* popup-ai.js in Resources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000007 /* popup-ai.js */; };
+		BC0000000000000000000001 /* icons in Resources */ = {isa = PBXBuildFile; fileRef = AC0000000000000000000001 /* icons */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -79,6 +80,7 @@
 		AA0000000000000000000005 /* dashboard.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = dashboard.js; path = ../../../extension/dashboard.js; sourceTree = "<group>"; };
 		AA0000000000000000000006 /* ai.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = ai.js; path = ../../../extension/ai.js; sourceTree = "<group>"; };
 		AA0000000000000000000007 /* popup-ai.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = popup-ai.js; path = ../../../extension/popup-ai.js; sourceTree = "<group>"; };
+		AC0000000000000000000001 /* icons */ = {isa = PBXFileReference; lastKnownFileType = folder; name = icons; path = ../../../extension/icons; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -154,6 +156,7 @@
 		8FFCB12E3090F03F0088828C /* Resources */ = {
 			isa = PBXGroup;
 			children = (
+				AC0000000000000000000001 /* icons */,
 				AA0000000000000000000001 /* core.js */,
 				AA0000000000000000000002 /* background.js */,
 				AA0000000000000000000003 /* dashboard.html */,
@@ -269,6 +272,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				BC0000000000000000000001 /* icons in Resources */,
 				8FFCB1363090F03F0088828C /* popup.css in Resources */,
 				BB0000000000000000000001 /* core.js in Resources */,
 				BB0000000000000000000002 /* background.js in Resources */,
@@ -462,7 +466,7 @@
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Safari Dev Lab Extension/Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = "Safari Dev Lab Extension";
+				INFOPLIST_KEY_CFBundleDisplayName = Tabby;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -497,7 +501,7 @@
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Safari Dev Lab Extension/Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = "Safari Dev Lab Extension";
+				INFOPLIST_KEY_CFBundleDisplayName = Tabby;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -536,7 +540,7 @@
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Safari Dev Lab/Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = "Safari Workspaces";
+				INFOPLIST_KEY_CFBundleDisplayName = Tabby;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMainStoryboardFile = Main;
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
@@ -578,7 +582,7 @@
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Safari Dev Lab/Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = "Safari Workspaces";
+				INFOPLIST_KEY_CFBundleDisplayName = Tabby;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMainStoryboardFile = Main;
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;

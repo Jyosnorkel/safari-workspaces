@@ -1,11 +1,40 @@
 {
   "manifest_version": 3,
-  "name": "Safari Workspaces",
-  "version": "0.10.0",
+  "name": "Tabby",
+  "version": "0.10.2",
   "description": "Review, save and restore Safari workspaces. Keep related tabs together and resume later.",
-  "permissions": ["tabs", "storage"],
-  "optional_host_permissions": ["http://127.0.0.1/*"],
-  "background": {"scripts": ["core.js", "ai.js", "background.js"], "persistent": false},
-  "action": {"default_title": "Safari Workspaces", "default_popup": "popup.html"},
-  "content_security_policy": {"extension_pages": "script-src 'self'; object-src 'none'; connect-src http://127.0.0.1:8788"}
+  "permissions": [
+    "tabs",
+    "storage"
+  ],
+  "optional_host_permissions": [
+    "http://127.0.0.1/*"
+  ],
+  "background": {
+    "scripts": [
+      "core.js",
+      "ai.js",
+      "background.js"
+    ],
+    "persistent": false
+  },
+  "action": {
+    "default_title": "Tabby",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/tabby-16.png",
+      "32": "icons/tabby-32.png"
+    }
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'; connect-src http://127.0.0.1:8788"
+  },
+  "icons": {
+    "16": "icons/tabby-16.png",
+    "32": "icons/tabby-32.png",
+    "48": "icons/tabby-48.png",
+    "128": "icons/tabby-128.png",
+    "256": "icons/tabby-256.png",
+    "512": "icons/tabby-512.png"
+  }
 }
