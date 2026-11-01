@@ -670,7 +670,7 @@
     if (!fileDrag(event.dataTransfer) || busy) return;
     const files = Array.from(event.dataTransfer.files || []);
     run(async () => {
-      if (files.length !== 1) throw new Error('Drop one Safari Workspaces JSON backup at a time.');
+      if (files.length !== 1) throw new Error('Drop one Tabby JSON backup at a time.');
       const file = files[0];
       if (file.size > C.MAX_BACKUP_BYTES) throw new Error('Choose a backup file smaller than 10 MB.');
       const json = await file.text();
@@ -826,7 +826,7 @@
   globalThis.addEventListener?.('hashchange',()=> { if (globalThis.location.hash === '#ai') revealAI(); });
   renderGroups();
   run(async()=> {
-    if (!api?.runtime?.sendMessage) throw new Error('This page must be opened from the Safari Workspaces extension toolbar. Enable the extension in Safari Settings → Extensions.');
+    if (!api?.runtime?.sendMessage) throw new Error('This page must be opened from the Tabby extension toolbar. Enable the extension in Safari Settings → Extensions.');
     const win = await api.windows.getCurrent(); windowId = win.id;
     if (win.incognito || (win.type && win.type !== 'normal')) throw new Error('Private browsing is excluded. Open the manager in a normal Safari window.');
     await loadSaved(); await scan(); await hydrateLiveGroups(); await loadClusterStatus();

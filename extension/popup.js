@@ -167,7 +167,7 @@ document.body.addEventListener('drop', async event => {
   setBusy(true);
   try {
     const files = Array.from(event.dataTransfer.files || []);
-    if (files.length !== 1) throw new Error('Drop one Safari Workspaces JSON backup at a time.');
+    if (files.length !== 1) throw new Error('Drop one Tabby JSON backup at a time.');
     const file = files[0];
     if (file.size > 10 * 1024 * 1024) throw new Error('Choose a backup smaller than 10 MB.');
     const api = globalThis.browser;

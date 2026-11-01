@@ -1,4 +1,4 @@
-# Safari Workspaces
+# Tabby
 
 A macOS Safari Web Extension for turning browser tabs into focused, reusable workspaces.
 
@@ -40,7 +40,7 @@ Requires macOS, Safari, Xcode and its command-line tools. No npm dependencies ar
 open 'build/Build/Products/Debug/Safari Dev Lab.app'
 ```
 
-The native host still uses the starter name **Safari Dev Lab**. The web extension is named **Safari Workspaces**. Both retain the original bundle identifier prefix so existing local installs can be updated.
+The app and extension display as **Tabby**. The build artifact and Xcode target retain the starter name **Safari Dev Lab**, and existing bundle identifiers remain unchanged so local installs and saved data can be updated.
 
 1. Enable Safari's developer features and **Allow unsigned extensions** for this ad-hoc development build. Authentication may be required, and Safari may reset this setting after quitting.
 2. Enable the extension in Safari Settings → Extensions. The `tabs` permission provides tab metadata; `storage` persists workspaces locally.
