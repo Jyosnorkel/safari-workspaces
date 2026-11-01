@@ -33,6 +33,7 @@
       if (!ids.has(tabId) || !object(result) || !['pending','opened','failed'].includes(result.state)) invalid();
     }
     if (record.restore.state === 'complete' && !record.tabs.every(tab => record.restore.results[tab.id]?.state === 'opened')) invalid();
+    if (record.trashedAt !== undefined && !timestamp(record.trashedAt)) invalid();
     if (record.restoreHistory !== undefined && (!Array.isArray(record.restoreHistory) || record.restoreHistory.length > 20)) invalid();
     return record;
   }
@@ -788,7 +789,17 @@
         await write(record);
         return {workspace: record, skipped: inventory.length - candidates.length};
       }
-      case 'list': return {workspaces: Object.values(await read()).sort((a,b) => b.createdAt.localeCompare(a.createdAt))};
+      case 'list': return {workspaces: Object.values(await read()).filter(record => record.trashedAt === undefined).sort((a,b) => b.createdAt.localeCompare(a.createdAt))};
+      case 'snapshot-trash':
+      case 'snapshot-undo-delete': {
+        if (!uuid(message.id)) throw new Error('Select a saved snapshot first.');
+        const all = await read(), record = verifiedRecord(all[message.id], message.id);
+        if (record.close.state === 'closing' || record.restore.state === 'restoring') throw new Error('This snapshot has an active recovery operation. Finish recovery before removing it.');
+        if (message.type === 'snapshot-trash') record.trashedAt ||= new Date().toISOString();
+        else delete record.trashedAt;
+        await write(record);
+        return {id:record.id,trashed:record.trashedAt !== undefined};
+      }
       case 'save': return save(message);
       case 'import-backup': return importBackup(message.json);
       case 'drop-backup': return dropBackup(message);

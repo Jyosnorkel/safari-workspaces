@@ -566,3 +566,25 @@ test('tab index or URL changes during the immediate pre-move read stop clusterin
  assert.equal(h.native.host,'com.local.safaridevlab');assert.equal(JSON.parse(h.native.message.json).format,'safari-workspaces-backup');
  h.nativeResult={ok:false};assert.equal((await h.send('download-backup',{id:saved.workspace.id})).ok,false);assert.equal(h.tabs.size,2);
  });
+
+
+test('snapshot removal is readback-verified, recoverable and preserves the saved record',async()=>{
+ const h=harness();const saved=await h.send('snapshot-window',{windowId:1,name:'Keep data',requestId:webcrypto.randomUUID()});const id=saved.workspace.id;
+ const before=clone(h.store['workspaces.v1'][id].tabs);
+ assert.equal((await h.send('snapshot-trash',{id})).trashed,true);
+ assert.equal((await h.send('list')).workspaces.length,0);assert.deepEqual(h.store['workspaces.v1'][id].tabs,before);
+ assert.equal((await h.send('snapshot-trash',{id})).ok,true);
+ assert.equal((await h.send('snapshot-undo-delete',{id})).trashed,false);
+ assert.equal((await h.send('list')).workspaces[0].id,id);assert.equal(h.tabs.size,2);
+});
+test('snapshot removal rejects active operations and failed durable writes',async()=>{
+ for(const state of ['closing','restoring']){
+  const h=harness();const saved=await h.send('snapshot-window',{windowId:1,name:'Busy',requestId:webcrypto.randomUUID()});const id=saved.workspace.id;
+  h.store['workspaces.v1'][id][state==='closing'?'close':'restore'].state=state;
+  const result=await h.send('snapshot-trash',{id});assert.equal(result.ok,false);assert.equal(h.store['workspaces.v1'][id].trashedAt,undefined);
+ }
+ const h=harness();const saved=await h.send('snapshot-window',{windowId:1,name:'Failed write',requestId:webcrypto.randomUUID()});const id=saved.workspace.id;
+ h.failWrite=h.writes+1;assert.equal((await h.send('snapshot-trash',{id})).ok,false);assert.equal((await h.send('list')).workspaces.length,1);
+ h.failWrite=0;h.failReadback=true;assert.equal((await h.send('snapshot-trash',{id})).ok,false);assert.equal((await h.send('list')).workspaces.length,1);
+ assert.equal((await h.send('snapshot-trash',{id:'invalid'})).ok,false);
+});

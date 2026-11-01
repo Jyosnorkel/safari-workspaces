@@ -108,10 +108,10 @@ test('popup navigation keeps snapshot details collapsed and saves appearance and
  for(let i=0;i<10;i++)await new Promise(r=>setImmediate(r));
  pane.scrollTop=300;nav[2].listeners.click();assert.equal(pane.scrollTop,0);for(let i=0;i<10;i++)await new Promise(r=>setImmediate(r));
  assert.equal(nodes.get('home-view').hidden,true);assert.equal(nodes.get('snapshots-view').hidden,false);
- const card=nodes.get('snapshot-list').children[0];assert.equal(card.open,undefined);assert.match(card.children[0].children[1].textContent,/1 tabs · 1 sites/);
- await card.children[1].listeners.click();assert.equal(exported,true);assert.match(nodes.get('status').textContent,/Export unavailable/);
+ const entry=nodes.get('snapshot-list').children[0],card=entry.children[0];assert.equal(card.open,undefined);assert.match(card.children[0].children[1].textContent,/1 tabs · 1 sites/);
+ await entry.children[1].listeners.click();assert.equal(exported,true);assert.match(nodes.get('status').textContent,/Export unavailable/);
  exportFails=false;document.createElement=()=>{const n=new Node();n.click=()=>{};n.remove=()=>{};return n;};
- await card.children[1].listeners.click();
+ await entry.children[1].listeners.click();
  assert.match(nodes.get('status').textContent,/Saved tabby-snapshot-test.json to Downloads/);
  nodes.get('settings-open').listeners.click();assert.equal(nodes.get('settings-view').hidden,false);
  nodes.get('setting-theme').value='dark';nodes.get('setting-preferences').value='Five specific groups';nodes.get('setting-autosave').value='15';nodes.get('setting-compact').checked=true;

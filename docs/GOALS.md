@@ -154,3 +154,8 @@ Three concurrent field agents verified Meta preferences, backup validation and t
 ## v0.14.1 parallel UI polish — November 1
 
 Themes/frontend, snapshot presentation and Meta UI review ran concurrently. Larger supporting text/control targets, clearer spacing/focus, readable snapshot dates and separate count lines, hostname detail rows with full URL tooltips. Group creation explains blank-name errors; deletion tooltip explains Ungrouped destination. AI wording matches direct application and consent explicitly includes saved preferences. 214 checks and native build/signature pass; fictional-data in-app-browser Organise visuals inspected. No real Safari/Meta or personal tab interactions.
+
+
+## v0.14.2 compact snapshot actions — November 1
+
+Export appears at the right of collapsed snapshot headers as a separate sibling control, avoiding disclosure toggling. Small outside-card delete hides records through verified durable trashedAt; immediate Undo restores them. No permanent purge. Active close/restore records reject deletion, failures preserve data and leave tabs untouched. Automated checks cover backend write/readback/replay/undo; actual Safari layout remains unverified.

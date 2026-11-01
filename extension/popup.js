@@ -301,6 +301,7 @@ if (document.querySelectorAll && document.getElementById('settings-open')) (() =
       const result=await send('list',{});list.replaceChildren();
       if(!result.workspaces.length)list.append(popupNode('p','workspace-help','No snapshots yet. Save your first snapshot from Home.'));
       for(const snapshot of result.workspaces){
+        const wrapper=popupNode('div','snapshot-entry');
         const card=popupNode('details','snapshot-card'),summary=popupNode('summary');
         const domains=new Set(snapshot.tabs.map(tab=>{try{return new URL(tab.url).hostname;}catch{return '';}}));
         const date=new Date(snapshot.createdAt);
@@ -317,14 +318,19 @@ if (document.querySelectorAll && document.getElementById('settings-open')) (() =
             status.textContent=`Saved ${filename} to Downloads. Contains full tab URLs and titles.`;
           } finally {exportButton.disabled=false;}
         }));
-        card.append(exportButton);
+        const remove=popupNode('button','snapshot-delete','×');remove.type='button';remove.title='Delete snapshot';remove.setAttribute('aria-label',`Delete snapshot from ${date.toLocaleString()}`);
+        remove.addEventListener('click',()=>action(async()=>{
+          await send('snapshot-trash',{id:snapshot.id});await snapshots();
+          status.textContent='Snapshot deleted. ';const undo=popupNode('button','snapshot-undo','Undo');undo.type='button';
+          undo.addEventListener('click',()=>action(async()=>{await send('snapshot-undo-delete',{id:snapshot.id});await snapshots();status.textContent='Snapshot restored.';}));status.append(undo);
+        }));
         for(const tab of snapshot.tabs){
           const row=popupNode('div','snapshot-tab');row.title=tab.url;
           let host=tab.url;try{host=new URL(tab.url).hostname;}catch{}
           row.append(popupNode('strong','snapshot-tab-title',tab.title || 'Untitled tab'),popupNode('small','snapshot-tab-host',host));
           card.append(row);
         }
-        list.append(card);
+        wrapper.append(card,exportButton,remove);list.append(wrapper);
       }
     }catch(error){list.textContent=error.message;}
   }
