@@ -29,7 +29,7 @@ Scan tabs → get meaningful Meta AI group suggestions → review and edit → s
 
 The Meta integration includes a local authenticated service, the official Responses/token-count transport, durable request limits and an editable suggestion preview. The user reports reasonable live Meta suggestions after the output cap was raised to 2,048 tokens. Automated tests use fake providers; this report is separate from independent browser verification. Manual grouping and backups work without an AI connection.
 
-To use your existing terminal key, follow [local Meta setup](docs/meta-setup.md). The key remains in the local service environment; the extension receives only a separate pairing token. Each connection/status check and suggestion automatically authenticates and refreshes Safari’s changed origin in connection.json; no repeated manual JSON edits or re-pairing are needed. Suggestions require disclosure/consent and explicit acceptance. Default limits are one in flight, two outbound attempts per minute and twenty per UTC day, with no retries. Token counting and generation consume separate attempts.
+To use your existing terminal key, follow [local Meta setup](docs/meta-setup.md). The key remains in the local service environment; the extension receives only a separate pairing token. Each connection/status check and suggestion automatically authenticates and refreshes Safari’s changed origin in connection.json; no repeated manual JSON edits or re-pairing are needed. Suggestions require disclosure/consent and explicit acceptance. Default limits are one in flight, ten outbound attempts per rolling minute and two hundred per UTC day, with no retries. Token counting and generation consume separate attempts.
 
 ## App setup (new desktop flow)
 

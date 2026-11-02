@@ -462,6 +462,11 @@
       if (Array.from(event.dataTransfer?.types || []).includes('Files')) return;
       event.preventDefault();
       const allowed = validProposalDrop(candidate,groupId,event.dataTransfer);
+      if(allowed){
+        event.stopPropagation?.();
+        for(const target of document.querySelectorAll?.('.is-drop-target, .drop-before') || []){target.classList.toggle('is-drop-target',false);target.classList.toggle('drop-before',false);}
+      }
+
       node.classList.toggle('is-drop-target',allowed);
       if (event.dataTransfer) event.dataTransfer.dropEffect = allowed ? 'move' : 'none';
     });
@@ -524,6 +529,11 @@
       if (Array.from(event.dataTransfer?.types || []).includes('Files')) return;
       event.preventDefault();
       const valid = validDrop(groupId,event.dataTransfer);
+      if(valid){
+        event.stopPropagation?.();
+        for(const target of document.querySelectorAll?.('.is-drop-target, .drop-before') || []){target.classList.toggle('is-drop-target',false);target.classList.toggle('drop-before',false);}
+      }
+
       const reorder = valid && beforeId !== undefined && beforeId !== draggedTab.tabId;
       node.classList.toggle('is-drop-target', Boolean(valid && beforeId === undefined && draggedTab.fromGroup !== groupId));
       node.classList.toggle('drop-before',Boolean(reorder));

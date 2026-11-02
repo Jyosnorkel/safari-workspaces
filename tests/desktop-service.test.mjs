@@ -43,7 +43,7 @@ test('desktop bootstrap preserves token and existing shared usage without infere
   try {
     assert.equal(result.token,connection.token);
     const status = await result.service.status();
-    assert.equal(status.attemptsToday,1); assert.equal(status.perMinute,2); assert.equal(status.perDay,20);
+    assert.equal(status.attemptsToday,1); assert.equal(status.perMinute,10); assert.equal(status.perDay,200);
     assert.equal(status.maxOutputTokens,2048); assert.equal(status.configured,true);
     assert.equal(await readFile(path,'utf8'),beforeConnection);
     assert.equal(await readFile(join(directory,'usage.json'),'utf8'),beforeUsage);

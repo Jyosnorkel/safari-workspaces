@@ -37,7 +37,7 @@ Short permission-based excerpts are an improvement after real title/URL grouping
 ## API controls approved by the user
 
 - One in-flight request at a time.
-- At most two outbound attempts per rolling minute and twenty per UTC calendar day, persisted across service restarts.
+- At most ten outbound attempts per rolling minute and two hundred per UTC calendar day, persisted across service restarts (increased at the user’s request on November 2).
 - No automatic retries or hidden background calls. Count admitted failures/timeouts conservatively.
 - Requests route through the service-side guard; UI limits alone are insufficient. Expose usage, cooldown and reset without revealing secrets.
 - Retain input/output bounds. If token counting requires a separate request, count it against the same attempt budget and disclose the resulting suggestions/day limit.
@@ -387,3 +387,8 @@ User requested separate destinations instead of one long page. Left sidebar now 
 ## v0.19.1 selection and settings appearance — November 2
 
 User reported first-row default highlight and unwanted selected left stripe. Home keyboard cursor now starts unset in popup/webpage; arrows choose first/last initially, Enter still opens first result without an arrow. Explicit multi-selection remains separate. Removed selected-row left inset while preserving drag insertion lines. Settings dropdowns share substantial rounded styling; explicit light/dark/system color-scheme and option colors request themed menus. Product design/themes reviewed CSS; fictional visual verification was blocked by unavailable CUA browser, so actual Safari menu rendering remains unverified for this change. 241 automated checks/native build/signature/package CSS comparisons pass. No personal Safari interaction, model calls or windows closed.
+
+
+## v0.20.0 higher request limits and insertion markers — November 2
+
+User explicitly requested more requests. Defaults are now10 outbound attempts/rolling minute and200/UTC day, with1 in flight, no automatic retries and existing ledger retained. Current two-attempt token-count/generation flow permits up to5 full suggestions/minute and100/day; no price/account-wide cap claim. Manual environment overrides remain authoritative. Updated bundled/local service must restart to load code; no Safari quit or ledger reset. Marker is a horizontal overlay with inward triangles at both ends (top insertion, bottom append), replacing card traces; dragover clears stale/nested markers. Product design/themes reviewed CSS geometry/layering, but browser preview unavailable, so actual marker visuals remain unverified. 243 automated checks/native build/signature/package comparisons pass. No live Meta calls or Safari operations.

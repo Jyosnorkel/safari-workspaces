@@ -204,3 +204,15 @@ html[data-theme=light]{color-scheme:light}
 html[data-theme=dark]{color-scheme:dark}
 @media(prefers-color-scheme:dark){html[data-theme=system],html:not([data-theme]){color-scheme:dark}}
 select,option,optgroup{color-scheme:inherit;background-color:var(--surface);color:var(--ink)}
+
+/* Absolute line and inward triangles paint above child surfaces without shifting rows. */
+html body .workspace-tab.drop-before,
+html body .workspace-tab.is-tab-selected.drop-before {position:relative;box-shadow:none}
+html body .live-workspace.is-drop-target {outline:none;box-shadow:none}
+html body :is(.workspace-tab.drop-before,.live-workspace.is-drop-target)::before {
+ content:'';position:absolute;z-index:2;left:0;right:0;height:10px;
+ background:var(--focus);pointer-events:none;
+ clip-path:polygon(0 0,8px 4px,calc(100% - 8px) 4px,100% 0,100% 100%,calc(100% - 8px) 6px,8px 6px,0 100%);
+}
+html body .workspace-tab.drop-before::before {top:0}
+html body .live-workspace.is-drop-target::before {bottom:0}

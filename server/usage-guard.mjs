@@ -19,7 +19,7 @@ const validTime = time => Number.isSafeInteger(time) && time >= 0 && Number.isFi
 /** One account, one shared state path, one local machine. Not a distributed limiter. */
 export class UsageGuard {
   #busy = false;
-  constructor({statePath, perMinute = 2, perDay = 20, timeoutMs = 30000, now = Date.now}) {
+  constructor({statePath, perMinute = 10, perDay = 200, timeoutMs = 30000, now = Date.now}) {
     if (typeof statePath !== 'string' || !statePath) throw new UsageError('invalid_config', 'A persistent usage state path is required.');
     this.statePath = statePath; this.lockPath = `${statePath}.lock`;
     this.perMinute = positive(perMinute, 'perMinute'); this.perDay = positive(perDay, 'perDay');

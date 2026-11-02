@@ -197,3 +197,8 @@ Sidebar now switches Home/Organise/Snapshots/Settings, showing one functionality
 ### November 2 — v0.19.1 selection appearance
 
 Removed automatic first-row cursor highlight and selected left stripe across popup/webpage; retained explicit selection and insertion markers. Settings dropdowns share theme tokens and control shape. 241 checks and native build/signature/package comparisons pass. Design CSS review completed; visual browser unavailable, actual Safari open-menu appearance still needs confirmation.
+
+
+### November 2 — v0.20.0 request headroom and drop position
+
+User-approved defaults increased to10 attempts/minute and200/day, retaining single-flight/no-retry/persistent accounting. Service restart required; explicit manual overrides preserved. Full-width insertion line and inward endpoint triangles replace card traces in popup/webpage; nested targets no longer show overlapping positions. 243 checks/native build/signature/package checks pass. Design source review done; visual browser unavailable, actual Safari marker verification remains open.

@@ -11,17 +11,18 @@ async function fixture(t, options = {}) {
   t.after(() => rm(dir,{recursive:true,force:true}));
   const statePath=join(dir,'usage.json');
   let time=Date.parse('2026-10-28T12:00:00Z');
-  return {statePath, dir, now:()=>time, advance:ms=>{time+=ms;}, guard:()=>new UsageGuard({statePath,now:()=>time,...options})};
+  return {statePath, dir, now:()=>time, advance:ms=>{time+=ms;}, guard:()=>new UsageGuard({statePath,perMinute:2,perDay:20,now:()=>time,...options})};
 }
 const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {promise,resolve};};
 const hasCode=code=>error=>error.code===code;
-const fakeEnv={AI_LIVE_ENABLED:'true',META_API_PROVIDER_ID:'test-only',META_API_MODEL:'fake-model',META_API_KEY:'TEST-ONLY-DO-NOT-USE'};
+const fakeEnv={AI_REQUESTS_PER_MINUTE:'2',AI_REQUESTS_PER_DAY:'20',AI_LIVE_ENABLED:'true',META_API_PROVIDER_ID:'test-only',META_API_MODEL:'fake-model',META_API_KEY:'TEST-ONLY-DO-NOT-USE'};
 const tabs=[{id:1,title:'Documentation',url:'https://user:secret@example.com/docs?q=secret#fragment'}];
 // All adapters in this file are local fake functions. No network library or live key is used.
 const fakeProvider=overrides=>({id:'test-only',countInputTokens:()=>100,generate:async()=>({groups:[{name:'Research',reason:'Related documentation',tabIds:['1']}]}),...overrides});
 
  test('defaults match human-selected limits and live access is disabled',()=>{
-  const config=readConfig({}); assert.equal(config.enabled,false); assert.equal(config.perMinute,2); assert.equal(config.perDay,20);
+  const config=readConfig({}); assert.equal(config.enabled,false); assert.equal(config.perMinute,10); assert.equal(config.perDay,200);
+  const overridden=readConfig({AI_REQUESTS_PER_MINUTE:'2',AI_REQUESTS_PER_DAY:'20'});assert.equal(overridden.perMinute,2);assert.equal(overridden.perDay,20);
   for(const value of ['0','-1','1.5','invalid','Infinity']) assert.throws(()=>readConfig({AI_REQUESTS_PER_DAY:value}),hasCode('invalid_config'));
 });
 test('two attempts per rolling minute with exact cooldown and no third provider call',async t=>{
@@ -377,4 +378,21 @@ test('Meta request includes grouping preferences beside tab metadata',()=>{
  const preferences='Around five groups; always include Reading';
  const request=makeMetaRequest({tabs:[{id:'1',title:'Example',url:'https://example.com'}],model:'fake',maxOutputTokens:2048,preferences});
  const input=JSON.parse(request.input);assert.equal(input.groupingPreferences,preferences);assert.equal(input.tabs[0].id,'1');assert.match(request.instructions,/groupingPreferences/);
+});
+
+test('raised default rolling budget persists across guard recreation without resetting attempts',async t=>{
+ const f=await fixture(t);
+ const guard=()=>new UsageGuard({statePath:f.statePath,now:f.now});
+ for(let index=0;index<10;index++)await guard().run(async()=>{});
+ const status=await guard().status();assert.equal(status.perMinute,10);assert.equal(status.perDay,200);assert.equal(status.attemptsToday,10);assert.equal(status.remainingToday,190);
+ await assert.rejects(guard().run(async()=>{}),hasCode('minute_limit'));
+ f.advance(60001);await guard().run(async()=>{});assert.equal((await guard().status()).attemptsToday,11);
+});
+
+test('raising limits retains old ledger and permits more than the old twenty daily attempts',async t=>{
+ const f=await fixture(t);
+ await writeFile(f.statePath,JSON.stringify({version:1,day:'2026-10-28',daily:20,attempts:[],lastSeenAt:f.now()}));
+ const raised=new UsageGuard({statePath:f.statePath,now:f.now});
+ assert.equal((await raised.status()).attemptsToday,20);
+ await raised.run(async()=>{});assert.equal((await raised.status()).attemptsToday,21);
 });

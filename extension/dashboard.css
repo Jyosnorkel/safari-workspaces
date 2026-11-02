@@ -194,3 +194,14 @@ html[data-theme=dark]{color-scheme:dark}
 select,option,optgroup{color-scheme:inherit;background-color:var(--surface);color:var(--ink)}
 #dashboard-settings select{-webkit-appearance:none;appearance:none;min-height:42px;padding:10px 36px 10px 12px;border:2px solid var(--line);border-radius:10px;font-weight:600;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='m2 2 4 4 4-4' fill='none' stroke='%237b9bb2' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 13px center}
 #dashboard-settings select:hover{border-color:var(--focus)}
+
+/* Full-width overlay marks insertion, never the destination card border. */
+:is(.tab.drop-before,.tab.is-drop-target,.tab.is-tab-selected.drop-before,.tab.is-tab-selected.is-drop-target) {position:relative;box-shadow:none}
+:is(.group,.group-chip).is-drop-target {position:relative;outline:none;box-shadow:none;border-color:var(--line)}
+:is(.tab.drop-before,.tab.is-drop-target,.group.is-drop-target,.group-chip.is-drop-target)::before {
+ content:'';position:absolute;z-index:2;left:0;right:0;height:10px;
+ background:var(--focus);pointer-events:none;
+ clip-path:polygon(0 0,8px 4px,calc(100% - 8px) 4px,100% 0,100% 100%,calc(100% - 8px) 6px,8px 6px,0 100%);
+}
+:is(.tab.drop-before,.tab.is-drop-target)::before {top:0}
+:is(.group,.group-chip).is-drop-target::before {bottom:0}

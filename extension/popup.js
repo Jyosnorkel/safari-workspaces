@@ -127,6 +127,7 @@ async function loadLiveGroups(windowId) {
     card.addEventListener('dragover',event => {
       if (!validDrag(event)) return;
       event.preventDefault(); event.stopPropagation(); event.dataTransfer.dropEffect = 'move';
+      for(const node of container.querySelectorAll('.is-drop-target, .drop-before'))node.classList.remove('is-drop-target','drop-before');
       card.classList.add('is-drop-target');
     });
     card.addEventListener('dragleave',()=>card.classList.remove('is-drop-target'));
@@ -177,7 +178,7 @@ async function loadLiveGroups(windowId) {
       jump.addEventListener('dragover',event=> {
         if (!validDrag(event)) return;
         event.preventDefault();event.stopPropagation();event.dataTransfer.dropEffect='move';
-        for(const node of container.querySelectorAll('.drop-before'))node.classList.remove('drop-before');
+        for(const node of container.querySelectorAll('.is-drop-target, .drop-before'))node.classList.remove('is-drop-target','drop-before');
         jump.classList.add('drop-before');
       });
       jump.addEventListener('dragleave',()=>jump.classList.remove('drop-before'));

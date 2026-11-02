@@ -11,7 +11,7 @@ export function readConfig(env = process.env) {
   const config = {
     enabled: env.AI_LIVE_ENABLED === 'true', providerId: env.META_API_PROVIDER_ID || 'meta',
     model: env.META_API_MODEL || '', apiKey: env.META_API_KEY || env.MODEL_API_KEY || '',
-    perMinute: number(env, 'AI_REQUESTS_PER_MINUTE', 2), perDay: number(env, 'AI_REQUESTS_PER_DAY', 20),
+    perMinute: number(env, 'AI_REQUESTS_PER_MINUTE', 10), perDay: number(env, 'AI_REQUESTS_PER_DAY', 200),
     timeoutMs: number(env, 'AI_TIMEOUT_MS', 30000), maxInputBytes: number(env, 'AI_MAX_INPUT_BYTES', 12000),
     maxInputTokens: number(env, 'AI_MAX_INPUT_TOKENS', 4096), maxOutputTokens: number(env, 'AI_MAX_OUTPUT_TOKENS', 2048)
   };

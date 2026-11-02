@@ -47,7 +47,7 @@ When first installing this automatic-refresh service code, restart **only the lo
 | Control | Default |
 | --- | --- |
 | Concurrent suggestions | 1 across both endpoint calls |
-| Outbound attempts | 2 per rolling minute; 20 per UTC day |
+| Outbound attempts | 10 per rolling minute; 200 per UTC day |
 | Automatic retries / background inference | None |
 | Complete suggestion timeout | 30 seconds |
 | Serialized sanitized tab input | 12,000 UTF-8 bytes; 1–100 tabs |
@@ -114,3 +114,10 @@ node server/start.mjs
 ```
 
 Use the same service-start command as before if it includes an env-file option. Exported shell values take precedence over Node's env-file values. Keep the existing key, pairing, ledger and Safari sessions. No extension rebuild is needed. Live success with the larger bound remains unverified until a user-initiated suggestion completes.
+
+
+## November 2 request-limit update
+
+At the user's request, defaults are now **10 outbound attempts per rolling minute and 200 per UTC calendar day**. One inference uses two attempts with the current Meta adapter (token count plus generation), allowing at most 100 full suggestions/day and five within a rolling minute when no other attempts consume the budget. One in-flight operation, persistent accounting and no automatic retries remain unchanged. These limits are service-local request controls, not account-wide or dollar caps. More admitted requests can increase spending. Historical notes above describe the earlier 2/20 limits.
+
+Rebuild/reopen the desktop host to use its updated bundled helper, or restart only a manually launched local service from its configured terminal. Do not quit Safari. Existing `AI_REQUESTS_PER_MINUTE` and `AI_REQUESTS_PER_DAY` environment overrides remain authoritative for the manual service; change those explicitly if they still specify 2/20. The desktop pipe configuration uses bundled defaults and does not inherit arbitrary limit overrides. Preserve the existing usage ledger: this update does not reset attempts or pairing. No live model call is needed to load the change; use explicit status refresh to inspect active limits.
