@@ -124,6 +124,15 @@ Use this single team structure for future work. Earlier agent names are historic
 - Inspect the popup at its actual dimensions, including scrolling content, long tab/group names, empty/loading/error states and narrow available widths. Verify that cards, fields and buttons fit within both margins with no unintended clipping or horizontal overflow.
 - Resolve review findings and inspect the corrected result before release. Root records the review evidence and distinguishes fictional-data/browser previews from actual packaged Safari verification. If a visual check cannot be performed, report the missing verification explicitly and do not claim that appearance was verified.
 
+
+### GitHub collaboration and version control
+
+- Collaborate with other subagents through project GitHub issues and pull requests. Record ownership, bounded deliverables, dependencies, review findings and handoffs there; use direct agent messages for immediate coordination.
+- Give concurrently editing subagents separate worktrees and `codex/` branches. Link each pull request to its tracking issue; communicate shared contracts before crossing file ownership.
+- Commit focused, tested changes regularly and push completed iterations to GitHub. Root reviews integration, resolves conflicts and verifies checks before merging; tag verified release milestones.
+- Do not leave completed work only as uncommitted local changes. Report branch, commit, pull request and verification evidence, plus any push or review blocker.
+- Preserve other contributors’ pending edits. Never reset, discard or bundle unrelated changes merely to create a checkpoint. Never include credentials, private browsing inventories or private source evidence.
+
 ### Role coordination
 
 - Use the six consolidated team role names when assigning agents. Hand related follow-up work to the same agent rather than creating one-off reviewer agents for each change. Agent sessions may need recreation across chats; these saved responsibilities persist even when a session does not.
