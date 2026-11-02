@@ -1,77 +1,136 @@
-# Tabby
+<p align="center">
+  <img src="assets/branding/tabby-master.png" width="120" alt="Tabby logo">
+</p>
 
-A macOS Safari extension that turns open tabs into focused, reusable workspaces.
+<h1 align="center">Tabby</h1>
 
-Built for the Meta Global AI Developer Hackathon, October–November 2026.
+<p align="center">Turn open Safari tabs into focused workspaces with Meta AI.<br>Find a tab, organise a project, and save your place for later.</p>
 
-## What you can do
+<p align="center">
+  <a href="https://github.com/Jyosnorkel/tabby/releases">Download</a> ·
+  <a href="#get-started">Get started</a> ·
+  <a href="docs/INSTALL.md">Installation guide</a> ·
+  <a href="https://github.com/Jyosnorkel/tabby/issues">Issues</a>
+</p>
 
-- Search your current tabs and switch to an existing tab.
-- Create named groups, drag tabs between them, reorder rows and collapse groups.
-- Ask Meta AI to organise included ungrouped tabs using your grouping preferences. Existing group names help it extend your organisation without replacing existing members.
-- Correct group names and membership manually. Popup AI applies validated results after sharing consent; the dashboard also supports staged review before acceptance.
-- Save a whole-window snapshot without closing anything, including pinned web URLs.
-- Save and close selected tabs, then restore their saved URLs in order with recovery for interrupted operations.
-- Export portable JSON backups to Downloads, import snapshots, or drop a backup to restore it in a new normal window.
-- Explicitly cluster eligible tabs in Safari and undo a completed reorder when the window remains unchanged.
-- Choose light, dark or system appearance, compact rows and optional snapshots when opening the popup.
+![Tabby organising a busy Safari window into project groups](img/Organised%20groups.png)
 
-The popup provides Home, Organise, Snapshots and settings. The workspace dashboard provides more space for organisation and recovery. Manual organisation and backups work without AI.
+## Download
 
-See [download and installation options](docs/INSTALL.md) for the prebuilt developer preview and signed-release requirements.
+### macOS
 
-## Build and set up
+[Download the developer preview](https://github.com/Jyosnorkel/tabby/releases/tag/dev-checkpoint-2026-11-02).
 
-Requires macOS, Safari, Xcode and its command-line tools. This is a development build, not a notarized public installer.
+The current preview targets **Apple silicon and macOS 26.5 or newer**. Unzip the download, move **Safari Dev Lab.app** to Applications, and open it. The app displays as **Tabby**.
+
+This is an ad-hoc development build, not a notarized installer. Safari requires **Allow Unsigned Extensions** and Tabby must be enabled in **Safari Settings → Extensions**. Normal Gatekeeper installation is not established; see the [installation guide](docs/INSTALL.md) for requirements and the source-build alternative.
+
+## Get started
+
+1. Open Tabby from Safari's toolbar. Search your tabs or create a group in **Organise**.
+2. Drag tabs between groups and reorder them to suit your work.
+3. Choose **Save snapshot** to keep a copy of the current window without closing tabs.
+4. Return to **Snapshots** to browse saved work, open saved tabs or export a JSON backup.
+
+Manual organisation, search and snapshots work without an AI account.
+
+### Organise with Meta AI
+
+Enter your Meta API key in the desktop app, explicitly enable AI and start the local connection. Copy the separate connection token into **Local AI connection** in the Safari popup. Keep the desktop app running while using AI.
+
+Choose **AI organise**, preview the information being shared and give consent. Meta receives included ungrouped tabs, your grouping preferences, and existing group names and counts. Matching suggestions add tabs to existing groups while preserving your manual organisation.
+
+The popup applies validated results after consent; you can rename groups and move tabs afterwards. The dashboard also offers staged review before acceptance. No model request runs automatically on startup or refresh.
+
+[AI setup guide](docs/meta-setup.md)
+
+## Find your tabs
+
+Search titles or websites and switch to a tab you already have open. Use the keyboard or select several tabs to organise them together.
+
+<p align="center">
+  <img src="img/list%20of%20current%20tabs%20for%20easy%20access.png" width="360" alt="Tabby tab search and current-tab list">
+</p>
+
+## Save your place
+
+Save ordered titles and URLs locally. Export portable JSON backups, import them without replacing existing snapshots, or drop a backup into Tabby to restore its URLs in a new normal window.
+
+The workspace dashboard also supports save-and-close, ordered restoration, partial-operation recovery and explicitly confirmed Safari tab clustering with guarded undo.
+
+Restoration reopens URLs. It does not recover unsaved forms, scroll positions, authentication, history or full page state. Tabby's groups are separate from native Safari Tab Groups.
+
+![Saved Tabby snapshot with project groups and JSON export](img/Snapshots.png)
+
+## Make it yours
+
+Choose light, dark or system appearance, compact rows and grouping preferences. Optional automatic snapshots run when you open the popup after your chosen interval; they do not close tabs or make AI calls.
+
+<p align="center">
+  <img src="img/Settings.png" width="360" alt="Tabby appearance, grouping preferences and snapshot settings">
+</p>
+
+<details>
+<summary>More screenshots</summary>
+
+### Home
+
+![Tabby Home with snapshot, AI organisation and search controls](img/search%20bar%20and%20init%20page.png)
+
+### Local AI connection
+
+<img src="img/Connection.png" width="360" alt="Tabby local AI connection settings and request allowance">
+
+</details>
+
+## Privacy
+
+Snapshots stay in local Safari extension storage. The Meta API key stays outside the extension, in macOS Keychain when configured through the desktop app. The extension uses a separate pairing token to authenticate with the local service.
+
+Before inference, URL credentials, query strings and fragments are removed. Titles, paths, group names and preferences may still contain sensitive information. Private, pinned and restricted tabs are excluded from inference; no page excerpts are sent. Exported backups contain full saved URLs and titles, so keep them private.
+
+The local service allows one in-flight request, ten outbound attempts per rolling minute and two hundred per UTC day, with persistent accounting and no automatic retries. Remote token counting and generation consume separate attempts. These are service-local controls, not an account-wide spending cap.
+
+## Development
+
+Build from source with macOS, Safari, Xcode and its command-line tools:
 
 ```sh
+git clone https://github.com/Jyosnorkel/tabby.git
+cd tabby
 ./scripts/build.sh
 open 'build/Build/Products/Debug/Safari Dev Lab.app'
 ```
 
-The app and extension display as **Tabby**; the build artifact retains the starter name **Safari Dev Lab**.
+Run the automated checks:
 
-1. Enable Safari developer features and **Allow unsigned extensions** for the development build.
-2. Enable Tabby in Safari Settings → Extensions and grant the required tab access.
-3. Open the toolbar popup to search, organise or save a snapshot.
-4. For AI, enter your Meta API key locally in the desktop setup app, explicitly enable AI and start the local connection.
-5. Choose **Copy connection token** in the app, paste it into **Local AI connection** in the popup and connect. Review the sharing preview and give consent before requesting organisation.
+```sh
+node scripts/check.mjs
+```
 
-The desktop app bundles the local service runtime. Keep it running while using AI; closing its window keeps the connection running. The provider key is stored in macOS Keychain, separately from the extension pairing token. Never put keys in chat, issues or the repository.
+Automated tests use fake browser APIs and providers. See [goals and implementation evidence](docs/GOALS.md), [development notes](docs/DEVELOPMENT_NOTES.md) and the [release checklist](docs/release.md) for detailed status.
 
-For terminal-based setup, see [local Meta setup](docs/meta-setup.md). For packaging and distribution requirements, see the [release checklist](docs/release.md).
+| Directory | Contents |
+| --- | --- |
+| `extension/` | Safari popup, dashboard and browser operations |
+| `native/` | macOS host, Keychain setup and Safari extension packaging |
+| `server/` | Authenticated local Meta service and request controls |
+| `demo/backups/` | [30-tab sample backups](demo/backups/README.md) for trying Tabby |
 
-## Privacy and limits
+[Backup format](docs/backup-format.md) · [Recovery](docs/recovery.md) · [Safari testing](docs/safari-testing.md) · [Feature mapping](docs/FEATURE_PARITY.md)
 
-Snapshots stay in local Safari extension storage. Exported backups contain full saved URLs and titles and should be kept private.
+## Contributing
 
-AI receives included eligible ungrouped tab titles and sanitized URLs, plus existing group names/counts and your preferences. URL credentials, query strings and fragments are removed; titles and paths can still contain sensitive information. Private, pinned and restricted tabs are excluded from inference. No page excerpts are sent.
+[Open an issue](https://github.com/Jyosnorkel/tabby/issues) with a bug report or feature suggestion. For bugs, include your macOS/Safari versions and steps to reproduce. Remove API keys, pairing tokens and personal browsing data before sharing logs or screenshots.
 
-AI requires an explicitly enabled, authenticated local service and sharing consent. Defaults are one in-flight request, ten outbound attempts per rolling minute and two hundred per UTC day, persisted across service restarts, with no automatic retries. Remote token counting and generation count as separate attempts. These are service-local controls, not an account-wide spending cap.
+## Built for the Meta Global AI Developer Hackathon
 
-## Scope and limitations
+Tabby is open source and was developed during the October–November 2026 hackathon. Meta powers task-based tab organisation; manual tools and local snapshots remain available without AI.
 
-- Restore reopens URLs; it does not recover unsaved forms, scroll position, authentication, history or complete page state.
-- Groups belong to Tabby. Safari tab clustering does not create native Safari Tab Groups.
-- Live group membership lasts for the browser session; saved snapshots are durable.
-- Organisation starts with one normal Safari window. There are no accounts or cloud sync.
-- Pinned tabs remain protected from group/close actions but can be included in snapshot-only backups.
-
-## Project documentation
-
-- [MVP goals and implementation history](docs/GOALS.md)
-- [Development notes and historical verification](docs/DEVELOPMENT_NOTES.md)
-- [Backup format](docs/backup-format.md)
-- [Recovery behavior](docs/recovery.md)
-- [Popup and dashboard feature mapping](docs/FEATURE_PARITY.md)
-- [Safari testing](docs/safari-testing.md)
-
-Source: `extension/` contains the popup, dashboard and browser operations; `native/` contains the macOS host and Safari extension; `server/` contains the local Meta service. Run automated checks with `node scripts/check.mjs`. Automated tests use fake providers and browser APIs; detailed evidence is recorded in the development documentation.
-
-## Original contributions and license
-
-Tabby was developed during the hackathon. Apple's extension packaging tools supplied the initial Safari Dev Lab scaffold on October 27, 2026. Project contributions include the popup/dashboard, manual and AI organisation, snapshot and recovery logic, portable backups, guarded Meta service and desktop setup.
+Apple's extension packaging tools supplied the initial Safari Dev Lab scaffold on October 27. Original contributions include the popup/dashboard, manual and AI organisation, snapshot and recovery logic, portable backups, guarded Meta service and desktop setup.
 
 [Tab Session Manager](https://github.com/sienori/Tab-Session-Manager) was reviewed as a reference; no source code from it was copied into this repository.
 
-Original project source is available under the [MIT License](LICENSE). Apple's SDKs and development tools and bundled third-party components remain subject to their respective terms.
+## License
+
+[MIT](LICENSE) for original project code. Apple's SDKs and bundled third-party components retain their respective terms.

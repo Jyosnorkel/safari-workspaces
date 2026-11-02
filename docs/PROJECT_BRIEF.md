@@ -10,6 +10,6 @@ Model output proposes existing tab IDs only; it never provides restoration URLs.
 
 Event goals include a public open-source repository, meaningful real Meta inference, clear event-built contributions and a three-minute demo. Theme/track choices remain unconfirmed. Detailed local participant-guide evidence is not public source. No agent may submit, spend or deploy without authorization.
 
-Repository: https://github.com/Jyosnorkel/safari-workspaces
+Repository: https://github.com/Jyosnorkel/tabby
 
 Instructions: `workstreams/<name>/AGENTS.md`. Foundation PRs are integrated. Integrated: UI and Meta transport (fake-provider verification only). Queued: actual Safari/provider verification, context and full delivery. The user prohibits closing current Safari sessions/windows and quitting Safari; browser operation is paused while the coordinator integrates these changes. Use docs/GOALS.md and the private build-guide webpage as the roadmap. Communicate through linked issues/draft PRs and concise coordinator handoffs.
