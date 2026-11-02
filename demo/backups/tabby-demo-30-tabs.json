@@ -1,0 +1,133 @@
+{
+  "format": "safari-workspaces-backup",
+  "version": 1,
+  "exportedAt": "2026-11-02T12:00:00.000Z",
+  "workspaces": [
+    {
+      "name": "Demo — a busy week (30 tabs)",
+      "createdAt": "2026-11-02T12:00:00.000Z",
+      "tabs": [
+        {
+          "title": "Safari Web Extensions | Apple Developer",
+          "url": "https://developer.apple.com/documentation/safariservices/safari-web-extensions"
+        },
+        {
+          "title": "Visit London — things to do",
+          "url": "https://www.visitlondon.com/"
+        },
+        {
+          "title": "Photography | Adobe",
+          "url": "https://www.adobe.com/creativecloud/photography.html"
+        },
+        {
+          "title": "Astro documentation",
+          "url": "https://docs.astro.build/en/getting-started/"
+        },
+        {
+          "title": "Meta Global AI Developer Hackathon",
+          "url": "https://cerebralvalley.ai/e/meta-ai-developer-hackathon"
+        },
+        {
+          "title": "WebExtensions | MDN",
+          "url": "https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions"
+        },
+        {
+          "title": "Plan a journey | Transport for London",
+          "url": "https://tfl.gov.uk/plan-a-journey/"
+        },
+        {
+          "title": "Photography | Wikipedia",
+          "url": "https://en.wikipedia.org/wiki/Photography"
+        },
+        {
+          "title": "GitHub Pages documentation",
+          "url": "https://docs.github.com/en/pages"
+        },
+        {
+          "title": "Meta Model API quickstart",
+          "url": "https://dev.meta.ai/docs/quickstart"
+        },
+        {
+          "title": "Tabs API | MDN",
+          "url": "https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/tabs"
+        },
+        {
+          "title": "British Museum — visit",
+          "url": "https://www.britishmuseum.org/visit"
+        },
+        {
+          "title": "Exposure | Wikipedia",
+          "url": "https://en.wikipedia.org/wiki/Exposure_(photography)"
+        },
+        {
+          "title": "Google Fonts",
+          "url": "https://fonts.google.com/"
+        },
+        {
+          "title": "Meta model cookbook",
+          "url": "https://github.com/meta-models/meta-model-cookbook"
+        },
+        {
+          "title": "Tabby source code",
+          "url": "https://github.com/Jyosnorkel/safari-workspaces"
+        },
+        {
+          "title": "Tate Modern",
+          "url": "https://www.tate.org.uk/visit/tate-modern"
+        },
+        {
+          "title": "Unsplash — photography inspiration",
+          "url": "https://unsplash.com/"
+        },
+        {
+          "title": "Responsive web design | MDN",
+          "url": "https://developer.mozilla.org/en-US/docs/Learn_web_development/Core/CSS_layout/Responsive_Design"
+        },
+        {
+          "title": "OBS Studio — screen recording",
+          "url": "https://obsproject.com/"
+        },
+        {
+          "title": "CSS grid layout | MDN",
+          "url": "https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_grid_layout"
+        },
+        {
+          "title": "Borough Market",
+          "url": "https://boroughmarket.org.uk/"
+        },
+        {
+          "title": "Darktable — photo editing",
+          "url": "https://www.darktable.org/"
+        },
+        {
+          "title": "Web accessibility fundamentals | W3C",
+          "url": "https://www.w3.org/WAI/fundamentals/"
+        },
+        {
+          "title": "iMovie — video editing",
+          "url": "https://www.apple.com/imovie/"
+        },
+        {
+          "title": "Accessibility | Apple Developer",
+          "url": "https://developer.apple.com/accessibility/"
+        },
+        {
+          "title": "Kew Gardens — visit",
+          "url": "https://www.kew.org/kew-gardens"
+        },
+        {
+          "title": "National Geographic — photography",
+          "url": "https://www.nationalgeographic.com/photography"
+        },
+        {
+          "title": "Squoosh — image compression",
+          "url": "https://squoosh.app/"
+        },
+        {
+          "title": "YouTube — upload demo video",
+          "url": "https://www.youtube.com/"
+        }
+      ]
+    }
+  ]
+}
