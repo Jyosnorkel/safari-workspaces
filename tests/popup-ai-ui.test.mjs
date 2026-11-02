@@ -60,7 +60,7 @@ test('popup AI startup/open only reads local state and never launches the dashbo
 });
 test('connection clears token field, remembers only explicit checkbox, and consent is per selected input',async()=>{
  const h=await harness();await h.connect();assert.equal(h.node('popup-ai-token').value,'');assert.equal(h.sent.find(message=>message.type==='popup-ai-connect').rememberSession,false);assert.equal(h.node('popup-ai-generate').disabled,true);
- const preview=JSON.parse(h.node('popup-ai-preview').textContent);assert.deepEqual(preview.map(tab=>tab.id),['1','3']);assert.equal(preview[0].url,'https://example.test/work');assert.match(h.node('popup-ai-usage').textContent,/at most 10 full suggestions\/day/);
+ const preview=JSON.parse(h.node('popup-ai-preview').textContent);assert.deepEqual(preview.tabs.map(tab=>tab.id),['1','3']);assert.equal(preview.tabs[0].url,'https://example.test/work');assert.match(h.node('popup-ai-usage').textContent,/at most 10 full suggestions\/day/);
  await h.consent();assert.equal(h.node('popup-ai-generate').disabled,false);
  await h.find('popup-ai-tabs','Send Notes for AI grouping').change(false);assert.equal(h.node('popup-ai-consent').checked,false);assert.equal(h.node('popup-ai-generate').disabled,true);
  await h.consent();await h.click('popup-ai-generate');const request=h.sent.find(message=>message.type==='popup-ai-suggest');assert.deepEqual(request.tabIds,['1']);assert.equal(request.token,'a'.repeat(64));assert.equal(request.consent,true);assert.equal(request.expectedRevision,'revision-1');assert.equal(request.inventoryToken,'inventory-1');assert.equal(h.node('popup-ai-consent').checked,false);

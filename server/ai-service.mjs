@@ -33,6 +33,13 @@ function inputTabs(tabs) {
     return {id, title: tab.title, url: `${url.origin}${url.pathname}`};
   });
 }
+function inputExistingGroups(groups) {
+  if (!Array.isArray(groups) || groups.length > 100) throw new UsageError('invalid_input', 'Existing group context must contain at most 100 groups.');
+  return groups.map(group => {
+    if (!group || typeof group !== 'object' || Array.isArray(group) || Object.keys(group).some(key => !['name','tabCount'].includes(key)) || typeof group.name !== 'string' || !group.name.trim() || group.name.length > 80 || !Number.isSafeInteger(group.tabCount) || group.tabCount < 0 || group.tabCount > 1000) throw new UsageError('invalid_input', 'Existing groups must contain only a name and bounded tab count.');
+    return {name:group.name.trim(),tabCount:group.tabCount};
+  });
+}
 function validateGroups(result, tabs) {
   if (!result || !Array.isArray(result.groups) || result.groups.length > 30) throw new UsageError('invalid_response', 'The model returned an invalid group list.');
   const allowed = new Set(tabs.map(t => t.id)), seen = new Set();
@@ -56,14 +63,15 @@ export function createAIService({env = process.env, provider, statePath, now = D
   const configured = () => config.enabled && Boolean(config.apiKey.trim() && config.model.trim() && config.providerId.trim()) && provider?.id === config.providerId && typeof provider.generate === 'function' && typeof provider.countInputTokens === 'function';
   return {
     async status() { return {enabled: config.enabled, configured: Boolean(configured()), ...await guard.status({requiredAttempts: provider?.remoteTokenCount ? 2 : 1}), maxInputBytes: config.maxInputBytes, maxInputTokens: config.maxInputTokens, maxOutputTokens: config.maxOutputTokens, requestsPerSuggestion: provider?.remoteTokenCount ? 2 : 1}; },
-    async suggest(tabs, {consent = false, preferences = ''} = {}) {
+    async suggest(tabs, {consent = false, preferences = '', existingGroups = []} = {}) {
       if (!configured()) throw new UsageError('not_configured', 'Live AI is disabled or its provider/model/key adapter is not configured. No request was sent.');
       if (consent !== true) throw new UsageError('consent_required', 'Confirm sending tab titles and sanitized URL paths to the configured provider. Titles and paths may contain sensitive information.');
       if(typeof preferences!=='string'||preferences.length>1200)throw new UsageError('invalid_input','Grouping preferences must be at most 1200 characters.');
       const input = inputTabs(tabs);
-      const body = JSON.stringify({tabs:input,preferences});
+      const context = inputExistingGroups(existingGroups);
+      const body = JSON.stringify({tabs:input,preferences,existingGroups:context});
       if (Buffer.byteLength(body, 'utf8') > config.maxInputBytes) throw new UsageError('input_limit', 'The tab inventory exceeds the configured input byte limit.');
-      const options = {tabs: input, preferences, model: config.model, apiKey: config.apiKey, maxOutputTokens: config.maxOutputTokens};
+      const options = {tabs: input, preferences, existingGroups:context, model: config.model, apiKey: config.apiKey, maxOutputTokens: config.maxOutputTokens};
       const checkCount = count => {
         if (!Number.isSafeInteger(count) || count < 0 || count > config.maxInputTokens) throw new UsageError('input_limit', 'The complete prompt exceeds the input token limit or cannot be counted.');
       };

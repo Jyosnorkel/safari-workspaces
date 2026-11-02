@@ -62,13 +62,19 @@ test('unknown/duplicated model IDs and failed provider calls preserve groups and
   const h=harness(options);const state=await h.begin();const result=await h.suggest(state);assert.equal(result.state,'error');assert.equal(h.modelCalls,1);assert.equal(h.store['workspaces.live.v1'],undefined);await h.send('popup-ai-state');assert.equal(h.modelCalls,1);
  }
 });
-test('explicit edited acceptance preserves excluded manual tabs and rejects forged assignments',async()=>{
- const h=harness({tabs:[tab(1),tab(2),tab(3)]});const manualId=webcrypto.randomUUID();const live=await h.send('live-groups-set',{expectedRevision:null,groups:[{id:manualId,name:'Manual',tabs:[{id:1,url:tab(1).url},{id:2,url:tab(2).url},{id:3,url:tab(3).url,excluded:true}]}]});
- const state=await h.begin();assert.equal(state.tabs.find(tab=>tab.id===3).included,false);const proposal=await h.suggest(state);
- assert.equal((await h.send('popup-ai-accept',{requestId:proposal.requestId,expectedRevision:live.revision,groups:[{name:'Forged',tabIds:['3']}]})).ok,false);
- const accepted=await h.send('popup-ai-accept',{requestId:proposal.requestId,expectedRevision:live.revision,groups:[{name:'Edited',reason:'Reviewed',tabIds:['1']}]});assert.equal(accepted.state,'accepted');
- const groups=(await h.send('live-groups-get')).groups;assert.equal(groups.find(group=>group.id===manualId).tabs[0].id,3);assert.equal(groups.find(group=>group.id===manualId).tabs[0].excluded,true);assert.equal(groups.find(group=>group.name==='Edited').tabs[0].id,1);assert.equal(groups.find(group=>group.id==='ungrouped').tabs[0].id,2);
- const replay=await h.send('popup-ai-accept',{requestId:proposal.requestId,expectedRevision:live.revision,groups:[]});assert.equal(replay.repeated,true);assert.equal(h.modelCalls,1);
+test('AI sends only ungrouped tabs and group context, merges matching names without changing manual members',async()=>{
+ const h=harness({tabs:[tab(1),tab(2),tab(3)],result:{groups:[{name:'Manual',reason:'Related task',tabIds:['2']} ]}});
+ const manualId=webcrypto.randomUUID(),emptyId=webcrypto.randomUUID();
+ await h.send('live-groups-set',{expectedRevision:null,groups:[{id:manualId,name:'Manual',tabs:[{id:1,url:tab(1).url},{id:3,url:tab(3).url,excluded:true}]},{id:emptyId,name:'Future',tabs:[]}]});
+ const state=await h.begin();assert.deepEqual(Array.from(state.tabs,t=>t.id),[2]);
+ assert.deepEqual(Array.from(state.existingGroups,g=>({name:g.name,tabCount:g.tabCount})),[{name:'Manual',tabCount:2},{name:'Future',tabCount:0}]);
+ assert.equal((await h.suggest(state,{tabIds:[1]})).ok,false);assert.equal(h.modelCalls,0);
+ const proposal=await h.suggest(state,{tabIds:[2]});assert.equal(proposal.state,'review');
+ assert.deepEqual(h.modelRequest.tabs.map(t=>t.id),['2']);assert.deepEqual(h.modelRequest.existingGroups,[{name:'Manual',tabCount:2},{name:'Future',tabCount:0}]);
+ const accepted=await h.send('popup-ai-accept',{requestId:proposal.requestId,expectedRevision:state.revision,groups:proposal.proposal.groups});assert.equal(accepted.state,'accepted');
+ const groups=(await h.send('live-groups-get')).groups;const manual=groups.find(g=>g.id===manualId);
+ assert.deepEqual(Array.from(manual.tabs,t=>t.id),[1,3,2]);assert.equal(manual.tabs[1].excluded,true);assert.ok(groups.some(g=>g.id===emptyId));
+ assert.equal(groups.filter(g=>g.name==='Manual').length,1);
 });
 test('manual edits or navigation after a response block stale acceptance without replacing groups',async()=>{
  const h=harness();const state=await h.begin(),proposal=await h.suggest(state);await h.send('live-groups-set',{expectedRevision:null,groups:[{id:'ungrouped',name:'Manual edit',tabs:[{id:1,url:tab(1).url}]}]});

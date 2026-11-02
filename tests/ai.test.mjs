@@ -396,3 +396,20 @@ test('raising limits retains old ledger and permits more than the old twenty dai
  assert.equal((await raised.status()).attemptsToday,20);
  await raised.run(async()=>{});assert.equal((await raised.status()).attemptsToday,21);
 });
+
+test('existing group reference context is bounded, metadata-free and counted before admission',async t=>{
+ const f=await fixture(t);let counted,generated,calls=0;
+ const provider=fakeProvider({countInputTokens:options=>{counted=options;return 100;},generate:async options=>{generated=options;calls++;return {groups:[{name:'Research',reason:'Existing project',tabIds:['1']}]};}});
+ const service=createAIService({env:fakeEnv,provider,statePath:f.statePath,now:f.now});
+ for(const existingGroups of [null,{},Array.from({length:101},()=>({name:'A',tabCount:1})),[{name:'A',tabCount:1001}],[{name:'A',tabCount:-1}],[{name:'A',tabCount:1.5}],[{name:' ',tabCount:1}],[{name:'A'.repeat(81),tabCount:1}],[{name:'A',tabCount:1,tabs:[{url:'https://private.invalid'}]}]]) {
+  await assert.rejects(service.suggest(tabs,{consent:true,existingGroups}),hasCode('invalid_input'));
+ }
+ assert.equal((await service.status()).attemptsToday,0);assert.equal(calls,0);
+ await service.suggest(tabs,{consent:true,preferences:'Keep research',existingGroups:[{name:' Research ',tabCount:8}]});
+ assert.deepEqual(counted.existingGroups,[{name:'Research',tabCount:8}]);assert.deepEqual(generated.existingGroups,counted.existingGroups);assert.equal(generated.preferences,'Keep research');
+ const request=makeMetaRequest({...generated,model:'fake',maxOutputTokens:2048});
+ assert.deepEqual(JSON.parse(request.input).existingGroups,[{name:'Research',tabCount:8}]);assert.match(request.instructions,/reusing an existing group name exactly/);
+ const limited=createAIService({env:{...fakeEnv,AI_MAX_INPUT_BYTES:'150'},provider,statePath:join(f.dir,'limited.json'),now:f.now});
+ await assert.rejects(limited.suggest(tabs,{consent:true,existingGroups:[{name:'R'.repeat(80),tabCount:8}]}),hasCode('input_limit'));
+ assert.equal((await limited.status()).attemptsToday,0);
+});

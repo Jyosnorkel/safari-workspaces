@@ -494,12 +494,13 @@
     await normalWindow(windowId);
     const live=await getLiveGroups({windowId});
     const exclusions=new Set(live.groups.flatMap(group=>group.tabs.filter(tab=>tab.excluded).map(tab=>tab.id)));
-    const tabs=(await liveInventory(windowId)).filter(tab=>tab.eligible && !tab.pendingUrl);
+    const grouped=new Set(live.groups.filter(group=>group.id!=='ungrouped').flatMap(group=>group.tabs.map(tab=>tab.id)));
+    const tabs=(await liveInventory(windowId)).filter(tab=>tab.eligible && !tab.pendingUrl && !grouped.has(tab.id));
     if(tabs.length>100)throw popupError('Popup AI supports up to 100 eligible tabs. Use a smaller window before requesting suggestions.');
-    return {revision:live.revision,inventory:tabs.map(tab=>({id:tab.id,url:tab.url,title:tab.title.slice(0,8192),included:!exclusions.has(tab.id)}))};
+    return {existingGroups:live.groups.filter(group=>group.id!=='ungrouped').map(group=>({name:group.name,tabCount:group.tabs.length})),revision:live.revision,inventory:tabs.map(tab=>({id:tab.id,url:tab.url,title:tab.title.slice(0,8192),included:!exclusions.has(tab.id)}))};
   }
   function newPopupState(view,previous={}) {
-    return {state:'idle',inventoryToken:crypto.randomUUID(),inventory:view.inventory,revision:view.revision,
+    return {existingGroups:view.existingGroups || [],state:'idle',inventoryToken:crypto.randomUUID(),inventory:view.inventory,revision:view.revision,
       usedIds:previous.usedIds || [],connected:Boolean(previous.connected),...(previous.usage?{usage:previous.usage}:{})};
   }
   async function popupPublic(record,windowId) {
@@ -511,7 +512,7 @@
       try {await recheckPopupInput(record,windowId);}
       catch {stale=true;}
     }
-    return {state:record.state,tabs,input:C.aiInventory(record.inventory.filter(tab=>selected.includes(tab.id)).map(tab=>({...tab,eligible:true}))),
+    return {existingGroups:record.existingGroups || [],state:record.state,tabs,input:C.aiInventory(record.inventory.filter(tab=>selected.includes(tab.id)).map(tab=>({...tab,eligible:true}))),
       inventoryToken:record.inventoryToken,inventoryId:record.inventoryToken,revision:record.revision,connected:record.connected,remembered,stale,
       ...(record.requestId?{requestId:record.requestId}:{}),...(record.proposal?{proposal:{...record.proposal,tabs:C.aiInventory(record.inventory.filter(tab=>record.selectedIds.includes(tab.id)).map(tab=>({...tab,eligible:true})))}}:{}),
       ...(record.usage?{usage:record.usage}:{}),...(record.error?{error:record.error}:{})};
@@ -571,7 +572,10 @@
   }
   async function recheckPopupInput(record,windowId) {
     await normalWindow(windowId);
-    if((await getLiveGroups({windowId})).revision!==record.revision)throw popupError('Workspace groups changed. Refresh AI input before requesting or accepting suggestions.');
+    const currentGroups=await getLiveGroups({windowId});
+    if(currentGroups.revision!==record.revision)throw popupError('Your groups changed. Refresh AI input to organise the remaining ungrouped tabs. Your manual groups were kept.');
+    const grouped=new Set(currentGroups.groups.filter(group=>group.id!=='ungrouped').flatMap(group=>group.tabs.map(tab=>tab.id)));
+    if(record.selectedIds?.some(id=>grouped.has(id)))throw popupError('Some selected tabs are already grouped. Refresh AI input; existing groups are kept.');
     const live=new Map((await liveInventory(windowId)).map(tab=>[tab.id,tab]));
     for(const saved of record.inventory.filter(tab=>record.selectedIds?.includes(tab.id))) {
       const tab=live.get(saved.id);
@@ -604,12 +608,12 @@
     popupAIFlight={windowId,requestId};
     const settings=(await api.storage.local.get('tabby.settings.v1'))['tabby.settings.v1'];
     const preferences=typeof settings?.preferences==='string'?settings.preferences.slice(0,1200):'';
-    return {windowId,requestId,token,payload,preferences,autoApply:message.autoApply === true};
+    return {windowId,requestId,token,payload,preferences,existingGroups:record.existingGroups || [],autoApply:message.autoApply === true};
   }
   async function performPopupSuggestion(job) {
     if(job.repeated)return {...job.state,repeated:true};
     let response,error;
-    try {response=await WorkspaceAI.suggest({token:job.token,tabs:job.payload,preferences:job.preferences,consent:true});}
+    try {response=await WorkspaceAI.suggest({token:job.token,tabs:job.payload,preferences:job.preferences,existingGroups:job.existingGroups,consent:true});}
     catch(caught){error=caught;}
     job.token='';
     const commit=queue.then(async()=>{
@@ -645,9 +649,14 @@
     const live=await getLiveGroups({windowId});
     const chosen=new Set(record.selectedIds),next=live.groups.map(group=>({id:group.id,name:group.name,reason:group.reason || '',tabs:group.tabs.filter(tab=>!chosen.has(tab.id)).map(({id,url,excluded})=>({id,url,excluded:Boolean(excluded)}))}));
     let ungrouped=next.find(group=>group.id==='ungrouped');if(!ungrouped){ungrouped={id:'ungrouped',name:'Ungrouped',reason:'',tabs:[]};next.unshift(ungrouped);}
-    for(const group of validated.groups)next.push({id:crypto.randomUUID(),name:group.name,reason:group.reason,tabs:group.tabIds.map(id=>{const tab=selected.find(tab=>String(tab.id)===id);return {id:tab.id,url:tab.url,excluded:false};})});
+    for(const group of validated.groups){
+      const members=group.tabIds.map(id=>{const tab=selected.find(tab=>String(tab.id)===id);return {id:tab.id,url:tab.url,excluded:false};});
+      const matches=next.filter(item=>item.id!=='ungrouped' && item.name.trim().toLocaleLowerCase()===group.name.trim().toLocaleLowerCase());
+      if(matches.length===1)matches[0].tabs.push(...members);
+      else next.push({id:crypto.randomUUID(),name:group.name,reason:group.reason,tabs:members});
+    }
     for(const id of validated.ungrouped){const tab=selected.find(tab=>String(tab.id)===id);ungrouped.tabs.push({id:tab.id,url:tab.url,excluded:false});}
-    const published=await setLiveGroups({windowId,expectedRevision:record.revision,groups:next.filter(group=>group.id==='ungrouped'||group.tabs.length)});
+    const published=await setLiveGroups({windowId,expectedRevision:record.revision,groups:next});
     record.state='accepted';record.revision=published.revision;record.connected=Boolean(record.connected);delete record.proposal;delete record.selectedIds;
     all[windowId]=record;await writePopupAI(all);
     return {...await popupPublic(record,windowId),liveGroups:published.groups,liveRevision:published.revision};

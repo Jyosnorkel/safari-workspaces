@@ -85,8 +85,8 @@ export function createLoopbackServer({service,token,allowedOrigin,getConnection,
       if(request.method!=='POST'||request.url!=='/v1/suggestions') return reply(404,{ok:false,error:{code:'not_found',message:'Local endpoint not found.'}});
       if(request.headers['content-type']!=='application/json') return reply(415,{ok:false,error:{code:'content_type',message:'Use application/json.'}});
       const input=await bodyJson(request,maxBodyBytes);
-      if(!input||typeof input!=='object'||Array.isArray(input)||Object.keys(input).some(k=>!['tabs','consent','preferences'].includes(k))) throw new UsageError('invalid_input','Unsupported request fields.');
-      const result=await service.suggest(input.tabs,{consent:input.consent,preferences:input.preferences});
+      if(!input||typeof input!=='object'||Array.isArray(input)||Object.keys(input).some(k=>!['tabs','consent','preferences','existingGroups'].includes(k))) throw new UsageError('invalid_input','Unsupported request fields.');
+      const result=await service.suggest(input.tabs,{consent:input.consent,preferences:input.preferences,existingGroups:input.existingGroups});
       reply(200,{ok:true,result,usage:await service.status()});
     } catch(error) {
       let usage;if(!connect)try{usage=await service.status();}catch{}

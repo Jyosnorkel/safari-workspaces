@@ -202,3 +202,10 @@ Removed automatic first-row cursor highlight and selected left stripe across pop
 ### November 2 — v0.20.0 request headroom and drop position
 
 User-approved defaults increased to10 attempts/minute and200/day, retaining single-flight/no-retry/persistent accounting. Service restart required; explicit manual overrides preserved. Full-width insertion line and inward endpoint triangles replace card traces in popup/webpage; nested targets no longer show overlapping positions. 243 checks/native build/signature/package checks pass. Design source review done; visual browser unavailable, actual Safari marker verification remains open.
+
+
+## v0.21.0 AI alongside manual organisation — November 2
+
+AI input now contains only included ungrouped tabs, with bounded existing group names/counts and saved preferences as context. Grouped titles/URLs are excluded. Exact case-insensitive unambiguous name matches append to existing group IDs, preserving members/order/exclusions and empty manual folders; ambiguous names create a separate group. Both popup and webpage implement this behavior. Revision and identity guards still reject concurrent changes rather than overwrite edits; older reviews containing grouped tabs are rejected. Service validates context and includes it in byte/token bounds; no retries or additional model calls. Local service restart required for the new request contract.
+
+244 automated fake-provider/browser checks passed before final packaging. Product design/themes reviewed fictional-data480×600 light and system-dark popup screenshots including long names, expanded input, disclosure and compact action; no clipping observed. Native build, strict signature and packaged backend/provider comparisons passed. Actual Safari/Meta behavior for this iteration remains user verification; no personal Safari actions or live inference.

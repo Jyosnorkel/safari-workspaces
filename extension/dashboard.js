@@ -38,7 +38,8 @@
     $('status').classList.toggle('error', error);
   }
   const ai = () => globalThis.WorkspaceAI;
-  const aiTabs = () => tabs.filter(tab => tab.eligible && !excluded.has(tab.id));
+  const aiTabs = () => tabs.filter(tab => tab.eligible && !excluded.has(tab.id) && (!assignments.get(tab.id) || assignments.get(tab.id)==='ungrouped'));
+  const existingAIgroups = () => groups.filter(group=>group.id!=='ungrouped').map(group=>({name:group.name,tabCount:tabs.filter(tab=>assignments.get(tab.id)===group.id).length}));
   const attemptsPerSuggestion = () => Number.isSafeInteger(usage?.requestsPerSuggestion) && usage.requestsPerSuggestion > 0 ? usage.requestsPerSuggestion : 2;
   function aiStatus(message, error = false) {
     $('ai-status').textContent = message;
@@ -53,7 +54,7 @@
   function updateAIControls() {
     const payload = C.aiInventory(aiTabs());
     $('ai-data-count').textContent = `Preview the exact model input · ${payload.length} tabs`;
-    $('ai-data-preview').textContent = JSON.stringify(payload, null, 2);
+    $('ai-data-preview').textContent = JSON.stringify({tabs:payload,existingGroups:existingAIgroups()}, null, 2);
     const retryAt = usage?.retryAt ? new Date(usage.retryAt).getTime() : 0;
     const cooling = retryAt > Date.now();
     const daily = Number.isFinite(usage?.remainingToday) ? usage.remainingToday : 0;
@@ -118,7 +119,8 @@
     if (!pairedToken || !usage?.enabled || !usage?.configured || !$('ai-consent').checked || !requestTabs.length) throw new Error('Connect the service, include tabs and agree to the disclosure first.');
     const baseline = reviewRevision;
     const payload = C.aiInventory(requestTabs);
-    if (!await confirm('Send these tabs for Meta suggestions?', `Send ${payload.length} tab titles and sanitized URL paths through http://127.0.0.1:8788 to its configured Meta model provider? Titles and paths may be sensitive. This uses up to ${attemptsPerSuggestion()} remote attempts. Page text is not sent. Your manual groups stay unchanged. Your saved grouping preferences are included. A valid response replaces any older unaccepted suggestion preview and applies directly if selected.`, 'Send & suggest')) return;
+    const existingGroups = existingAIgroups();
+    if (!await confirm('Send these tabs for Meta suggestions?', `Send ${payload.length} tab titles and sanitized URL paths through http://127.0.0.1:8788 to its configured Meta model provider? Titles and paths may be sensitive. This uses up to ${attemptsPerSuggestion()} remote attempts. Page text is not sent. Your manual groups stay unchanged. Existing group names and tab counts are sent as reference alongside your saved preferences. Already grouped tab titles and URLs are not sent. A valid response replaces any older unaccepted suggestion preview and applies directly if selected.`, 'Send & suggest')) return;
     if (baseline !== reviewRevision) throw new Error('Your review changed. Review the updated input before requesting suggestions.');
     $('ai-consent').checked = false;
     aiStatus('Requesting Meta suggestions: token count and generation. Your manual groups are unchanged…');
@@ -126,7 +128,7 @@
     try {
       const savedSettings = await api.storage.local.get('tabby.settings.v1');
       const preferences = String(savedSettings?.['tabby.settings.v1']?.preferences || '').slice(0,1200);
-      const response = await ai().suggest({token: pairedToken, tabs: payload, preferences, consent: true});
+      const response = await ai().suggest({token: pairedToken, tabs: payload, preferences, existingGroups, consent: true});
       if (response?.usage) usage = response.usage;
       const validated = C.suggestions(response?.result, requestTabs);
       if (baseline !== reviewRevision) throw new Error('Your review changed during the request. Suggestions were not applied.');
@@ -192,14 +194,18 @@
     const validated = C.suggestions(raw, candidate.tabs);
     if (!direct && !await confirm('Accept reviewed suggestions?', `Apply these group assignments to ${candidate.tabs.length} included tabs? Existing unchecked tabs keep their groups. This updates only the review; no tabs are saved, closed or restored.`, 'Accept groups')) return;
     if (candidate.revision !== reviewRevision) throw new Error('Your review changed. Suggestions were not applied.');
-    const added = validated.groups.map(group => ({...group, id: crypto.randomUUID()}));
-    candidate.tabs.forEach((tab,index)=>tabOrder.set(tab.id,index));
+    const added = validated.groups.map(group => {
+      const matches=groups.filter(item=>item.id!=='ungrouped' && item.name.trim().toLocaleLowerCase()===group.name.trim().toLocaleLowerCase());
+      return {...group,id:matches.length===1?matches[0].id:crypto.randomUUID()};
+    });
+    const appendOrder=Math.max(-1,...tabOrder.values())+1;
+    candidate.tabs.forEach((tab,index)=>tabOrder.set(tab.id,appendOrder+index));
     for (const tab of candidate.tabs) assignments.delete(tab.id);
     for (let i = 0; i < validated.groups.length; i++) for (const id of validated.groups[i].tabIds) {
       const original = candidate.tabs.find(tab => String(tab.id) === String(id)); assignments.set(original.id, added[i].id);
     }
-    groups.push(...added.map(({id, name, reason}) => ({id, name, reason})));
-    groups = groups.filter(group => group.id === 'ungrouped' || tabs.some(tab => assignments.get(tab.id) === group.id));
+    groups.push(...added.filter(item=>!groups.some(group=>group.id===item.id)).map(({id, name, reason}) => ({id, name, reason})));
+    // Preserve existing manual groups, including deliberately empty folders.
     pendingSuggestions = null; reviewRevision++; requests.clear(); renderSuggestions(); renderGroups();
     queueLivePublish();
     aiStatus('Reviewed suggestions accepted. You can still rename, move or exclude tabs before saving.');

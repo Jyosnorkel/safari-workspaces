@@ -29,8 +29,8 @@
     const attempts = usage?.requestsPerSuggestion || 2;
     const cooling = Number(usage?.retryAt || 0) > Date.now();
     $('popup-ai-generate').disabled = locked || uncertainRequest || Boolean(draft) || !state?.connected || !(pageToken || state?.remembered) || !usage?.enabled || !usage?.configured || usage?.busy || cooling || (usage?.remainingToday ?? 0) < attempts || (usage?.remainingThisMinute ?? 0) < attempts || !selected.size || !$('popup-ai-consent').checked;
-    $('popup-ai-generate').textContent = state?.state === 'requesting' ? 'Requesting suggestions…' : 'Send to Meta & organise';
-    $('popup-ai-preview').textContent = JSON.stringify(input(),null,2);
+    $('popup-ai-generate').textContent = state?.state === 'requesting' ? 'Requesting suggestions…' : 'Organise ungrouped tabs';
+    $('popup-ai-preview').textContent = JSON.stringify({tabs:input(),existingGroups:state?.existingGroups || []},null,2);
     hooks.setBusy?.(locked);
   }
   function renderUsage() {
@@ -55,7 +55,7 @@
       const text=node('span');text.append(node('span','popup-ai-tab-title',tab.title),node('small','popup-ai-tab-url',tab.url));
       row.append(check,text);list.append(row);editable.push(check);
     }
-    if (!state?.tabs?.length) list.append(node('p','workspace-empty','No eligible tabs. Open regular web pages, then refresh tabs.'));
+    if (!state?.tabs?.length) list.append(node('p','workspace-empty','No ungrouped tabs to organise. Your existing groups are already kept.'));
   }
   function proposalDraft(proposal) {
     const groups=proposal.groups.map((group,index)=>({...group,id:`proposal-${index}`}));
@@ -170,7 +170,7 @@
     if(api.permissions?.request && !await api.permissions.request({origins:['http://127.0.0.1/*']}))throw new Error('Local-service access was denied. No model request was made.');
     pageToken='';
     const result=await send('popup-ai-connect',{token,rememberSession:$('popup-ai-remember').checked});
-    pageToken=token;$('popup-ai-token').value='';receive(result);message('Connected. Select tabs and agree to send their metadata before generating suggestions.');
+    pageToken=token;$('popup-ai-token').value='';receive(result);message('Connected. Choose ungrouped tabs. Existing group names and your preferences help Meta organise them.');
   }));
   $('popup-ai-refresh').addEventListener('click',()=>run(async()=> {
     receive(await send('popup-ai-refresh',pageToken?{token:pageToken}:{}));
@@ -181,10 +181,10 @@
   }));
   $('popup-ai-generate').addEventListener('click',()=>run(async()=> {
     if (!$('popup-ai-consent').checked) throw new Error('Review the selected titles and URL paths and agree before sending.');
-    if (!selected.size) throw new Error('Select at least one eligible tab.');
+    if (!selected.size) throw new Error('Select at least one ungrouped tab.');
     const requestId=crypto.randomUUID(),tabIds=[...selected];
     $('popup-ai-consent').checked=false;
-    message('Sending the selected metadata for one suggestion request…');
+    message('Organising selected ungrouped tabs with your existing groups and preferences as context…');
     try {
       receive(await send('popup-ai-suggest',{requestId,expectedRevision:state.revision,inventoryToken:state.inventoryToken,tabIds,consent:true,autoApply:true,...(pageToken?{token:pageToken}:{})}));
     } catch (error) {

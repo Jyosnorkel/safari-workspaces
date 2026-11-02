@@ -433,7 +433,8 @@ test('confirmed cluster uses the published revision and exposes deliberate undo 
  assert.equal(h.sent.some(message=>['save','restore','drop-backup'].includes(message.type)),false);assert.equal(h.suggestCalls,0);
 });
 test('unaccepted AI proposals prevent Safari reorder; acceptance never automatically reorders',async()=>{
- const h=await clusteredReview();await h.connect();await h.consent();await h.click('suggest');assert.equal(h.node('cluster-tabs').disabled,true);
+ const h=await clusteredReview({result:{groups:[{name:'Workspace 1',reason:'Related task',tabIds:['2']}]}});await h.connect();await h.consent();await h.click('suggest');assert.equal(h.node('cluster-tabs').disabled,true);
+ const request=h.calls.find(c=>c.type==='suggest');assert.deepEqual(request.tabs.map(t=>t.id),['2']);assert.deepEqual(request.existingGroups,[{name:'Workspace 1',tabCount:1}]);
  assert.equal(h.sent.some(message=>message.type==='cluster-preview'),false);await h.click('ai-accept');assert.equal(h.node('cluster-tabs').disabled,false);assert.equal(h.sent.some(message=>message.type==='cluster-apply'),false);
 });
 test('no-op and interrupted clustering do not retry moves; partial status stays visible',async()=>{
