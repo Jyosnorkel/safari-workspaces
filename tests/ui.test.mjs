@@ -6,7 +6,7 @@ import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import {webcrypto} from 'node:crypto';
 const core = readFileSync(new URL('../extension/core.js',import.meta.url),'utf8');
-const source = readFileSync(new URL('../extension/dashboard.js',import.meta.url),'utf8');
+const source = readFileSync(new URL('../extension/tab-selection.js',import.meta.url),'utf8')+'\n'+readFileSync(new URL('../extension/dashboard.js',import.meta.url),'utf8');
 const html = readFileSync(new URL('../extension/dashboard.html',import.meta.url),'utf8');
 const all = node => [node,...node.children.flatMap(all)];
 class Element {
@@ -206,7 +206,7 @@ test('chip counts include all assigned tabs; cross-group drag preserves unchecke
   assert(result.over.defaultPrevented);assert(result.event.defaultPrevented);
   assert.equal(selectedGroup(h,'Page 1'),targetId);assert.equal(h.label('groups','Include Page 1').checked,false);
   assert.equal(chipFor(h,'Workspace 1').children[1].textContent,'1');assert.match(chipFor(h,'Workspace 1').attributes['aria-label'],/, 1 tab$/);assert.match(chipFor(h,'Ungrouped').attributes['aria-label'],/, 2 tabs$/);assert.equal(chipFor(h,'Ungrouped').children[1].textContent,'2');
-  assert.equal(h.sent.filter(message=>message.type!=='live-groups-set').length,sent);assert.equal(h.suggestCalls,0);assert.match(h.node('status').textContent,/remains unchecked/);
+  assert.equal(h.sent.filter(message=>message.type!=='live-groups-set').length,sent);assert.equal(h.suggestCalls,0);assert.match(h.node('status').textContent,/remain unchecked/);
 });
 test('collapse is associated with its body, persists through renaming/moving and supports native-button keyboard toggles',async()=>{
   const h=await harness();await h.scan();await h.click('new-group');
@@ -480,4 +480,17 @@ test('direct AI application forwards saved preferences and needs no second accep
  const group=named(h,'groups','Research');assert(group);
  assert.equal(selectedGroup(h,'Page 1'),selectedGroup(h,'Page 2'));assert.notEqual(selectedGroup(h,'Page 1'),'ungrouped');
  assert.equal(h.sent.some(message=>['save','restore','cluster-apply'].includes(message.type)),false);
+});
+
+test('manual row Cmd/Shift multi-selection moves an ordered batch and preserves inclusion',async()=>{
+ const h=await harness({tabs:[sample(1),sample(2),sample(3),sample(4)]});await h.click('new-group');
+ const row=title=>h.label('groups',`Include ${title}`).parent;
+ row('Page 1').dispatch('click');row('Page 3').dispatch('click',{shiftKey:true});
+ assert.equal(row('Page 1').attributes['aria-pressed'],'true');assert.equal(row('Page 2').attributes['aria-pressed'],'true');assert.equal(row('Page 3').attributes['aria-pressed'],'true');
+ row('Page 2').dispatch('click',{metaKey:true});assert.equal(row('Page 2').attributes['aria-pressed'],'false');
+ await h.change(h.label('groups','Include Page 3'),false);
+ const drag=await startDrag(h,'Page 1');await drop(h,chipFor(h,'Workspace 1'),drag.data);
+ const target=groupIdOf(chipFor(h,'Workspace 1'));assert.equal(selectedGroup(h,'Page 1'),target);assert.equal(selectedGroup(h,'Page 3'),target);assert.equal(selectedGroup(h,'Page 2'),'ungrouped');assert.equal(h.label('groups','Include Page 3').checked,false);
+ const published=h.sent.filter(m=>m.type==='live-groups-set').at(-1);assert.deepEqual(published.groups.find(g=>g.id===target).tabs.map(t=>t.id),[1,3]);
+ assert.equal(h.sent.some(m=>['restore','save','snapshot-open-tab','cluster-apply'].includes(m.type)),false);
 });

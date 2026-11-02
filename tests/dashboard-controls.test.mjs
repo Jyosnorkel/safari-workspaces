@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
-const source=readFileSync(new URL('../extension/dashboard-controls.js',import.meta.url),'utf8');
+const source=readFileSync(new URL('../extension/tab-selection.js',import.meta.url),'utf8')+'\n'+readFileSync(new URL('../extension/dashboard-controls.js',import.meta.url),'utf8');
 async function harness(saved={}){
  class Node{
   constructor(){this.children=[];this.listeners={};this.value='';this.classes=new Set();this.classList={toggle:(name,on)=>on?this.classes.add(name):this.classes.delete(name)};this.dataset={};}
@@ -39,8 +39,14 @@ test('dashboard keyboard opens selected existing tab only after live window, URL
  const h=await harness();h.update();await h.flush();const search=h.nodes.get('dashboard-tab-search'),event=key=>({key,preventDefault(){}});
  search.listeners.keydown(event('ArrowDown'));search.listeners.keydown(event('Enter'));await h.flush();assert.deepEqual(h.updates,[{id:2,active:true}]);h.updates.length=0;
  for(const changed of [{windowId:8},{url:'https://changed.example'},{incognito:true}]){
-  h.live.set(1,{...h.inventory[0],...changed});h.update();await h.nodes.get('dashboard-tab-list').children[0].listeners.click();await h.flush();assert.equal(h.updates.length,0);assert.match(h.nodes.get('dashboard-tab-count').textContent,/changed/);
+  h.live.set(1,{...h.inventory[0],...changed});h.update();await h.nodes.get('dashboard-tab-list').children[0].listeners.dblclick();await h.flush();assert.equal(h.updates.length,0);assert.match(h.nodes.get('dashboard-tab-count').textContent,/changed/);
  }
  const shortcut={key:'f',metaKey:true,target:{tagName:'BODY'},preventDefault(){this.prevented=true;}};h.handlers.keydown(shortcut);assert(shortcut.prevented);assert(search.focused);
  h.handlers.keydown({key:'/',target:{tagName:'TEXTAREA'},preventDefault(){throw Error('Must preserve ordinary text entry');}});
+});
+test('webpage Home single clicks select multiple rows; only double-click opens',async()=>{
+ const h=await harness();h.update();await h.flush();const rows=h.nodes.get('dashboard-tab-list').children;
+ rows[0].listeners.click({});rows[1].listeners.click({metaKey:true});assert.equal(h.updates.length,0);
+ assert(rows[0].classes.has('is-tab-selected'));assert(rows[1].classes.has('is-tab-selected'));
+ await rows[1].listeners.dblclick({});assert.deepEqual(h.updates,[{id:2,active:true}]);
 });

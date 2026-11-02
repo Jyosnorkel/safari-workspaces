@@ -5,6 +5,7 @@
   const defaults={theme:'system',preferences:'',autosave:0,compact:false};
   let settings={...defaults},inventory=[],windowId,selection=0,matches=[],activating=false,autosaveChecked=false;
   const message=text=>{$('dashboard-settings-status').textContent=text;};
+  const multiSelection=globalThis.TabbySelection?.create({announce:(count,clear)=>TabbySelection.toolbar($('dashboard-tab-count'),count,clear)});
   function apply(value){
     settings={...defaults,...value};
     if(!['light','dark','system'].includes(settings.theme))settings.theme='system';
@@ -21,6 +22,7 @@
     selection=Math.max(0,Math.min(selection,matches.length-1));
     $('dashboard-tab-count').textContent=`${matches.length} of ${inventory.length} tabs`;
     const list=$('dashboard-tab-list');list.replaceChildren();
+    multiSelection?.beginRender();multiSelection?.setItems(matches.map(tab=>tab.id));
     if(!matches.length)list.append(node('p','hint',query?'No matching tabs.':'No tabs available. Refresh tabs to try again.'));
     matches.forEach((tab,index)=>{
       const row=node('button','dashboard-search-tab','');row.type='button';row.title=tab.url || '';
@@ -28,7 +30,7 @@
       if(tab.active)row.setAttribute('aria-current','page');
       row.append(node('span','workspace-tab-title',tab.title || 'Untitled tab'));
       let host='Safari tab';try{host=new URL(tab.url).hostname || host;}catch{}
-      row.append(node('small','workspace-tab-host',host));row.addEventListener('click',()=>activate(tab));list.append(row);
+      row.append(node('small','workspace-tab-host',host));if(multiSelection)multiSelection.bind(row,tab.id,()=>activate(tab));else row.addEventListener('click',()=>activate(tab));list.append(row);
     });
   }
   async function activate(tab){

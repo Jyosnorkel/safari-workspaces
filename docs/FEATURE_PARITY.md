@@ -17,7 +17,7 @@ Updated November 1, 2026 — v0.17.0.
 | Compact expandable snapshot summaries | Snapshots | Saved workspaces |
 | Per-snapshot JSON export to Downloads | Snapshot header | Snapshot header |
 | Snapshot soft deletion and immediate Undo | Outside snapshot card | Outside snapshot card |
-| Open individual saved URL in current normal window | Saved tab click | Saved tab click |
+| Open individual saved URL in current normal window | Saved tab double-click | Saved tab double-click |
 | Whole-interface validated JSON drop | All popup pages | Entire webpage |
 
 Webpage additionally retains bulk export, import-only picker, save-and-close, recovery, complete restore sessions, real Safari tab-bar clustering and its guarded Undo. Those controls are not yet all exposed in the popup. The popup opening/dismissal shortcut is Cmd+Shift+F; it is not bound to close the full webpage.
@@ -31,3 +31,11 @@ The final visual check using a deliberately long-title fixture could not run bec
 ## v0.18.0 webpage navigation
 
 The webpage now uses four separate sidebar destinations: Home (current tabs/search, refresh and snapshot), Organise (AI, groups and real Safari clustering), Snapshots (export/import/restore/recovery), and Settings (shared preferences and explanatory information). Only the selected destination is visible. Switching preserves DOM/edit state and resets scroll; browser Back/Forward and legacy #ai/#saved links remain supported. Search shortcuts reveal Home before focusing the field. JSON backup drop remains available in every view.
+
+## v0.19.0 selection and grouped snapshots
+
+Single-click selects a row; Command-click toggles members, Shift-click selects a range, and double-click or Return opens/switches the tab. Escape/Clear selection clears selection. Organise drags move selected eligible tabs together in display order. Inclusion checkboxes remain separate: selecting rows does not change which tabs are included in save/close actions.
+
+New snapshots preserve Tabby group names, member order and exclusions using durable saved-tab identities, including duplicate URLs. Whole-window snapshots store named-group order followed by Ungrouped; snapshots without grouping keep their normal URL order. Expanded snapshot cards show group headings. Export/import preserves optional grouping metadata while remapping IDs and resetting operation journals; older JSON backups remain supported. Old snapshots cannot recover group data that was never saved.
+
+Restoration opens saved URLs in saved order and reconstructs Tabby organisation from confirmed created tab IDs. Pending navigation is reconciled on a later explicit popup read/scan. Partial/interrupted restores retain recovery guards; later destination edits take precedence over replayed saved assignments. These are Tabby groups, not native Safari Tab Groups. Restored URLs do not recover forms, history or full page state.

@@ -78,7 +78,29 @@
       return {id: String(t.id), title: title(t.title).slice(0,250), url: `${url.origin}${url.pathname}`};
     });
   }
-  // Portable v1 backups contain URL snapshots only, never live tab IDs or operation journals.
+  // Group membership refers to durable snapshot tab IDs, never URLs/live Safari IDs.
+  function snapshotGroups(groups, tabs) {
+    if (!Array.isArray(groups) || groups.length > 100) throw new Error('Invalid snapshot groups.');
+    const allowed = new Set(tabs.map(tab => tab.id)), seen = new Set();
+    let ungrouped = false;
+    return groups.map(group => {
+      if (!record(group) || typeof group.name !== 'string' || !group.name.trim() || group.name.length > 80 ||
+          (group.reason !== undefined && (typeof group.reason !== 'string' || group.reason.length > 2000)) ||
+          (group.ungrouped !== undefined && typeof group.ungrouped !== 'boolean') ||
+          !Array.isArray(group.tabIds) || group.tabIds.length > tabs.length ||
+          (group.excludedTabIds !== undefined && !Array.isArray(group.excludedTabIds))) throw new Error('Invalid snapshot groups.');
+      if (group.ungrouped) { if (ungrouped) throw new Error('Duplicate ungrouped snapshot bucket.'); ungrouped = true; }
+      const members = new Set();
+      for (const id of group.tabIds) {
+        if (!allowed.has(id) || seen.has(id)) throw new Error('Unknown or duplicate snapshot group tab.');
+        seen.add(id); members.add(id);
+      }
+      const excluded = group.excludedTabIds || [];
+      if (new Set(excluded).size !== excluded.length || excluded.some(id => !members.has(id))) throw new Error('Invalid snapshot group exclusion.');
+      return {name:group.name.trim(),reason:group.reason || '',tabIds:[...group.tabIds],excludedTabIds:[...excluded],...(group.ungrouped ? {ungrouped:true} : {})};
+    });
+  }
+  // Portable v1 backups contain URL/title snapshots and optional ordered groups, never live tab IDs or operation journals.
   const BACKUP_FORMAT = 'safari-workspaces-backup';
   const MAX_BACKUP_BYTES = 10 * 1024 * 1024;
   function backupWorkspaces(value) {
@@ -90,10 +112,25 @@
           !Array.isArray(workspace.tabs) || !workspace.tabs.length || workspace.tabs.length > MAX_TABS) throw new Error('Invalid workspace in backup.');
       total += workspace.tabs.length;
       if (total > 5000) throw new Error('A backup may contain at most 5,000 tabs.');
-      return {name: workspace.name.trim(), createdAt: workspace.createdAt, tabs: workspace.tabs.map(tab => {
+      const result = {name: workspace.name.trim(), createdAt: workspace.createdAt, tabs: workspace.tabs.map(tab => {
         if (!record(tab) || !restorable(tab.url) || tab.url.length > 32768 || typeof tab.title !== 'string' || tab.title.length > 8192) throw new Error('Invalid tab in backup. Only HTTP and HTTPS URLs are supported.');
         return {title: title(tab.title), url: tab.url};
       })};
+      if (workspace.groups !== undefined) {
+        if(!Array.isArray(workspace.groups))throw new Error('Invalid backup groups.');
+        // Encoded groups use array positions so duplicate URLs remain distinct.
+        const groups = workspace.groups.map(group => {
+          if (group.tabIndexes !== undefined) {
+            if (!Array.isArray(group.tabIndexes) || !Array.isArray(group.excludedTabIndexes || []) || [...group.tabIndexes,...(group.excludedTabIndexes || [])].some(i=>!Number.isSafeInteger(i) || i<0 || i>=workspace.tabs.length)) throw new Error('Invalid backup group indexes.');
+            return {...group,tabIds:group.tabIndexes,excludedTabIds:group.excludedTabIndexes || []};
+          }
+          if (!Array.isArray(group.tabIds) || !Array.isArray(group.excludedTabIds || [])) throw new Error('Invalid backup groups.');
+          const indexes=new Map(workspace.tabs.map((tab,index)=>[tab.id,index]));
+          return {...group,tabIds:group.tabIds.map(id=>indexes.get(id)),excludedTabIds:(group.excludedTabIds || []).map(id=>indexes.get(id))};
+        });
+        result.groups=snapshotGroups(groups,result.tabs.map((tab,id)=>({...tab,id}))).map(({tabIds,excludedTabIds,...group})=>({...group,tabIndexes:tabIds,excludedTabIndexes:excludedTabIds}));
+      }
+      return result;
     });
   }
   function encodeBackup(workspaces, now = new Date().toISOString()) {
@@ -109,5 +146,5 @@
     if (!record(value) || value.format !== BACKUP_FORMAT || value.version !== 1) throw new Error('Unsupported backup format or version.');
     return backupWorkspaces(value.workspaces);
   }
-  globalThis.WorkspaceCore = {KEY, restorable, inventory, snapshot, suggestions, aiInventory, encodeBackup, decodeBackup, MAX_BACKUP_BYTES};
+  globalThis.WorkspaceCore = {KEY, restorable, inventory, snapshot, suggestions, aiInventory, encodeBackup, decodeBackup, MAX_BACKUP_BYTES, snapshotGroups};
 })();

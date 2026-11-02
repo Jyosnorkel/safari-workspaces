@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
-const source=readFileSync(new URL('../extension/popup.js',import.meta.url),'utf8');
+const source=readFileSync(new URL('../extension/tab-selection.js',import.meta.url),'utf8')+'\n'+readFileSync(new URL('../extension/popup.js',import.meta.url),'utf8');
 test('dashboard creation activates the new tab without explicitly closing the popup window',async()=>{
   let click, created, closeCalls=0;
   const button={addEventListener:(_,fn)=>click=fn}, status={textContent:''};
@@ -94,6 +94,11 @@ test('confirmed popup rows move between groups and reorder with revision and exc
  cards[1].children[2].listeners.click();for(let i=0;i<10;i++)await new Promise(r=>setImmediate(r));
  assert(!groups.some(group=>group.id==='b'));
  assert.deepEqual(Array.from(groups.find(group=>group.id==='ungrouped').tabs,t=>t.id),[1,3]);
+ groups=[{id:'a',name:'A',tabs:[{id:1,url:'https://a.test',excluded:true},{id:2,url:'https://b.test'}]},{id:'b',name:'B',tabs:[{id:3,url:'https://c.test'}]}];
+ await vm.runInContext('loadLiveGroups(7)',context);cards=nodes.get('live-groups').children;
+ const rows=cards[0].children[1].children;rows[0].listeners.click({});rows[1].listeners.click({metaKey:true});
+ rows[0].listeners.dragstart(event());cards[1].listeners.drop(event());for(let i=0;i<10;i++)await new Promise(r=>setImmediate(r));
+ assert.deepEqual(Array.from(groups[1].tabs,t=>t.id),[3,1,2]);assert.equal(groups[1].tabs[1].excluded,true);
 });
 
 test('popup navigation keeps snapshot details collapsed and saves appearance and grouping preferences',async()=>{

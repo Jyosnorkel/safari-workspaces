@@ -5,6 +5,8 @@ let liveRevision = 0;
 let workspaceButtons = [];
 let popupDrag = null;
 const expandedGroups = new Set();
+const liveSelection=globalThis.TabbySelection?.create({announce:(count,clear)=>TabbySelection.toolbar(status,count,clear)});
+const homeMultiSelection=globalThis.TabbySelection?.create({announce:(count,clear)=>TabbySelection.toolbar(status,count,clear)});
 
 function isDashboard(candidate, dashboardURL) {
   if (typeof candidate !== 'string') return false;
@@ -92,6 +94,7 @@ async function loadLiveGroups(windowId) {
   addForm.addEventListener('submit',event=> {event.preventDefault();if(!nameInput.value.trim()){status.textContent='Enter a name for your new group.';nameInput.focus?.();return;}action(async()=> {await publish([...response.groups,{id:crypto.randomUUID(),name:nameInput.value.trim(),tabs:[]}]);status.textContent='Group added.';});});
   workspaceButtons.push(addButton,nameInput);
   const groups = response.groups;
+  liveSelection?.beginRender();liveSelection?.setItems(groups.flatMap(group=>group.tabs.map(tab=>tab.id)));
   if (!groups.length) {
     container.append(addForm,popupNode('p','workspace-empty','Add a group or use AI organise to get started.'));
     return;
@@ -104,17 +107,16 @@ async function loadLiveGroups(windowId) {
       event.preventDefault(); event.stopPropagation();
       const drag = popupDrag; popupDrag = null;
       card.classList.remove('is-drop-target');
-      if (beforeId === drag.tabId) return;
+      if ((drag.tabIds || [drag.tabId]).includes(beforeId)) return;
       action(async () => {
         const next = response.groups.map(item => ({id:item.id,name:item.name,reason:item.reason || '',tabs:item.tabs.map(({id,url,excluded})=>({id,url,excluded:Boolean(excluded)}))}));
-        const source = next.find(item => item.id === drag.groupId);
+        const ids=drag.tabIds || [drag.tabId], moving=next.flatMap(item=>item.tabs).filter(tab=>ids.includes(tab.id));
         const target = next.find(item => item.id === group.id);
-        const index = source?.tabs.findIndex(tab => tab.id === drag.tabId);
-        if (!target || index === undefined || index < 0) throw new Error('Refresh tabs before moving this row.');
-        const [tab] = source.tabs.splice(index,1);
+        if(!target || moving.length!==ids.length)throw new Error('Refresh tabs before moving these rows.');
+        for(const item of next)item.tabs=item.tabs.filter(tab=>!ids.includes(tab.id));
         const before = beforeId === null ? target.tabs.length : target.tabs.findIndex(item => item.id === beforeId);
-        if (before < 0) throw new Error('Refresh tabs before moving this row.');
-        target.tabs.splice(before,0,tab);
+        if (before < 0) throw new Error('Refresh tabs before moving these rows.');
+        target.tabs.splice(before,0,...moving);
         await send('live-groups-set',{windowId,expectedRevision:drag.revision,groups:next});
         expandedGroups.add(group.id);
         await loadLiveGroups(windowId);
@@ -167,7 +169,7 @@ async function loadLiveGroups(windowId) {
       jump.title = `${tab.title || 'Untitled tab'}\nDrag to a group, or above another tab to reorder${tab.excluded ? '\nExcluded from group actions' : ''}`;
       jump.addEventListener('dragstart',event => {
         if (opening || aiBusy) { event.preventDefault(); return; }
-        popupDrag = {tabId:tab.id,groupId:group.id,revision:liveRevision};
+        popupDrag = {tabId:tab.id,tabIds:liveSelection?.dragIds(tab.id) || [tab.id],groupId:group.id,revision:liveRevision};
         event.dataTransfer.setData('application/x-tabby-row','internal');
         event.dataTransfer.effectAllowed = 'move';
       });
@@ -187,10 +189,11 @@ async function loadLiveGroups(windowId) {
       // Text only: never turn saved/model-provided URLs into navigation instructions.
       let host = ''; try { host = new URL(tab.url).hostname; } catch {}
       jump.append(popupNode('small','workspace-tab-host',host));
-      jump.addEventListener('click',()=>action(async()=> {
+      const activate=()=>action(async()=> {
         await send('live-groups-focus',{windowId,groupId:group.id,tabId:tab.id,expectedRevision:liveRevision});
         status.textContent = `Switched to ${title}.`;
-      }));
+      });
+      if(liveSelection)liveSelection.bind(jump,tab.id,activate);else jump.addEventListener('click',activate);
       workspaceButtons.push(jump);list.append(jump);
     }
     container.append(card);
@@ -207,6 +210,7 @@ function renderHomeTabs() {
   homeMatches = homeInventory.filter(tab => `${tab.title || ''} ${tab.url || ''}`.toLocaleLowerCase().includes(query));
   homeSelection = Math.max(0, Math.min(homeSelection, homeMatches.length - 1));
   list.replaceChildren();
+  homeMultiSelection?.beginRender();homeMultiSelection?.setItems(homeMatches.map(tab=>tab.id));
   const count = document.getElementById('home-tab-results');
   if (count) count.textContent = `${homeMatches.length} of ${homeInventory.length} tabs`;
   if (!homeMatches.length) list.append(popupNode('p','workspace-empty',query ? 'No matching tabs.' : 'No tabs available. Refresh tabs to try again.'));
@@ -219,7 +223,7 @@ function renderHomeTabs() {
     let host = ''; try { host = new URL(tab.url).hostname; } catch {}
     row.append(popupNode('span','workspace-tab-title',tab.title || 'Untitled tab'),popupNode('small','workspace-tab-host',host || 'Safari tab'));
     row.disabled = opening || aiBusy;
-    row.addEventListener('click',()=>activateHomeTab(tab));
+    if(homeMultiSelection)homeMultiSelection.bind(row,tab.id,()=>activateHomeTab(tab));else row.addEventListener('click',()=>activateHomeTab(tab));
     list.append(row);
   });
 }
@@ -367,15 +371,20 @@ if (document.querySelectorAll && document.getElementById('settings-open')) (() =
           status.textContent='Snapshot deleted. ';const undo=popupNode('button','snapshot-undo','Undo');undo.type='button';
           undo.addEventListener('click',()=>action(async()=>{await send('snapshot-undo-delete',{id:snapshot.id});await snapshots();status.textContent='Snapshot restored.';}));status.append(undo);
         }));
+        const savedSelection=globalThis.TabbySelection?.create({announce:(count,clear)=>TabbySelection.toolbar(status,count,clear)});
+        savedSelection?.setItems(snapshot.tabs.map(tab=>tab.id));
+        let lastSavedGroup;
         for(const tab of snapshot.tabs){
+          if(snapshot.groups?.length){const group=snapshot.groups.find(group=>group.tabIds.includes(tab.id)),name=group?.name || 'Ungrouped';if(name!==lastSavedGroup){card.append(popupNode('h3','snapshot-group-heading',name));lastSavedGroup=name;}}
           const row=popupNode('button','snapshot-tab');row.type='button';row.title=`Open in this window: ${tab.url}`;
           let requestId;
-          row.addEventListener('click',()=>action(async()=>{
+          const openSaved=()=>action(async()=>{
             requestId ||= crypto.randomUUID();
             const win=await currentWindow();
             await send('snapshot-open-tab',{id:snapshot.id,tabId:tab.id,windowId:win.id,requestId});
             requestId=undefined;status.textContent='Saved tab opened in this window.';
-          }));
+          });
+          if(savedSelection)savedSelection.bind(row,tab.id,openSaved);else row.addEventListener('click',openSaved);
           let host=tab.url;try{host=new URL(tab.url).hostname;}catch{}
           row.append(popupNode('strong','snapshot-tab-title',tab.title || 'Untitled tab'),popupNode('small','snapshot-tab-host',host));
           card.append(row);

@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
-const source = readFileSync(new URL('../extension/popup.js',import.meta.url),'utf8');
+const source = readFileSync(new URL('../extension/tab-selection.js',import.meta.url),'utf8')+'\n'+readFileSync(new URL('../extension/popup.js',import.meta.url),'utf8');
 class Node {
  constructor(tag='div'){this.tagName=tag;this.children=[];this.listeners={};this.attributes={};this.hidden=false;this.disabled=false;this._text='';this.classList={toggle(){}};}
  set textContent(value){this._text=String(value);this.children=[];}
@@ -12,7 +12,7 @@ class Node {
  replaceChildren(...children){this._text='';this.children=children;}
  addEventListener(type,fn){this.listeners[type]=fn;}
  setAttribute(name,value){this.attributes[name]=value;}
- click(){if(!this.disabled)return this.listeners.click?.();}
+ click(){if(!this.disabled)return this.listeners.click?.();} dblclick(){return this.listeners.dblclick?.();}
 }
 const all = node => [node,...node.children.flatMap(all)];
 const sampleGroups = () => [{id:'research',name:'Research <script>',lastTabId:2,tabs:[{id:1,url:'https://example.test/one',title:'Notes <b>one</b>',active:false},{id:2,url:'https://example.test/two',title:'Working document',active:true}]},{id:'empty',name:'Empty',tabs:[]}];
@@ -43,11 +43,11 @@ test('workspace and tab clicks use the current revision without opening or resto
  const h=await harness();await h.find('Show tabs in Research <script>').click();
  assert.equal(h.sent.some(message=>message.type==='live-groups-focus'),false);
  let request;
- await h.find('Switch to tab: Notes <b>one</b>').click();request=h.sent.filter(message=>message.type==='live-groups-focus').at(-1);assert.equal(request.tabId,1);
+ await h.find('Switch to tab: Notes <b>one</b>').dblclick();request=h.sent.filter(message=>message.type==='live-groups-focus').at(-1);assert.equal(request.tabId,1);
  assert.equal(h.sent.some(message=>['restore','drop-backup','suggest','save'].includes(message.type)),false);
 });
 test('stale activation is visible and empty workspaces explain how to start',async()=>{
- const h=await harness({focusError:'This tab changed. Refresh workspaces before switching.'});await h.find('Switch to tab: Notes <b>one</b>').click();assert.match(h.node('status').textContent,/This tab changed/);
+ const h=await harness({focusError:'This tab changed. Refresh workspaces before switching.'});await h.find('Switch to tab: Notes <b>one</b>').dblclick();assert.match(h.node('status').textContent,/This tab changed/);
  const empty=await harness({groups:[]});assert.match(empty.node('live-groups').textContent,/Add a group or use AI organise/);
 });
 
@@ -68,7 +68,7 @@ test('actual popup and coordinator agree on a validated live switch without reop
  for(let i=0;i<10;i++)await new Promise(resolve=>setImmediate(resolve));
  const focus=all(nodes.get('live-groups')).find(node=>node.attributes['aria-label']==='Show tabs in Research');assert(focus);
  await focus.click();assert.equal(updates.length,0);
- const second=all(nodes.get('live-groups')).find(node=>node.attributes['aria-label']==='Switch to tab: Page 2');await second.click();assert.deepEqual(updates,[{id:2,active:true}]);
- const jump=all(nodes.get('live-groups')).find(node=>node.attributes['aria-label']==='Switch to tab: Page 1');tabs[0].url='https://example.test/changed';await jump.click();
+ const second=all(nodes.get('live-groups')).find(node=>node.attributes['aria-label']==='Switch to tab: Page 2');await second.dblclick();assert.deepEqual(updates,[{id:2,active:true}]);
+ const jump=all(nodes.get('live-groups')).find(node=>node.attributes['aria-label']==='Switch to tab: Page 1');tabs[0].url='https://example.test/changed';await jump.dblclick();
  assert.equal(updates.length,1);assert.match(nodes.get('status').textContent,/no longer in this workspace|changed|Refresh/);
 });

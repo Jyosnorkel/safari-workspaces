@@ -608,3 +608,70 @@ test('saved-tab opening rejects invalid IDs/private targets and does not retry a
  h.failCreate.add(snapshot.tabs[0].url);assert.equal((await h.send('snapshot-open-tab',request)).ok,false);h.failCreate.clear();
  assert.equal((await h.send('snapshot-open-tab',request)).ok,false);assert.equal(h.tabs.size,2);
 });
+
+test('whole-window snapshots preserve named groups order exclusions and duplicate URL identities through backup and restore',async()=>{
+ const same='https://example.com/duplicate';
+ const h=harness([tab(1,{url:same}),tab(2),tab(3,{url:same}),tab(4,{pinned:true})]);
+ const groupId=webcrypto.randomUUID();
+ assert.equal((await h.send('live-groups-set',{windowId:1,expectedRevision:null,groups:[{id:groupId,name:'Research',reason:'Manual task',tabs:[{id:3,url:same,excluded:true},{id:1,url:same}]},{id:'ungrouped',name:'Ungrouped',tabs:[{id:2,url:'https://example.com/2'}]}]})).ok,true);
+ const saved=await h.send('snapshot-window',{windowId:1,name:'Grouped window',requestId:webcrypto.randomUUID()});assert(saved.ok);
+ const record=saved.workspace;assert.deepEqual(Array.from(record.tabs,t=>t.url),[same,same,'https://example.com/2','https://example.com/4']);
+ assert.equal(record.groups[0].name,'Research');assert.equal(record.groups[0].excludedTabIds[0],record.tabs[0].id);
+ const json=h.C.encodeBackup([record]);const portable=JSON.parse(json);assert.deepEqual(portable.workspaces[0].groups[0].tabIndexes,[0,1]);assert(!json.includes(groupId));
+ const imported=await h.send('import-backup',{json});assert(imported.ok);const copy=imported.workspaces[0];assert.notEqual(copy.tabs[0].id,record.tabs[0].id);assert.equal(copy.groups[0].tabIds[0],copy.tabs[0].id);
+ const restored=await h.send('restore',{id:copy.id,windowId:2});assert(restored.ok);assert.equal(restored.workspace.restore.state,'complete');
+ const live=await h.send('live-groups-get',{windowId:2});assert(live.ok);assert.equal(live.groups[0].name,'Research');assert.deepEqual(Array.from(live.groups[0].tabs,t=>t.excluded),[true,false]);assert.equal(live.groups[0].tabs.length,2);assert.notEqual(live.groups[0].tabs[0].id,live.groups[0].tabs[1].id);
+ const created=h.events.filter(e=>e.startsWith('create:')).length;
+ await h.send('restore',{id:copy.id,windowId:2});assert.equal(h.events.filter(e=>e.startsWith('create:')).length,created);
+ assert.equal((await h.send('live-groups-get',{windowId:2})).groups.filter(g=>g.name==='Research').length,1);
+});
+
+test('snapshot backup rejects malformed group references before writing and legacy backups still restore',async()=>{
+ const h=harness();const saved=(await h.save()).workspace;const backup=JSON.parse(h.C.encodeBackup([saved]));
+ backup.workspaces[0].groups=[{name:'Bad',tabIndexes:[0,0]}];const before=h.writes;
+ assert.equal((await h.send('import-backup',{json:JSON.stringify(backup)})).ok,false);assert.equal(h.writes,before);
+ backup.workspaces[0].groups=[{name:'Bad',tabIndexes:[99]}];assert.equal((await h.send('import-backup',{json:JSON.stringify(backup)})).ok,false);
+ delete backup.workspaces[0].groups;const legacy=await h.send('import-backup',{json:JSON.stringify(backup)});assert(legacy.ok);assert.equal(legacy.workspaces[0].groups,undefined);
+});
+
+test('partial grouped restores rebuild once and preserve later manual organisation on retry',async()=>{
+ const h=harness();const id=webcrypto.randomUUID();
+ await h.send('live-groups-set',{windowId:1,expectedRevision:null,groups:[{id,name:'Task',tabs:[{id:1,url:'https://example.com/1'},{id:2,url:'https://example.com/2'}]}]});
+ const record=(await h.send('snapshot-window',{windowId:1,name:'Task window',requestId:webcrypto.randomUUID()})).workspace;
+ h.failCreate.add('https://example.com/2');const partial=await h.send('restore',{id:record.id,windowId:2});assert(partial.ok);assert.equal(partial.workspace.restore.state,'partial');
+ let live=await h.send('live-groups-get',{windowId:2});assert.equal(live.groups[0].tabs.length,1);
+ const manualId=webcrypto.randomUUID();await h.send('live-groups-set',{windowId:2,expectedRevision:live.revision,groups:live.groups.map(g=>({...g,id:g.id==='ungrouped'?g.id:manualId,name:'My edit'}))});
+ h.failCreate.clear();const retried=await h.send('restore',{id:record.id,windowId:2});assert(retried.ok);assert.equal(retried.workspace.restore.organization.state,'skipped');
+ live=await h.send('live-groups-get',{windowId:2});assert.equal(live.groups[0].name,'My edit');assert.equal(live.groups.filter(g=>g.name==='Task').length,0);
+});
+
+test('completed restore resumes interrupted group publication without reopening tabs',async()=>{
+ const h=harness();await h.send('live-groups-set',{windowId:1,expectedRevision:null,groups:[{id:webcrypto.randomUUID(),name:'Recovered task',tabs:[{id:1,url:'https://example.com/1'}]}]});
+ const record=(await h.send('snapshot-window',{windowId:1,name:'Window',requestId:webcrypto.randomUUID()})).workspace;
+ let fail=true;h.onWrite=values=>{if(values['workspaces.live.v1']?.[2] && fail){fail=false;throw Error('Interrupted group publication');}};
+ const stopped=await h.send('restore',{id:record.id,windowId:2});assert.equal(stopped.ok,false);
+ assert.equal(h.store['workspaces.v1'][record.id].restore.state,'complete');const creates=h.events.filter(e=>e.startsWith('create:')).length;
+ let live=await h.send('live-groups-get',{windowId:2});assert(live.ok);assert.equal(h.events.filter(e=>e.startsWith('create:')).length,creates);assert.equal(live.groups[0].name,'Recovered task');
+ const resumed=await h.send('restore',{id:record.id,windowId:2});assert(resumed.ok);assert.equal(h.events.filter(e=>e.startsWith('create:')).length,creates);
+ const revision=live.revision;await h.send('restore',{id:record.id,windowId:2});live=await h.send('live-groups-get',{windowId:2});assert.equal(live.revision,revision);
+ await h.send('live-groups-set',{windowId:2,expectedRevision:revision,groups:live.groups.map(g=>({...g,name:'My later change'}))});
+ await h.send('restore',{id:record.id,windowId:2});assert.equal((await h.send('live-groups-get',{windowId:2})).groups[0].name,'My later change');
+});
+
+test('pending restored navigation regains saved groups before explicit scan reconciliation',async()=>{
+ const h=harness();await h.send('live-groups-set',{windowId:1,expectedRevision:null,groups:[{id:webcrypto.randomUUID(),name:'Pending task',tabs:[{id:1,url:'https://example.com/1'},{id:2,url:'https://example.com/2'}]}]});
+ const record=(await h.send('snapshot-window',{windowId:1,name:'Window',requestId:webcrypto.randomUUID()})).workspace;
+ h.onQuery=()=>{for(const tab of h.tabs.values())if(tab.windowId===2)tab.pendingUrl=tab.url;};
+ const restored=await h.send('restore',{id:record.id,windowId:2});assert(restored.ok);assert.equal(restored.workspace.restore.organization.state,'waiting');
+ h.onQuery=null;for(const tab of h.tabs.values())if(tab.windowId===2)delete tab.pendingUrl;
+ const synced=await h.send('live-groups-sync-scan',{windowId:2});assert(synced.ok);assert.equal(synced.groups[0].name,'Pending task');assert.equal(synced.groups[0].tabs.length,2);
+ assert.equal(h.store['workspaces.v1'][record.id].restore.organization.state,'applied');
+});
+
+
+test('snapshot capture accepts the full100 named-group bound without inventing an empty Ungrouped bucket',async()=>{
+ const h=harness([tab(1)]);
+ const groups=Array.from({length:100},(_,index)=>({id:webcrypto.randomUUID(),name:`Group ${index+1}`,tabs:index===0?[{id:1,url:'https://example.com/1'}]:[]}));
+ assert((await h.send('live-groups-set',{windowId:1,expectedRevision:null,groups})).ok);
+ const result=await h.send('snapshot-window',{windowId:1,name:'Full group roster',requestId:webcrypto.randomUUID()});assert(result.ok);assert.equal(result.workspace.groups.length,100);assert(!result.workspace.groups.some(group=>group.ungrouped));
+});

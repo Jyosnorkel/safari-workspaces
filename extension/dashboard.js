@@ -25,6 +25,7 @@
   let liveReady = false, liveRevision = null, liveDirty = false, liveConflict = false;
   let liveScheduled = false, liveTask = Promise.resolve(true), liveFingerprint = '';
   let clusterOperation = null;
+  const manualSelection=globalThis.TabbySelection?.create({announce:(count,clear)=>TabbySelection.toolbar($('status'),count,clear)});
 
   const e = (tag, className, text) => {
     const node = document.createElement(tag);
@@ -335,6 +336,8 @@
   }
   function validDrop(groupId, transfer, readToken = false) {
     if (busy || !draggedTab || draggedTab.scope !== 'manual' || draggedTab.generation !== generation || draggedTab.revision !== reviewRevision || !groups.some(group => group.id === groupId)) return false;
+    const dragIds=draggedTab.tabIds || [draggedTab.tabId];
+    if(dragIds.some(id=>!draggableTab(tabs.find(tab=>tab.id===id)) || (draggedTab.fromGroups && groupFor(id)!==draggedTab.fromGroups[id])))return false;
     const tab = tabs.find(tab => tab.id === draggedTab.tabId);
     if (!draggableTab(tab) || groupFor(tab.id) !== draggedTab.fromGroup || !Array.from(transfer?.types || []).includes(DRAG_TYPE)) return false;
     // During dragover, browsers protect the data store; read its opaque token only on drop.
@@ -350,6 +353,18 @@
     reviewChanged(); renderGroups();
     notice(`Moved “${tab.title}” to “${target.name || 'Unnamed group'}”.${excluded.has(tabId) ? ' It remains unchecked.' : ''} No browser tabs were moved or changed.`);
     return true;
+  }
+  function moveSelectedTabs(ids,targetId,beforeId){
+    if(busy || !groups.some(group=>group.id===targetId) || ids.includes(beforeId))return false;
+    const moving=groups.flatMap(group=>assigned(group.id)).filter(tab=>ids.includes(tab.id));
+    if(moving.length!==ids.length || moving.some(tab=>!draggableTab(tab)))return false;
+    if(beforeId===undefined && moving.every(tab=>groupFor(tab.id)===targetId))return false;
+    const ordered=assigned(targetId).filter(tab=>!ids.includes(tab.id));
+    const index=beforeId===undefined?ordered.length:ordered.findIndex(tab=>tab.id===beforeId);
+    if(index<0)return false;
+    ordered.splice(index,0,...moving);for(const tab of moving)assignments.set(tab.id,targetId);
+    ordered.forEach((tab,position)=>tabOrder.set(tab.id,position));
+    reviewChanged();renderGroups();notice(`${moving.length} tab${moving.length===1?'':'s'} moved.${moving.some(tab=>excluded.has(tab.id))?' Unchecked tabs remain unchecked.':''} Safari’s tab bar is unchanged.`);return true;
   }
   function toggleGroup(groupId, focusId) {
     if (busy || !groups.some(group => group.id === groupId)) return;
@@ -396,7 +411,7 @@
       chip.addEventListener('drop',event=>{
         event.preventDefault();
         const source = draggedTab;
-        if (validDrop(group.id,event.dataTransfer,true)) moveTab(source.tabId,group.id);
+        if (validDrop(group.id,event.dataTransfer,true)) moveSelectedTabs(source.tabIds || [source.tabId],group.id);
         clearDrag();
       });
       $('group-chips').append(chip);
@@ -416,7 +431,8 @@
       const token = crypto.randomUUID();
       try { event.dataTransfer.setData(DRAG_TYPE,token); event.dataTransfer.effectAllowed='move'; }
       catch { event.preventDefault(); return; }
-      draggedTab = {tabId:tab.id,fromGroup:sourceGroupId,token,generation,revision:reviewRevision,scope:'manual', mode:'order'};
+      const tabIds=(manualSelection?.dragIds(tab.id) || [tab.id]).filter(id=>draggableTab(tabs.find(item=>item.id===id)));
+      draggedTab = {tabId:tab.id,tabIds,fromGroups:Object.fromEntries(tabIds.map(id=>[id,groupFor(id)])),fromGroup:sourceGroupId,token,generation,revision:reviewRevision,scope:'manual', mode:'order'};
       $('group-chips').classList.toggle('is-dragging',true);
     };
     handle.addEventListener('dragstart', event=>{ event.stopPropagation?.(); handle._startDrag(event); });
@@ -519,17 +535,7 @@
       event.preventDefault(); event.stopPropagation?.();
       if (validDrop(groupId,event.dataTransfer,true)) {
         const source = draggedTab;
-        if (beforeId !== undefined && beforeId !== source.tabId) {
-          const target = groups.find(group=>group.id===groupId);
-          const moving = tabs.find(tab=>tab.id===source.tabId);
-          const ordered = assigned(groupId).filter(tab=>tab.id!==source.tabId);
-          const index = ordered.findIndex(tab=>tab.id===beforeId);
-          if (index >= 0) {
-            ordered.splice(index,0,moving); assignments.set(source.tabId,groupId);
-            ordered.forEach((tab,position)=>tabOrder.set(tab.id,position));
-            reviewChanged(); renderGroups(); notice(`Tab placed in “${target.name}”. Safari’s tab bar is unchanged.`);
-          }
-        } else if (beforeId === undefined) moveTab(source.tabId,groupId);
+        moveSelectedTabs(source.tabIds || [source.tabId],groupId,beforeId);
       }
       node.classList.toggle('is-drop-target',false); node.classList.toggle('drop-before',false); clearDrag();
     });
@@ -539,6 +545,7 @@
     renderGroupChips();
     updateAIControls();
     $('groups').replaceChildren();
+    manualSelection?.beginRender();manualSelection?.setItems(groups.flatMap(group=>assigned(group.id).map(tab=>tab.id)));
     if (!tabs.length) {
       $('groups').append(e('div','empty','No tabs scanned yet. Scan this window to organize your work.'));
       return;
@@ -554,7 +561,7 @@
       name.setAttribute('aria-label', `Name for ${group.name}`);
       name.addEventListener('input', () => {group.name = name.value; reviewChanged(); renderGroupChips();});
       name.addEventListener('change',renderGroups);
-      header.append(name,e('span','count',`${tabLabel(assigned(group.id).length)} · ${selected(group.id).length} selected`));
+      header.append(name,e('span','count',`${tabLabel(assigned(group.id).length)} · ${selected(group.id).length} included`));
       header.setAttribute('id',`group-toggle-${group.id}`); header.setAttribute('role','button'); header.setAttribute('tabindex','0');
       header.setAttribute('aria-label',`${collapsed ? 'Expand' : 'Collapse'} ${group.name || 'Unnamed group'}`);
       header.setAttribute('aria-expanded',String(!collapsed)); header.setAttribute('aria-controls',`group-body-${group.id}`);
@@ -572,7 +579,7 @@
       }
       card.append(header);
       const selectionActions = e('div','group-select-actions');
-      for (const [label,include] of [['Select all',true],['Select none',false]]) selectionActions.append(button(label,async()=>{
+      for (const [label,include] of [['Include all',true],['Exclude all',false]]) selectionActions.append(button(label,async()=>{
         for (const tab of assigned(group.id).filter(tab=>tab.eligible)) if (include) excluded.delete(tab.id); else excluded.add(tab.id);
         reviewChanged(); renderGroups();
       }));
@@ -605,20 +612,26 @@
         }
         row.append(checkbox);
         if (draggableTab(tab)) { row.classList.toggle('draggable-tab',true); bindRowDrag(row,tab,group.id); row.append(dragHandle(tab,group.id)); }
-        row.append(content); list.append(row);
+        row.append(content);
+        manualSelection?.bind(row,tab.id,()=>run(async()=>{
+          const live=await api.tabs.get(tab.id);
+          if(!live || live.incognito || live.windowId!==windowId || live.url!==tab.url)throw new Error('This tab changed. Refresh tabs and try again.');
+          await api.tabs.update(tab.id,{active:true});notice(`Switched to ${tab.title}.`);
+        }));
+        list.append(row);
       }
       if (!assigned(group.id).length) list.append(e('div','empty','Move tabs here using the group menu on any tab.'));
       body.append(list);
       const actions = e('div','group-footer');
       const save = button('Save snapshot', () => saveGroup(group,false));
-      const close = button('Save & close selected', () => saveGroup(group,true),'primary');
+      const close = button('Save & close included', () => saveGroup(group,true),'primary');
       save.disabled = close.disabled = !selected(group.id).length;
       actions.append(save,close); body.append(actions); card.append(body); $('groups').append(card);
     }
   }
   async function saveGroup(group, close) {
     const selection = selected(group.id);
-    if (!selection.length) throw new Error('Select at least one tab.');
+    if (!selection.length) throw new Error('Include at least one tab.');
     if (!group.name.trim()) throw new Error('Give the group a name first.');
     const text = close
       ? `Save ${selection.length} tabs in “${group.name}”, verify the snapshot, then close those tabs? Save any unsaved forms or work first. Restoring reopens URLs only. Tabs that changed after scanning will not be closed.`
@@ -627,6 +640,7 @@
     // Reuse this ID until the selection changes. Retrying after a lost response cannot close a second time.
     const key = JSON.stringify({generation, groupId: group.id, name: group.name, close, tabs: selection.map(t => [t.id, t.url])});
     if (!requests.has(key)) requests.set(key,crypto.randomUUID());
+    if(groups.some(item=>item.id!=='ungrouped') && (!liveReady || !await queueLivePublish()))throw new Error('Load shared groups or refresh before saving so your organisation is preserved.');
     notice(close ? 'Saving and verifying your snapshot before closing tabs…' : 'Saving your snapshot…');
     const {workspace, repeated, closedTabIds} = await send('save',{name:group.name,tabs:selection,windowId,close,requestId:requests.get(key)});
     await loadSaved();
@@ -679,6 +693,7 @@
     if(pairedToken)$('ai-consent').focus({preventScroll:true});
   }
   async function snapshotWindow() {
+    if(groups.some(group=>group.id!=='ungrouped') && (!liveReady || !await queueLivePublish()))throw new Error('Load shared groups or refresh before saving so your organisation is preserved.');
     const name = `Window ${new Date().toLocaleString()}`.slice(0,80);
     const {workspace, skipped} = await send('snapshot-window', {windowId, name, requestId: crypto.randomUUID()});
     await loadSaved();
@@ -788,19 +803,27 @@
         try {
           const response = await send('restore',{id:workspace.id,windowId:complete ? windowId : (workspace.restore.windowId ?? windowId),...(complete ? {newSessionId:crypto.randomUUID(),previousSessionId:workspace.restore.sessionId || null} : {})});
           const count = Object.values(response.workspace.restore.results).filter(r=>r.state==='opened').length;
-          notice(`${workspace.name}: ${count}/${workspace.tabs.length} tabs restored. ${response.workspace.restore.state === 'complete' ? 'Snapshot kept for reference.' : 'Review failures and retry the remaining tabs.'}`);
+          const organization=response.workspace.restore.organization;
+          const groupNotice=organization?.state==='skipped'?' Existing destination groups were kept; restored tabs may appear in Ungrouped.':organization?.state==='error'?' Tabs opened, but organisation could not be restored. Refresh groups and check recovery.':'';
+          notice(`${workspace.name}: ${count}/${workspace.tabs.length} tabs restored. ${response.workspace.restore.state === 'complete' ? 'Snapshot kept for reference.' : 'Review failures and retry the remaining tabs.'}${groupNotice}`);
         } finally { await loadSaved(); }
       },'primary');
       restore.disabled = pending.length > 0;
       actions.append(restore); card.append(actions);
       const list = e('div','snapshot-tabs');
+      const savedSelection=globalThis.TabbySelection?.create({announce:(count,clear)=>TabbySelection.toolbar($('status'),count,clear)});
+      savedSelection?.setItems(workspace.tabs.map(tab=>tab.id));
+      let lastSavedGroup;
       for (const tab of workspace.tabs) {
+        if(workspace.groups?.length){const group=workspace.groups.find(group=>group.tabIds.includes(tab.id)),name=group?.name || 'Ungrouped';if(name!==lastSavedGroup){list.append(e('h3','snapshot-group-heading',name));lastSavedGroup=name;}}
         let requestId;
-        const item = button('',async()=>{
+        const item=e('button','snapshot-tab');item.type='button';
+        const openSaved=()=>run(async()=>{
           requestId ||= crypto.randomUUID();
           await send('snapshot-open-tab',{id:workspace.id,tabId:tab.id,windowId,requestId});
           requestId=undefined;notice('Saved tab opened in this window.');
-        },'snapshot-tab');
+        });
+        if(savedSelection)savedSelection.bind(item,tab.id,openSaved);else item.addEventListener('click',openSaved);
         item.title=`Open in this window: ${tab.url}`;
         item.setAttribute('aria-label',`Open saved tab in this window: ${tab.title || 'Untitled tab'}`);
         let host=tab.url;try{host=new URL(tab.url).hostname;}catch{}

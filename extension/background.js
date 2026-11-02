@@ -19,6 +19,7 @@
           typeof tab.url !== 'string' || !C.restorable(tab.url) || !Number.isSafeInteger(tab.index) || tab.index <= lastIndex) invalid();
       ids.add(tab.id); lastIndex = tab.index;
     }
+    if (record.groups !== undefined) C.snapshotGroups(record.groups,record.tabs);
     if (!object(record.close) || !['not-requested','closing','closed','partial'].includes(record.close.state) ||
         !Array.isArray(record.close.results) || !object(record.restore) ||
         !['not-started','restoring','complete','partial'].includes(record.restore.state) ||
@@ -30,7 +31,15 @@
       closedIds.add(result.tabId);
     }
     for (const [tabId, result] of Object.entries(record.restore.results)) {
-      if (!ids.has(tabId) || !object(result) || !['pending','opened','failed'].includes(result.state)) invalid();
+      if (!ids.has(tabId) || !object(result) || !['pending','opened','failed'].includes(result.state) || (result.liveTabId !== undefined && (!Number.isSafeInteger(result.liveTabId) || result.liveTabId < 0))) invalid();
+    }
+    if(record.restore.organization !== undefined){
+      const plan=record.restore.organization;
+      if(!object(plan) || !record.groups || !['pending','waiting','applied','skipped'].includes(plan.state) ||
+        (plan.expectedRevision!==null && !uuid(plan.expectedRevision)) || !Array.isArray(plan.groupIds) || plan.groupIds.length!==record.groups.length ||
+        new Set(plan.groupIds).size!==plan.groupIds.length ||
+        plan.groupIds.some((id,index)=>record.groups[index].ungrouped?id!=='ungrouped':!uuid(id)) ||
+        (plan.publishId!==undefined && !uuid(plan.publishId)) || (plan.publishedRevision!==undefined && !uuid(plan.publishedRevision)))invalid();
     }
     if (record.restore.state === 'complete' && !record.tabs.every(tab => record.restore.results[tab.id]?.state === 'opened')) invalid();
     if (record.trashedAt !== undefined && !timestamp(record.trashedAt)) invalid();
@@ -83,6 +92,7 @@
     for (const original of tabs) live.push(await currentTab(original, windowId));
     // Dashboard order is the user’s review order; browser positions remain untouched.
     const record = C.snapshot(name, live.map((tab, index) => ({...tab, index})), requestId);
+    await captureSnapshotGroups(record,live,windowId,false);
     record.close.state = close ? 'closing' : 'not-requested';
     await write(record); // Full snapshot must be persisted AND read back before any close.
     const closedTabIds = [];
@@ -114,6 +124,10 @@
       close: {state: 'not-requested', results: []}, restore: {state: 'not-started', results: {}},
       ...(dropRequestId ? {dropRequestId} : {})
     }));
+    records.forEach((record,index)=>{
+      const groups=workspaces[index].groups;
+      if(groups)record.groups=groups.map(({tabIndexes,excludedTabIndexes,...group})=>({...group,tabIds:tabIndexes.map(i=>record.tabs[i].id),excludedTabIds:excludedTabIndexes.map(i=>record.tabs[i].id)}));
+    });
     for (const record of records) all[record.id] = verifiedRecord(record, record.id);
     await api.storage.local.set({[C.KEY]: all});
     const stored = await read();
@@ -178,8 +192,15 @@
       }].slice(-20);
       record.restore = {state: 'not-started', sessionId: newSessionId, results: {}};
     }
-    if (record.restore.state === 'complete') return {workspace: record, repeated: true};
+    if(record.restore.windowId !== undefined && record.restore.windowId!==windowId)throw new Error('Continue this restore in its original destination window.');
+    if (record.restore.state === 'complete') { await restoreSnapshotGroups(record,windowId);return {workspace: record, repeated: true}; }
     record.restore.sessionId ||= crypto.randomUUID();
+    if(record.groups && !record.restore.organization){
+      const destination=(await readLive())[windowId];
+      record.restore.organization={state:'pending',expectedRevision:destination?.revision || null,groupIds:record.groups.map(group=>group.ungrouped?'ungrouped':crypto.randomUUID())};
+    }
+    record.restore.windowId ||= windowId;
+    if(record.restore.windowId!==windowId)throw new Error('Continue this restore in its original destination window.');
     if (Object.values(record.restore.results).some(r => r.state === 'pending')) throw new Error('A previous restore was interrupted. Check Safari for already opened tabs, then resolve the uncertain items before retrying.');
     record.restore.state = 'restoring';
     await write(record);
@@ -199,12 +220,71 @@
         await write(record); continue;
       }
       if (!Number.isInteger(created?.id)) throw new Error('Safari did not confirm the new tab. Check the window before resolving the uncertain restore.');
-      record.restore.results[tab.id] = {state: 'opened', openedAt: new Date().toISOString()};
+      record.restore.results[tab.id] = {state: 'opened', openedAt: new Date().toISOString(), liveTabId:created.id};
       await write(record);
     }
     record.restore.state = Object.values(record.restore.results).every(r => r.state === 'opened') ? 'complete' : 'partial';
     await write(record);
+    await restoreSnapshotGroups(record,windowId);
     return {workspace: record};
+  }
+  async function captureSnapshotGroups(record, live, windowId, reorder) {
+    const view=await liveView(windowId);
+    if(!view.groups.some(group=>group.id!=='ungrouped'))return;
+    const originals=new Map(live.map((tab,index)=>[tab.id,{live:tab,saved:record.tabs[index]}]));
+    const seen=new Set(), groups=[];
+    for(const group of [...view.groups.filter(g=>g.id!=='ungrouped'),...view.groups.filter(g=>g.id==='ungrouped')]){
+      const members=group.tabs.filter(tab=>originals.get(tab.id)?.live.url===tab.url);
+      groups.push({name:group.name,reason:group.reason || '',...(group.id==='ungrouped'?{ungrouped:true}:{}),tabIds:members.map(tab=>{seen.add(tab.id);return originals.get(tab.id).saved.id;}),excludedTabIds:members.filter(tab=>tab.excluded).map(tab=>originals.get(tab.id).saved.id)});
+    }
+    const remaining=live.filter(tab=>!seen.has(tab.id)).map(tab=>originals.get(tab.id).saved.id);
+    let ungrouped=groups.find(group=>group.ungrouped);
+    if(!ungrouped && remaining.length){ungrouped={name:'Ungrouped',reason:'',ungrouped:true,tabIds:[],excludedTabIds:[]};groups.push(ungrouped);}
+    if(ungrouped)ungrouped.tabIds.push(...remaining);
+    record.groups=C.snapshotGroups(groups,record.tabs);
+    if(reorder){const byId=new Map(record.tabs.map(tab=>[tab.id,tab]));record.tabs=record.groups.flatMap(group=>group.tabIds).map((id,index)=>({...byId.get(id),index}));}
+  }
+  async function restoreSnapshotGroups(record,windowId){
+    const plan=record.restore.organization;
+    if(!record.groups || !plan || plan.state==='skipped')return;
+    const all=await readLive(), current=all[windowId];
+    // Recognize our verified publication if suspension occurred before journal readback.
+    const own=current?.restoreSessionId===record.restore.sessionId;
+    if((current?.revision || null)!==plan.expectedRevision && !(own && current?.revision===plan.publishedRevision)){
+      // A publication may be recognized only when its complete payload matches the planned tabs.
+      if(!own || current?.restorePublishId!==plan.publishId){plan.state='skipped';plan.error='Destination groups changed; existing organisation was preserved.';await write(record);return;}
+    }
+    const live=new Map((await liveInventory(windowId)).map(tab=>[tab.id,tab]));
+    const ownedIds=new Set(plan.groupIds.filter(id=>id!=='ungrouped'));
+    const groups=(current?.groups || []).filter(group=>!ownedIds.has(group.id)).map(group=>({...group,tabs:[...group.tabs]}));
+    const existingIds=new Set(groups.flatMap(group=>group.tabs.map(tab=>tab.id)));
+    record.groups.forEach((group,index)=>{
+      const members=group.tabIds.flatMap(id=>{
+        const saved=record.tabs.find(tab=>tab.id===id), result=record.restore.results[id],tab=live.get(result?.liveTabId);
+        return result?.state==='opened' && tab && tab.windowId===windowId && tab.eligible && !tab.pendingUrl && tab.url===saved.url && !existingIds.has(tab.id) ? [{id:tab.id,url:tab.url,excluded:group.excludedTabIds.includes(id)}] : [];
+      });
+      if(group.ungrouped){let target=groups.find(item=>item.id==='ungrouped');if(!target){target={id:'ungrouped',name:group.name,reason:group.reason,tabs:[]};groups.push(target);}target.tabs.push(...members);}
+      else groups.push({id:plan.groupIds[index],name:group.name,reason:group.reason,tabs:members});
+    });
+    const groupedSavedIds=new Set(record.groups.flatMap(group=>group.tabIds));
+    const remaining=record.tabs.filter(tab=>!groupedSavedIds.has(tab.id)).flatMap(saved=>{
+      const result=record.restore.results[saved.id],tab=live.get(result?.liveTabId);
+      return result?.state==='opened' && tab?.eligible && !tab.pendingUrl && tab.windowId===windowId && tab.url===saved.url && !existingIds.has(tab.id) ? [{id:tab.id,url:tab.url,excluded:false}] : [];
+    });
+    if(remaining.length){let target=groups.find(group=>group.id==='ungrouped');if(!target){target={id:'ungrouped',name:'Ungrouped',reason:'',tabs:[]};groups.push(target);}target.tabs.push(...remaining);}
+    groups.sort((a,b)=>Number(a.id==='ungrouped')-Number(b.id==='ungrouped'));
+    validateLiveGroups(groups);
+    const waiting=record.tabs.some(saved=>{const result=record.restore.results[saved.id],tab=live.get(result?.liveTabId);return result?.state==='opened' && tab?.pendingUrl && (tab.url===saved.url || tab.pendingUrl===saved.url);});
+    if(['waiting','applied'].includes(plan.state) && JSON.stringify(canonical(current?.groups))===JSON.stringify(canonical(groups))){
+      if(!waiting && plan.state==='waiting'){plan.state='applied';await write(record);}
+      return;
+    }
+    plan.publishId=crypto.randomUUID();await write(record);
+    const revision=crypto.randomUUID();
+    all[windowId]={windowId,revision,groups,restoreSessionId:record.restore.sessionId,restorePublishId:plan.publishId};
+    await writeLive(all);
+    plan.state=waiting?'waiting':'applied';plan.expectedRevision=revision;plan.publishedRevision=revision;await write(record);
+    api.runtime.sendMessage?.({channel:'workspace-dashboard',type:'live-groups-changed',windowId}).catch?.(()=>{});
   }
   // Live groups describe existing browser tabs; they are not recovery snapshots.
   // Session storage survives event-page suspension without carrying browser tab IDs
@@ -285,12 +365,21 @@
     })}));
     return {all,record,revision:record.revision,groups:visible};
   }
+  async function reconcileRestoredGroups(windowId){
+    for(const record of Object.values(await read())){
+      if(record.restore?.windowId===windowId && ['complete','partial'].includes(record.restore?.state) && ['pending','waiting'].includes(record.restore?.organization?.state)){
+        verifiedRecord(record,record.id);await restoreSnapshotGroups(record,windowId);
+      }
+    }
+  }
   async function getLiveGroups({windowId}) {
+    await normalWindow(windowId);await reconcileRestoredGroups(windowId);
     const {revision,groups} = await liveView(windowId);
     return {revision,groups};
   }
   // Explicit scan reconciliation only: ordinary reads never invent memberships.
   async function syncLiveGroupsScan({windowId}) {
+    await normalWindow(windowId);await reconcileRestoredGroups(windowId);
     const {all,record} = await liveView(windowId);
     const inventory = await liveInventory(windowId);
     const assigned = new Set((record?.groups || []).flatMap(group => group.tabs.map(tab => tab.id)));
@@ -802,6 +891,7 @@
         const record = C.snapshot(message.name, candidates.map(tab => ({...tab, pinned: false})), message.requestId);
         const previous = (await read())[record.id];
         if (previous) return {workspace: verifiedRecord(previous, record.id), repeated: true};
+        await captureSnapshotGroups(record,candidates,message.windowId,true);
         verifiedRecord(record, record.id);
         await write(record);
         return {workspace: record, skipped: inventory.length - candidates.length};
