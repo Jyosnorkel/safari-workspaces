@@ -377,3 +377,9 @@ Final long-title fixture visual verification could not run after the preview bro
 ## v0.18.0 focused webpage views — November 1
 
 User requested separate destinations instead of one long page. Left sidebar now selects Home, Organise, Snapshots and Settings; only one section is visible. Hash routing supports legacy #ai/#saved/#organize/#dashboard-settings, browser history and links without reload/discarding group edits. Page changes reset scroll; search shortcuts reveal Home before focus. Organise retains AI and Safari clustering, Snapshots keeps restore/recovery/import/export, Settings holds shared preferences. Narrow layouts keep all four navigation choices reachable. 231 automated fake-browser/provider checks include isolated views, edit preservation and legacy/back routing. Native build/signature and packaged navigation/CSS comparisons pass; actual Safari remains unverified. Design/themes reviewed integrated fictional desktop views; no personal Safari operations or Meta calls.
+
+## User verification and bug reporting — November 2
+
+- User routinely verifies changes after ChatGPT makes them and reports encountered bugs. Record explicit user verification as user-reported evidence; do not describe it as agent-run testing.
+- On November 2, user confirmed all changes delivered so far verified, including thicker popup settings dropdowns, full-width saved-tab hover highlights and removal of the Tabby hover underline. This supersedes earlier pending user-verification notes for those delivered changes; retain historical test records.
+- Continue appropriate automated checks for subsequent changes. Do not infer unperformed restart, failure-injection, live-provider or submission checks from general user verification.

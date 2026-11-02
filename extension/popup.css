@@ -64,7 +64,7 @@ html body :is(button,input,select,textarea,a):focus-visible{outline:2px solid #2
 /* Primary action subtitles must contrast against the blue fill in either theme. */
 html body #save-snapshot small{color:var(--accent-ink)}
 html body header .brand-link{width:auto;padding:4px 0;min-height:36px;background:transparent;border:0;border-radius:4px;font-size:17px;font-weight:650;letter-spacing:-.4px;color:var(--ink);justify-content:flex-start}
-html body header .brand-link:hover{text-decoration:underline;background:transparent}
+html body header .brand-link:hover{text-decoration:none;background:transparent}
 
 /* Snapshot summaries share the same quiet cards as confirmed groups. */
 html body .snapshot-card{padding:0;margin:0 0 8px;border:1px solid var(--line);border-radius:9px;background:var(--surface);color:var(--ink);overflow:hidden;font-size:12px}
@@ -164,3 +164,21 @@ html body .home-tab.is-selected { border-color:var(--accent); background:var(--h
 html body .home-tab:hover { background:var(--hover); }
 
 .home-tab :is(.workspace-tab-title,.workspace-tab-host) { display:block; min-width:0; max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+/* Give settings menus the same substantial rounded surface as action controls. */
+html body #settings-form select {
+  -webkit-appearance:none; appearance:none;
+  box-sizing:border-box; min-height:42px; width:100%;
+  padding:10px 36px 10px 12px; border:2px solid var(--line);
+  border-radius:10px; font:600 12px/1.5 -apple-system,BlinkMacSystemFont,sans-serif;
+  background-color:var(--surface);
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='m2 2 4 4 4-4' fill='none' stroke='%237b9bb2' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat; background-position:right 13px center;
+}
+html body #settings-form select:hover { border-color:var(--focus); }
+/* Fill the saved row through its card edges, retaining an inset for text. */
+html body .snapshot-entry .snapshot-card > .snapshot-tab {
+  box-sizing:border-box; width:100%; margin:0; padding:10px 11px;
+  border-radius:0;
+}
+html body .snapshot-entry .snapshot-card > .snapshot-tab:last-child { border-radius:0 0 8px 8px; }
