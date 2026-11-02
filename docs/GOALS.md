@@ -193,3 +193,7 @@ Popup capabilities mirrored into webpage: current-tab search/activation, shared 
 ### November 1 — v0.18.0 separate webpage views
 
 Sidebar now switches Home/Organise/Snapshots/Settings, showing one functionality area at a time without losing edits. Legacy links, browser history, scroll reset and search-to-Home are supported. 231 automated checks/native build/signature/package checks pass. Product design/themes reviewed fictional desktop pages; actual packaged Safari verification remains open.
+
+### November 2 — v0.19.1 selection appearance
+
+Removed automatic first-row cursor highlight and selected left stripe across popup/webpage; retained explicit selection and insertion markers. Settings dropdowns share theme tokens and control shape. 241 checks and native build/signature/package comparisons pass. Design CSS review completed; visual browser unavailable, actual Safari open-menu appearance still needs confirmation.

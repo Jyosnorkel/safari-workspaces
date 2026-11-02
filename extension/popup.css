@@ -169,7 +169,7 @@ html body .home-tab:hover { background:var(--hover); }
 html body :is(.home-tab,.workspace-tab,.snapshot-tab).is-tab-selected {
   background:var(--hover);
   border-color:var(--focus);
-  box-shadow:inset 3px 0 var(--focus);
+  box-shadow:none;
   color:var(--ink);
 }
 html body :is(.home-tab,.workspace-tab,.snapshot-tab).is-tab-selected:hover { background:var(--hover); }
@@ -179,7 +179,7 @@ html body :is(.home-tab,.workspace-tab,.snapshot-tab)[aria-pressed] { user-selec
 html body .tab-selection-bar button { flex:0 0 auto; width:auto; min-height:30px; padding:5px 8px; font-size:11px; border-radius:6px; background:transparent; }
 html body .tab-selection-bar button:hover { background:var(--hover); }
 .snapshot-group-heading { margin:12px 11px 4px; color:var(--ink); font-size:11px; font-weight:650; line-height:1.5; overflow-wrap:anywhere; }
-html body :is(.workspace-tab,.home-tab,.snapshot-tab).is-tab-selected.drop-before { box-shadow:inset 0 3px var(--focus),inset 3px 0 var(--focus); }
+html body :is(.workspace-tab,.home-tab,.snapshot-tab).is-tab-selected.drop-before { box-shadow:inset 0 3px var(--focus); }
 
 /* Give settings menus the same substantial rounded surface as action controls. */
 html body #settings-form select {
@@ -198,3 +198,9 @@ html body .snapshot-entry .snapshot-card > .snapshot-tab {
   border-radius:0;
 }
 html body .snapshot-entry .snapshot-card > .snapshot-tab:last-child { border-radius:0 0 8px 8px; }
+
+/* Native choice menus inherit the same theme as their closed controls. */
+html[data-theme=light]{color-scheme:light}
+html[data-theme=dark]{color-scheme:dark}
+@media(prefers-color-scheme:dark){html[data-theme=system],html:not([data-theme]){color-scheme:dark}}
+select,option,optgroup{color-scheme:inherit;background-color:var(--surface);color:var(--ink)}

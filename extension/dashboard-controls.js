@@ -3,7 +3,7 @@
   const api=globalThis.browser, $=id=>document.getElementById(id), key='tabby.settings.v1';
   if(!$('dashboard-settings-form') || !api?.storage?.local)return;
   const defaults={theme:'system',preferences:'',autosave:0,compact:false};
-  let settings={...defaults},inventory=[],windowId,selection=0,matches=[],activating=false,autosaveChecked=false;
+  let settings={...defaults},inventory=[],windowId,selection=-1,matches=[],activating=false,autosaveChecked=false;
   const message=text=>{$('dashboard-settings-status').textContent=text;};
   const multiSelection=globalThis.TabbySelection?.create({announce:(count,clear)=>TabbySelection.toolbar($('dashboard-tab-count'),count,clear)});
   function apply(value){
@@ -19,7 +19,7 @@
   function render(){
     const query=$('dashboard-tab-search').value.trim().toLocaleLowerCase();
     matches=inventory.filter(tab=>`${tab.title || ''} ${tab.url || ''}`.toLocaleLowerCase().includes(query));
-    selection=Math.max(0,Math.min(selection,matches.length-1));
+    selection=Math.max(-1,Math.min(selection,matches.length-1));
     $('dashboard-tab-count').textContent=`${matches.length} of ${inventory.length} tabs`;
     const list=$('dashboard-tab-list');list.replaceChildren();
     multiSelection?.beginRender();multiSelection?.setItems(matches.map(tab=>tab.id));
@@ -55,12 +55,12 @@
       await api.storage.local.set({[stampKey]:Date.now()});message('Autosaved this window. Refresh saved snapshots to see it.');
     }catch(error){message(`Autosave unavailable: ${error.message}`);}
   }
-  globalThis.DashboardControls={updateInventory(tabs,id){inventory=tabs.filter(tab=>Number.isInteger(tab.id)&&!tab.incognito);windowId=id;selection=0;render();autosave();}};
-  $('dashboard-tab-search').addEventListener('input',()=>{selection=0;render();});
+  globalThis.DashboardControls={updateInventory(tabs,id){inventory=tabs.filter(tab=>Number.isInteger(tab.id)&&!tab.incognito);windowId=id;selection=-1;render();autosave();}};
+  $('dashboard-tab-search').addEventListener('input',()=>{selection=-1;render();});
   $('dashboard-tab-search').addEventListener('keydown',event=>{
     if(event.isComposing || event.metaKey || event.ctrlKey || event.altKey)return;
-    if(['ArrowUp','ArrowDown'].includes(event.key) && matches.length){event.preventDefault();selection=(selection+(event.key==='ArrowDown'?1:-1)+matches.length)%matches.length;render();$('dashboard-tab-list').children[selection]?.scrollIntoView?.({block:'nearest'});}
-    else if(event.key==='Enter' && matches.length){event.preventDefault();activate(matches[selection]);}
+    if(['ArrowUp','ArrowDown'].includes(event.key) && matches.length){event.preventDefault();selection=selection<0?(event.key==='ArrowDown'?0:matches.length-1):(selection+(event.key==='ArrowDown'?1:-1)+matches.length)%matches.length;render();$('dashboard-tab-list').children[selection]?.scrollIntoView?.({block:'nearest'});}
+    else if(event.key==='Enter' && matches.length){event.preventDefault();activate(matches[Math.max(0,selection)]);}
   });
   document.addEventListener('keydown',event=>{
     if(event.isComposing || event.altKey || event.shiftKey)return;

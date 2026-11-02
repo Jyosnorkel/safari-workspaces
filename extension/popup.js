@@ -202,13 +202,13 @@ async function loadLiveGroups(windowId) {
   if(scrollPane && Number.isFinite(savedScroll))scrollPane.scrollTop=savedScroll;
 }
 // Home search uses the latest explicit local scan; activation never opens a URL.
-let homeInventory = [], homeWindowId, homeSelection = 0, homeMatches = [];
+let homeInventory = [], homeWindowId, homeSelection = -1, homeMatches = [];
 function renderHomeTabs() {
   const list = document.getElementById('home-tab-list');
   if (!list) return;
   const query = (document.getElementById('home-tab-search')?.value || '').trim().toLocaleLowerCase();
   homeMatches = homeInventory.filter(tab => `${tab.title || ''} ${tab.url || ''}`.toLocaleLowerCase().includes(query));
-  homeSelection = Math.max(0, Math.min(homeSelection, homeMatches.length - 1));
+  homeSelection = Math.max(-1, Math.min(homeSelection, homeMatches.length - 1));
   list.replaceChildren();
   homeMultiSelection?.beginRender();homeMultiSelection?.setItems(homeMatches.map(tab=>tab.id));
   const count = document.getElementById('home-tab-results');
@@ -236,23 +236,23 @@ function activateHomeTab(tab) {
   });
 }
 const homeSearch = document.getElementById('home-tab-search');
-homeSearch?.addEventListener?.('input',()=>{homeSelection=0;renderHomeTabs();});
+homeSearch?.addEventListener?.('input',()=>{homeSelection=-1;renderHomeTabs();});
 homeSearch?.addEventListener?.('keydown',event=>{
   if (event.isComposing || event.altKey || event.metaKey || event.ctrlKey) return;
   if (['ArrowDown','ArrowUp'].includes(event.key) && homeMatches.length) {
     event.preventDefault();
-    homeSelection = (homeSelection + (event.key === 'ArrowDown' ? 1 : -1) + homeMatches.length) % homeMatches.length;
+    homeSelection = homeSelection < 0 ? (event.key === 'ArrowDown' ? 0 : homeMatches.length-1) : (homeSelection + (event.key === 'ArrowDown' ? 1 : -1) + homeMatches.length) % homeMatches.length;
     renderHomeTabs();
     document.getElementById('home-tab-list')?.children[homeSelection]?.scrollIntoView?.({block:'nearest'});
   } else if (event.key === 'Enter' && homeMatches.length) {
-    event.preventDefault();activateHomeTab(homeMatches[homeSelection]);
+    event.preventDefault();activateHomeTab(homeMatches[Math.max(0,homeSelection)]);
   }
 });
 async function refreshTabs() {
   const win = await currentWindow();
   status.textContent = 'Refreshing tabs…';
   const result = await send('scan',{windowId:win.id});
-  homeWindowId=win.id;homeInventory=result.tabs.filter(tab=>Number.isInteger(tab.id) && !tab.incognito);homeSelection=0;renderHomeTabs();
+  homeWindowId=win.id;homeInventory=result.tabs.filter(tab=>Number.isInteger(tab.id) && !tab.incognito);homeSelection=-1;renderHomeTabs();
   const eligible = result.tabs.filter(tab => tab.eligible).length;
   document.getElementById('tab-count').textContent = `${result.tabs.length} tabs · ${eligible} available to organise`;
   document.getElementById('scan-time').textContent = `Updated ${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`;

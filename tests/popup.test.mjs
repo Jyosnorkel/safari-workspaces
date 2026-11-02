@@ -180,7 +180,7 @@ test('Home searches the latest local tab inventory by title and URL without priv
 
 test('Home keyboard selection activates an existing tab and stale or private identities are rejected',async()=>{
  const h=await homeSearchHarness(),search=h.nodes.get('home-tab-search');
- search.focus();await h.key(search,'ArrowDown');await h.key(search,'Enter');
+ search.focus();await h.key(search,'ArrowDown');await h.key(search,'ArrowDown');await h.key(search,'Enter');
  assert.deepEqual(h.updates,[{id:12,active:true}]);
  h.updates.length=0;h.live.set(11,{id:11,windowId:8,url:'https://research.example/paper'});
  await h.nodes.get('home-tab-list').children[0].listeners.click();assert.equal(h.updates.length,0);

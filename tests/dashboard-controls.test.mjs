@@ -37,7 +37,7 @@ test('dashboard search matches title and URL from latest scan and excludes priva
 });
 test('dashboard keyboard opens selected existing tab only after live window, URL and private checks',async()=>{
  const h=await harness();h.update();await h.flush();const search=h.nodes.get('dashboard-tab-search'),event=key=>({key,preventDefault(){}});
- search.listeners.keydown(event('ArrowDown'));search.listeners.keydown(event('Enter'));await h.flush();assert.deepEqual(h.updates,[{id:2,active:true}]);h.updates.length=0;
+ search.listeners.keydown(event('ArrowDown'));search.listeners.keydown(event('ArrowDown'));search.listeners.keydown(event('Enter'));await h.flush();assert.deepEqual(h.updates,[{id:2,active:true}]);h.updates.length=0;
  for(const changed of [{windowId:8},{url:'https://changed.example'},{incognito:true}]){
   h.live.set(1,{...h.inventory[0],...changed});h.update();await h.nodes.get('dashboard-tab-list').children[0].listeners.dblclick();await h.flush();assert.equal(h.updates.length,0);assert.match(h.nodes.get('dashboard-tab-count').textContent,/changed/);
  }
