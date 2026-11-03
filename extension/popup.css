@@ -216,3 +216,13 @@ html body :is(.workspace-tab.drop-before,.live-workspace.is-drop-target)::before
 }
 html body .workspace-tab.drop-before::before {top:0}
 html body .live-workspace.is-drop-target::before {bottom:0}
+
+/* Expanded choices use the same surfaces as Tabby, including on macOS. */
+html body button.settings-choice{display:flex;align-items:center;justify-content:space-between;width:100%;min-height:42px;margin-top:7px;padding:10px 12px;border:2px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);font:600 12px/1.5 -apple-system,BlinkMacSystemFont,sans-serif;}
+html body button.settings-choice::after{content:'';width:8px;height:8px;margin:0 3px 4px 14px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(45deg);}
+html body button.settings-choice:is(:hover,[aria-expanded=true]){border-color:var(--focus);background:var(--surface);}
+.settings-options{position:fixed;z-index:100;box-sizing:border-box;overflow-y:auto;overscroll-behavior:contain;padding:4px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);box-shadow:0 6px 18px #0002;font:500 12px/1.5 -apple-system,BlinkMacSystemFont,sans-serif;}
+.settings-options[hidden]{display:none!important;}
+.settings-options [role=option]{display:flex;justify-content:space-between;gap:10px;min-height:34px;padding:8px 10px;border-radius:6px;cursor:pointer;}
+.settings-options [role=option]:is(:hover,.is-current){background:var(--hover);outline:1px solid var(--focus);outline-offset:-1px;}
+.settings-options [aria-selected=true]::after{content:'✓';color:var(--focus);font-weight:700;}
