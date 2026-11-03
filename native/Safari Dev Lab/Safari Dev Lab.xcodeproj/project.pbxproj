@@ -32,6 +32,8 @@
 		BB0000000000000000000009 /* dashboard-pages.js in Resources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000009 /* dashboard-pages.js */; };
 		BB000000000000000000000A /* tab-selection.js in Resources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000000A /* tab-selection.js */; };
 		BC0000000000000000000001 /* icons in Resources */ = {isa = PBXBuildFile; fileRef = AC0000000000000000000001 /* icons */; };
+		BB0000000000000000000009 /* settings-menus.js in Resources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000009 /* settings-menus.js */; };
+		BB000000000000000000000A /* settings-menus.css in Resources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000000A /* settings-menus.css */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -87,6 +89,8 @@
 		AA0000000000000000000009 /* dashboard-pages.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = dashboard-pages.js; path = ../../../extension/dashboard-pages.js; sourceTree = "<group>"; };
 		AA000000000000000000000A /* tab-selection.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = tab-selection.js; path = ../../../extension/tab-selection.js; sourceTree = "<group>"; };
 		AC0000000000000000000001 /* icons */ = {isa = PBXFileReference; lastKnownFileType = folder; name = icons; path = ../../../extension/icons; sourceTree = "<group>"; };
+		AA0000000000000000000009 /* settings-menus.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = settings-menus.js; path = ../../../extension/settings-menus.js; sourceTree = "<group>"; };
+		AA000000000000000000000A /* settings-menus.css */ = {isa = PBXFileReference; lastKnownFileType = text.css; name = settings-menus.css; path = ../../../extension/settings-menus.css; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -171,6 +175,8 @@
 				AA0000000000000000000006 /* ai.js */,
 				AA0000000000000000000007 /* popup-ai.js */,
 				AA0000000000000000000008 /* dashboard-controls.js */,
+				AA000000000000000000000A /* settings-menus.css */,
+				AA0000000000000000000009 /* settings-menus.js */,
 				AA0000000000000000000009 /* dashboard-pages.js */,
 				AA000000000000000000000A /* tab-selection.js */,
 				8FFCB12F3090F03F0088828C /* popup.js */,
@@ -291,6 +297,8 @@
 				BB0000000000000000000006 /* ai.js in Resources */,
 				BB0000000000000000000007 /* popup-ai.js in Resources */,
 				BB0000000000000000000008 /* dashboard-controls.js in Resources */,
+				BB000000000000000000000A /* settings-menus.css in Resources */,
+				BB0000000000000000000009 /* settings-menus.js in Resources */,
 				BB0000000000000000000009 /* dashboard-pages.js in Resources */,
 				BB000000000000000000000A /* tab-selection.js in Resources */,
 				8FFCB1333090F03F0088828C /* popup.js in Resources */,
@@ -471,7 +479,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 45;
+				CURRENT_PROJECT_VERSION = 46;
 				ENABLE_APP_SANDBOX = YES;
                 ENABLE_FILE_ACCESS_DOWNLOADS_FOLDER = readwrite;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -487,7 +495,7 @@
 					"@executable_path/../../../../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 10.14;
-				MARKETING_VERSION = 0.21.0;
+				MARKETING_VERSION = 0.21.1;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
@@ -507,7 +515,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 45;
+				CURRENT_PROJECT_VERSION = 46;
 				ENABLE_APP_SANDBOX = YES;
                 ENABLE_FILE_ACCESS_DOWNLOADS_FOLDER = readwrite;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -523,7 +531,7 @@
 					"@executable_path/../../../../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 10.14;
-				MARKETING_VERSION = 0.21.0;
+				MARKETING_VERSION = 0.21.1;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
@@ -546,7 +554,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 45;
+				CURRENT_PROJECT_VERSION = 46;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_DEBUG_DYLIB = NO;
@@ -562,7 +570,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 0.21.0;
+				MARKETING_VERSION = 0.21.1;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
@@ -588,7 +596,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 45;
+				CURRENT_PROJECT_VERSION = 46;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_DEBUG_DYLIB = NO;
@@ -604,7 +612,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 0.21.0;
+				MARKETING_VERSION = 0.21.1;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,

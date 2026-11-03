@@ -14,6 +14,7 @@
     document.body.classList.toggle('compact',Boolean(settings.compact));
     for(const name of ['theme','preferences','autosave'])$('dashboard-setting-'+name).value=String(settings[name] || (name==='autosave'?0:''));
     $('dashboard-setting-compact').checked=Boolean(settings.compact);
+    globalThis.TabbySettingsMenus?.refresh();
   }
   const node=(tag,className,text)=>{const n=document.createElement(tag);n.className=className;n.textContent=text;return n;};
   function render(){

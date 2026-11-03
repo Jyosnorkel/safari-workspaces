@@ -216,3 +216,6 @@ html body :is(.workspace-tab.drop-before,.live-workspace.is-drop-target)::before
 }
 html body .workspace-tab.drop-before::before {top:0}
 html body .live-workspace.is-drop-target::before {bottom:0}
+
+/* One scroll owner; redraws must not compete with browser anchoring or wheel momentum. */
+html{max-width:100vw;max-height:100vh}main{overflow-anchor:none;scroll-behavior:auto}

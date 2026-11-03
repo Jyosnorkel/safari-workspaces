@@ -65,3 +65,12 @@ Six added fake-DOM tests cover cross-group moves with exclusion retention/no API
 Coordinator polish: collapsing hides the entire group card so only its chip remains; the chip retains its count and is the keyboard-focus destination after collapsing from a card header. Expanding the chip restores the card with its original tab selections. Collapse is view-only and does not save/close/remove browser tabs. The real preview mouse drag and unchecked-tab preservation were verified in the internal browser with fictional data; Safari sessions and Meta were not used.
 
 The final narrow-layout preview found an existing minimum-width overflow in saved-workspace cards; the <=600px layout now uses a zero-minimum single column for both groups and saved workspaces. Desktop group drag/collapse checks used a temporary 1200px viewport, restored afterward. The final preview remains sample data; no Safari session or API request was used.
+
+
+## v0.21.1 themed settings choices and popup scroll — November 3
+
+Replaced native expanded Appearance/Autosave menus in popup and webpage with shared themed keyboard-accessible choices. Original selects remain the saved-value source; unsaved choices do not apply settings. Menus show selection, support arrows/Home/End/type-to-match/Enter/Space/Escape/Tab, flip above lower triggers, and dismiss on outside click, focus change, resize or parent scroll. No extra provider calls. Shared palette fallback covers webpage hover.
+
+Popup redraws skip unchanged scroll-position writes; empty live-group rendering also restores position. Explicit scroll restoration no longer competes with browser anchoring. Page switches still reset to top. Popup width fits narrower available viewports; no artificial smooth-scroll animation is added to wheel input.
+
+246 automated fake-browser/provider checks pass; native v0.21.1/build46, strict signature and packaged UI/source comparisons pass. Root used the in-app browser with fictional tabs only: keyboard theme selection/save/reload, lower-menu flip/dismissal, 400px/480px layouts, Home/Settings/Organise/Snapshots navigation, snapshot save/expand, long-title scrolling and manual-group creation/redraw. Product design and themes reviewed light/dark and narrow expanded-menu screenshots. No horizontal overflow observed (480px popup main client/scroll width both465px). This is isolated preview evidence, not packaged Safari or real Meta testing. Safari was not controlled, quit or closed; no personal tabs or settings were changed. Actual Safari wheel/trackpad momentum remains user verification.
