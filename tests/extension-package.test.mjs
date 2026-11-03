@@ -24,3 +24,12 @@ test('package verification rejects missing and stale files, including nested res
     assert.equal(verifyResources(source,destination),2);
   }finally{rmSync(directory,{recursive:true,force:true});}
 });
+
+
+test('build guard refuses registered output but permits a separate staging path',async()=>{
+  const {checkBuildTarget}=await import('../scripts/check-build-target.mjs');
+  const app=path.join(tmpdir(),'tabby-registered','Tabby.app');
+  const registration=` Path = ${app}/Contents/PlugIns/Tabby.appex\n`;
+  assert.throws(()=>checkBuildTarget(app,registration),/Refusing to overwrite/);
+  assert.doesNotThrow(()=>checkBuildTarget(app+'-staged',registration));
+});

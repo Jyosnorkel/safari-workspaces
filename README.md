@@ -102,6 +102,8 @@ cd tabby
 open 'build/Build/Products/Debug/Safari Dev Lab.app'
 ```
 
+Once this app is registered with Safari, the build script refuses to overwrite that same app folder. For a planned update, a separate output can be requested with `./scripts/build.sh build/staging-update`. Xcode may register staged apps too; building is not proof Safari has loaded the new version. Arrange extension activation separately, without deleting extension storage or restarting Safari as an automatic build step. See [Safari testing](docs/safari-testing.md).
+
 Run the automated checks:
 
 ```sh
