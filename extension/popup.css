@@ -218,4 +218,6 @@ html body .workspace-tab.drop-before::before {top:0}
 html body .live-workspace.is-drop-target::before {bottom:0}
 
 /* One scroll owner; redraws must not compete with browser anchoring or wheel momentum. */
-html{max-width:100vw;max-height:100vh}main{overflow-anchor:none;scroll-behavior:auto}
+/* Safari measures the root to size its popover: retain its explicit 480×600 size.
+   Viewport-relative root maxima can feed the initial tiny viewport back into sizing. */
+main{overflow-anchor:none;scroll-behavior:auto}
