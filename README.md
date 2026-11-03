@@ -19,7 +19,7 @@
 
 ### macOS
 
-[Download the developer preview](https://github.com/Jyosnorkel/tabby/releases/tag/dev-checkpoint-2026-11-02).
+[Download the stable developer preview — v0.21.5](https://github.com/Jyosnorkel/tabby/releases/tag/v0.21.5). [Checkpoint notes](docs/releases/v0.21.5.md).
 
 The current preview targets **Apple silicon and macOS 26.5 or newer**. Unzip the download, move **Safari Dev Lab.app** to Applications, and open it. The app displays as **Tabby**.
 
