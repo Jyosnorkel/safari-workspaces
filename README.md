@@ -13,7 +13,9 @@
   <a href="https://github.com/Jyosnorkel/tabby/issues">Issues</a>
 </p>
 
-![Tabby organising a busy Safari window into project groups](img/Organised%20groups.png)
+![Concept illustration: scattered browser tabs organised into focused workspaces](assets/marketing/tabby-workspaces-hero-v1.png)
+
+<p align="center"><sub>Concept illustration · Actual app screenshots below.</sub></p>
 
 ## Download
 
@@ -31,6 +33,8 @@ This is an ad-hoc development build, not a notarized installer. Safari requires 
 2. Drag tabs between groups and reorder them to suit your work.
 3. Choose **Save snapshot** to keep a copy of the current window without closing tabs.
 4. Return to **Snapshots** to browse saved work, open saved tabs or export a JSON backup.
+
+![Tabby organising a busy Safari window into project groups](img/Organised%20groups.png)
 
 Manual organisation, search and snapshots work without an AI account.
 
