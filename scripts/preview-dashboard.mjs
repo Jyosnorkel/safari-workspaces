@@ -30,7 +30,7 @@ const fakeAI=`
 const usage=()=>({enabled:true,configured:true,busy:false,attemptsToday:0,remainingToday:20,remainingThisMinute:2,perMinute:2,perDay:20,timezone:'UTC',requestsPerSuggestion:2,maxOutputTokens:2048,dailyResetAt:Date.now()+86400000,retryAt:null});
 window.WorkspaceAI={clientOrigin:'safari-web-extension://preview',status:async()=>({ok:true,usage:usage()}),suggest:async({tabs})=>{const ids=new Set(tabs.map(tab=>String(tab.id)));return {ok:true,usage:usage(),result:{groups:[{name:'Build the project',reason:'Fictional preview: roadmap, design and documentation.',tabIds:['1','2','3'].filter(id=>ids.has(id))},{name:'Weekend trip',reason:'Fictional preview: itinerary, transport and map.',tabIds:['4','5','6'].filter(id=>ids.has(id))}].filter(group=>group.tabIds.length)}};}};
 `;
-const allowed=new Set(['core.js','tab-selection.js','background.js','dashboard.js','dashboard-controls.js','dashboard-pages.js','dashboard.css','popup.js','popup-ai.js','popup.css','settings-menus.js','settings-menus.css']);
+const allowed=new Set(['core.js','tab-selection.js','background.js','dashboard.js','dashboard-controls.js','dashboard-pages.js','dashboard.css','popup.js','popup-ai.js','popup.css']);
 const server=createServer(async(request,response)=>{
  try{
   const name=new URL(request.url,'http://127.0.0.1').pathname.slice(1);

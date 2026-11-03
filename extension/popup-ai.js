@@ -97,7 +97,7 @@
   function render() {
     const pane=document.querySelector?.('main'),scrollTop=pane?.scrollTop;
     editable=[];renderTabs();renderUsage();renderReview();updateControls();
-    if(pane && Number.isFinite(scrollTop) && pane.scrollTop!==scrollTop)pane.scrollTop=scrollTop;
+    if(pane && Number.isFinite(scrollTop))pane.scrollTop=scrollTop;
   }
   function receive(response) {
     const previousState=state?.state;

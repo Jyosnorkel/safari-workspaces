@@ -97,7 +97,6 @@ async function loadLiveGroups(windowId) {
   liveSelection?.beginRender();liveSelection?.setItems(groups.flatMap(group=>group.tabs.map(tab=>tab.id)));
   if (!groups.length) {
     container.append(addForm,popupNode('p','workspace-empty','Add a group or use AI organise to get started.'));
-    if(scrollPane && Number.isFinite(savedScroll) && scrollPane.scrollTop!==savedScroll)scrollPane.scrollTop=savedScroll;
     return;
   }
   for (const group of groups) {
@@ -201,7 +200,7 @@ async function loadLiveGroups(windowId) {
     container.append(card);
   }
   container.append(addForm);
-  if(scrollPane && Number.isFinite(savedScroll) && scrollPane.scrollTop!==savedScroll)scrollPane.scrollTop=savedScroll;
+  if(scrollPane && Number.isFinite(savedScroll))scrollPane.scrollTop=savedScroll;
 }
 // Home search uses the latest explicit local scan; activation never opens a URL.
 let homeInventory = [], homeWindowId, homeSelection = -1, homeMatches = [];
@@ -343,7 +342,7 @@ if (document.querySelectorAll && document.getElementById('settings-open')) (() =
   const key='tabby.settings.v1', defaults={theme:'system',preferences:'',autosave:0,compact:false};
   let settings={...defaults},view='home';
   const $=id=>document.getElementById(id);
-  function theme(){document.documentElement.dataset.theme=settings.theme;document.body.classList.toggle('compact',settings.compact);globalThis.TabbySettingsMenus?.refresh();}
+  function theme(){document.documentElement.dataset.theme=settings.theme;document.body.classList.toggle('compact',settings.compact);}
   async function snapshots(){
     const list=$('snapshot-list');list.textContent='Loading…';
     try {
